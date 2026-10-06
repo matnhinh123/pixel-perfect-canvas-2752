@@ -10,33 +10,141 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuditLogRouteImport } from './routes/audit-log'
+import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as CostIndexRouteImport } from './routes/cost.index'
+import { Route as CostIdRouteImport } from './routes/cost.$id'
+import { Route as RoutingIndexRouteImport } from './routes/routing.index'
+import { Route as RoutingIdRouteImport } from './routes/routing.$id'
+import { Route as ServiceIndexRouteImport } from './routes/service.index'
+import { Route as ServiceIdRouteImport } from './routes/service.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuditLogRoute = AuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CostIndexRoute = CostIndexRouteImport.update({
+  id: '/cost/',
+  path: '/cost/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CostIdRoute = CostIdRouteImport.update({
+  id: '/cost/$id',
+  path: '/cost/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoutingIndexRoute = RoutingIndexRouteImport.update({
+  id: '/routing/',
+  path: '/routing/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoutingIdRoute = RoutingIdRouteImport.update({
+  id: '/routing/$id',
+  path: '/routing/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServiceIndexRoute = ServiceIndexRouteImport.update({
+  id: '/service/',
+  path: '/service/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServiceIdRoute = ServiceIdRouteImport.update({
+  id: '/service/$id',
+  path: '/service/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/audit-log': typeof AuditLogRoute
+  '/pricing': typeof PricingRoute
+  '/cost/$id': typeof CostIdRoute
+  '/routing/$id': typeof RoutingIdRoute
+  '/service/$id': typeof ServiceIdRoute
+  '/cost/': typeof CostIndexRoute
+  '/routing/': typeof RoutingIndexRoute
+  '/service/': typeof ServiceIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/audit-log': typeof AuditLogRoute
+  '/pricing': typeof PricingRoute
+  '/cost/$id': typeof CostIdRoute
+  '/routing/$id': typeof RoutingIdRoute
+  '/service/$id': typeof ServiceIdRoute
+  '/cost': typeof CostIndexRoute
+  '/routing': typeof RoutingIndexRoute
+  '/service': typeof ServiceIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/audit-log': typeof AuditLogRoute
+  '/pricing': typeof PricingRoute
+  '/cost/$id': typeof CostIdRoute
+  '/routing/$id': typeof RoutingIdRoute
+  '/service/$id': typeof ServiceIdRoute
+  '/cost/': typeof CostIndexRoute
+  '/routing/': typeof RoutingIndexRoute
+  '/service/': typeof ServiceIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/audit-log'
+    | '/pricing'
+    | '/cost/$id'
+    | '/routing/$id'
+    | '/service/$id'
+    | '/cost/'
+    | '/routing/'
+    | '/service/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/audit-log'
+    | '/pricing'
+    | '/cost/$id'
+    | '/routing/$id'
+    | '/service/$id'
+    | '/cost'
+    | '/routing'
+    | '/service'
+  id:
+    | '__root__'
+    | '/'
+    | '/audit-log'
+    | '/pricing'
+    | '/cost/$id'
+    | '/routing/$id'
+    | '/service/$id'
+    | '/cost/'
+    | '/routing/'
+    | '/service/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuditLogRoute: typeof AuditLogRoute
+  PricingRoute: typeof PricingRoute
+  CostIdRoute: typeof CostIdRoute
+  RoutingIdRoute: typeof RoutingIdRoute
+  ServiceIdRoute: typeof ServiceIdRoute
+  CostIndexRoute: typeof CostIndexRoute
+  RoutingIndexRoute: typeof RoutingIndexRoute
+  ServiceIndexRoute: typeof ServiceIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +156,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/audit-log': {
+      id: '/audit-log'
+      path: '/audit-log'
+      fullPath: '/audit-log'
+      preLoaderRoute: typeof AuditLogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cost/': {
+      id: '/cost/'
+      path: '/cost'
+      fullPath: '/cost/'
+      preLoaderRoute: typeof CostIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cost/$id': {
+      id: '/cost/$id'
+      path: '/cost/$id'
+      fullPath: '/cost/$id'
+      preLoaderRoute: typeof CostIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/routing/': {
+      id: '/routing/'
+      path: '/routing'
+      fullPath: '/routing/'
+      preLoaderRoute: typeof RoutingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/routing/$id': {
+      id: '/routing/$id'
+      path: '/routing/$id'
+      fullPath: '/routing/$id'
+      preLoaderRoute: typeof RoutingIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/': {
+      id: '/service/'
+      path: '/service'
+      fullPath: '/service/'
+      preLoaderRoute: typeof ServiceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$id': {
+      id: '/service/$id'
+      path: '/service/$id'
+      fullPath: '/service/$id'
+      preLoaderRoute: typeof ServiceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuditLogRoute: AuditLogRoute,
+  PricingRoute: PricingRoute,
+  CostIdRoute: CostIdRoute,
+  RoutingIdRoute: RoutingIdRoute,
+  ServiceIdRoute: ServiceIdRoute,
+  CostIndexRoute: CostIndexRoute,
+  RoutingIndexRoute: RoutingIndexRoute,
+  ServiceIndexRoute: ServiceIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
