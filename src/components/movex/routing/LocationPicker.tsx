@@ -7,8 +7,9 @@ import { routingService } from "@/services/routing/routingService";
 import { cn } from "@/lib/utils";
 
 /**
- * Location autocomplete in the design style: [📍 TP.HCM (HCM)      ✕][🔍]
- * Talks to routingService only (master data + Vietmap via the server proxy).
+ * Location autocomplete. Talks to routingService only (master data + Vietmap via the server proxy).
+ * - default: [📍 TP.HCM (HCM)      ✕][🔍]
+ * - inline:  borderless text that becomes an input on hover/focus (used inside the stop table)
  */
 export function LocationPicker({
   value,
@@ -16,12 +17,14 @@ export function LocationPicker({
   placeholder,
   invalid,
   disabled,
+  inline,
 }: {
   value: RoutePoint;
   onChange: (p: RoutePoint) => void;
   placeholder?: string;
   invalid?: boolean;
   disabled?: boolean;
+  inline?: boolean;
 }) {
   const [text, setText] = useState(value.name);
   const [open, setOpen] = useState(false);
@@ -61,6 +64,7 @@ export function LocationPicker({
         lat: r.lat,
         lng: r.lng,
         ...(r.source === "master" ? { locationId: r.id } : {}),
+        ...(value.note ? { note: value.note } : {}),
       });
     } catch {
       toast.error("Không xác định được toạ độ địa điểm này. Hãy chọn địa điểm khác.");
@@ -75,74 +79,108 @@ export function LocationPicker({
     inputRef.current?.focus();
   };
 
+  const input = (
+    <input
+      ref={inputRef}
+      value={text}
+      disabled={disabled}
+      aria-invalid={invalid || undefined}
+      placeholder={placeholder ?? "Tìm địa điểm…"}
+      className={cn(
+        "h-full w-full bg-transparent text-sm outline-none disabled:cursor-not-allowed",
+        inline ? "pl-2 pr-7" : "pl-9 pr-8",
+      )}
+      onFocus={() => {
+        if (!valid) browse();
+      }}
+      onChange={(e) => {
+        typing.current = true;
+        setText(e.target.value);
+        setQuery(e.target.value.trim());
+        setOpen(true);
+        // Typed text is not a location until picked from the list.
+        if (valid)
+          onChange({
+            name: e.target.value,
+            lat: NaN,
+            lng: NaN,
+            ...(value.note ? { note: value.note } : {}),
+          });
+      }}
+    />
+  );
+
+  const clear = text && !disabled && (
+    <button
+      type="button"
+      aria-label="Xoá"
+      className={cn(
+        "absolute right-2 rounded p-0.5 text-muted-foreground hover:text-foreground",
+        inline && "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+      )}
+      onClick={() => {
+        typing.current = true;
+        setText("");
+        onChange({ name: "", lat: NaN, lng: NaN, ...(value.note ? { note: value.note } : {}) });
+        setQuery("");
+        setOpen(true);
+        inputRef.current?.focus();
+      }}
+    >
+      <X className="h-4 w-4" />
+    </button>
+  );
+
   return (
     <Popover open={open && !disabled} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <div
-          className={cn(
-            "flex h-10 overflow-hidden rounded-md border border-input bg-card focus-within:ring-2 focus-within:ring-ring",
-            invalid && "border-destructive",
-            disabled && "bg-muted/50",
-          )}
-        >
-          <div className="relative flex flex-1 items-center">
-            <MapPin
-              className={cn(
-                "absolute left-3 h-4 w-4",
-                valid ? "text-foreground" : "text-muted-foreground",
-              )}
-            />
-            <input
-              ref={inputRef}
-              value={text}
-              disabled={disabled}
-              aria-invalid={invalid || undefined}
-              placeholder={placeholder ?? "Tìm địa điểm…"}
-              className="h-full w-full bg-transparent pl-9 pr-8 text-sm outline-none disabled:cursor-not-allowed"
-              onFocus={() => {
-                if (!valid) browse();
-              }}
-              onChange={(e) => {
-                typing.current = true;
-                setText(e.target.value);
-                setQuery(e.target.value.trim());
-                setOpen(true);
-                // Typed text is not a location until picked from the list.
-                if (valid) onChange({ name: e.target.value, lat: NaN, lng: NaN });
-              }}
-            />
-            {text && !disabled && (
-              <button
-                type="button"
-                aria-label="Xoá"
-                className="absolute right-2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  typing.current = true;
-                  setText("");
-                  onChange({ name: "", lat: NaN, lng: NaN });
-                  setQuery("");
-                  setOpen(true);
-                  inputRef.current?.focus();
-                }}
-              >
-                <X className="h-4 w-4" />
-              </button>
+        {inline ? (
+          <div
+            className={cn(
+              "group relative flex h-9 items-center rounded-md border border-transparent hover:border-input focus-within:border-input focus-within:bg-card focus-within:ring-2 focus-within:ring-ring",
+              invalid && "border-destructive",
+            )}
+          >
+            {input}
+            {loading ? (
+              <Loader2 className="absolute right-2 h-4 w-4 animate-spin text-muted-foreground" />
+            ) : (
+              clear
             )}
           </div>
-          <button
-            type="button"
-            aria-label="Tìm địa điểm"
-            onClick={browse}
-            disabled={disabled}
-            className="flex w-10 items-center justify-center border-l text-muted-foreground hover:bg-accent hover:text-primary disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
+        ) : (
+          <div
+            className={cn(
+              "flex h-10 overflow-hidden rounded-md border border-input bg-card focus-within:ring-2 focus-within:ring-ring",
+              invalid && "border-destructive",
+              disabled && "bg-muted/50",
             )}
-          </button>
-        </div>
+          >
+            <div className="relative flex flex-1 items-center">
+              <MapPin
+                className={cn(
+                  "absolute left-3 h-4 w-4",
+                  valid ? "text-foreground" : "text-muted-foreground",
+                )}
+              />
+              {input}
+              {clear}
+            </div>
+            <button
+              type="button"
+              aria-label="Tìm địa điểm"
+              onClick={browse}
+              disabled={disabled}
+              className="flex w-10 items-center justify-center border-l text-muted-foreground hover:bg-accent hover:text-primary disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        )}
       </PopoverAnchor>
       <PopoverContent
         align="start"

@@ -38,8 +38,8 @@ export const MOCK_TOLL_GATES: MockTollGate[] = [
     province: "TP. Hồ Chí Minh",
     road: "Cầu Phú Mỹ",
     feeType: "Bridge",
-    lat: 10.7636,
-    lng: 106.7536,
+    lat: 10.73,
+    lng: 106.757,
     prices: [20000, 30000, 40000, 60000, 80000],
   },
   {
@@ -74,8 +74,8 @@ export const MOCK_TOLL_GATES: MockTollGate[] = [
     province: "Đồng Nai",
     road: "CT HCM–Long Thành–Dầu Giây",
     feeType: "Toll",
-    lat: 10.8076,
-    lng: 106.8458,
+    lat: 10.7632,
+    lng: 106.8791,
     prices: [40000, 60000, 85000, 130000, 180000],
   },
   {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import "leaflet/dist/leaflet.css";
 import type * as Leaflet from "leaflet";
-import { Crosshair, Layers, Loader2 } from "lucide-react";
+import { Layers, Loader2 } from "lucide-react";
 import type { RoutePoint, TollStation } from "@/types";
 import { formatVnd } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -260,18 +260,6 @@ export function RouteMapPanel({
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            boundsRef.current &&
-            mapRef.current?.fitBounds(boundsRef.current, { padding: [40, 40], maxZoom: 14 })
-          }
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-card text-muted-foreground shadow-md hover:text-primary"
-          aria-label="Căn giữa lộ trình"
-          title="Căn giữa lộ trình"
-        >
-          <Crosshair className="h-4 w-4" />
-        </button>
       </div>
       {providerLabel && (
         <span className="absolute bottom-1 left-2 z-[400] rounded bg-card/90 px-1.5 py-0.5 text-[10px] text-muted-foreground">

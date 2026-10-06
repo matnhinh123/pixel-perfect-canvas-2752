@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, GripVertical, Info, Pencil, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,31 +21,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, Field, NativeSelect, Tag, thClass } from "@/components/movex/common";
 import { LocationPicker } from "./LocationPicker";
-import { emptyPoint } from "@/services/routeService";
 import { stationsTotal, type LegFigures } from "@/services/cost/costMath";
 import { uid } from "@/repositories/storage";
 import { formatVnd } from "@/lib/format";
 import {
   MANUAL_COST_TYPES,
-  VEHICLE_GROUPS,
-  VEHICLE_PROFILES,
-  profileNeedsCapacity,
   type FeeType,
   type ManualCost,
   type ManualCostType,
   type RoadTypeSplit,
   type RoutePoint,
-  type RouteRecord,
   type TollStation,
-  type VehicleGroup,
-  type VehicleProfile,
 } from "@/types";
 import { cn } from "@/lib/utils";
-
-const validPoint = (p: RoutePoint) => !!p.name && Number.isFinite(p.lat) && Number.isFinite(p.lng);
 
 export const FEE_TYPE_LABEL: Record<FeeType, string> = {
   Toll: "Cầu đường",
@@ -70,23 +60,28 @@ function StopBadge({ kind, index }: { kind: "origin" | "stop" | "destination"; i
 }
 
 /**
- * Whole sequence [origin, ...waypoints, destination] as one table. Rows can be dragged; after a drop the
- * first row becomes the origin and the last the destination.
+ * The whole sequence [origin, ...waypoints, destination] edited in place: pick a location and type a
+ * note directly in each row; drag a row by its handle to reorder. After a drop the first row becomes
+ * the origin and the last row the destination.
  */
 export function StopList({
-  r,
+  seq,
   onChange,
-  onEditStop,
-  readOnly,
+  errors,
 }: {
-  r: Pick<RouteRecord, "origin" | "waypoints" | "destination">;
+  seq: RoutePoint[];
   onChange: (seq: RoutePoint[]) => void;
-  onEditStop: (waypointIndex: number) => void;
-  readOnly?: boolean;
+  errors: {
+    origin?: string | undefined;
+    destination?: string | undefined;
+    waypoints?: string | undefined;
+  };
 }) {
-  const seq = [r.origin, ...r.waypoints, r.destination];
+  const [armed, setArmed] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
+
+  const update = (i: number, p: RoutePoint) => onChange(seq.map((x, j) => (j === i ? p : x)));
   const drop = (to: number) => {
     if (dragFrom === null || dragFrom === to) return;
     const next = [...seq];
@@ -94,7 +89,11 @@ export function StopList({
     next.splice(to, 0, moved!);
     onChange(next);
   };
-  const remove = (i: number) => onChange(seq.filter((_, j) => j !== i));
+  const reset = () => {
+    setArmed(null);
+    setDragFrom(null);
+    setOver(null);
+  };
 
   return (
     <Table>
@@ -116,70 +115,85 @@ export function StopList({
       <TableBody>
         {seq.map((p, i) => {
           const kind = i === 0 ? "origin" : i === seq.length - 1 ? "destination" : "stop";
+          const invalid =
+            (kind === "origin" && !!errors.origin) ||
+            (kind === "destination" && !!errors.destination) ||
+            (kind === "stop" && !!errors.waypoints && !Number.isFinite(p.lat));
           return (
             <TableRow
               key={i}
-              draggable={!readOnly}
+              draggable={armed === i}
               onDragStart={() => setDragFrom(i)}
               onDragOver={(e) => {
                 e.preventDefault();
                 setOver(i);
               }}
-              onDragLeave={() => setOver((o) => (o === i ? null : o))}
               onDrop={() => {
                 drop(i);
-                setDragFrom(null);
-                setOver(null);
+                reset();
               }}
-              onDragEnd={() => {
-                setDragFrom(null);
-                setOver(null);
-              }}
+              onDragEnd={reset}
               className={cn(
                 over === i && dragFrom !== null && dragFrom !== i && "bg-accent",
                 dragFrom === i && "opacity-50",
               )}
             >
               <TableCell className="w-8 text-muted-foreground">
-                <GripVertical className={cn("h-4 w-4", !readOnly && "cursor-grab")} />
-              </TableCell>
-              <TableCell className="w-10 text-center text-muted-foreground">{i + 1}</TableCell>
-              <TableCell>
-                {kind === "origin" ? "Điểm đi" : kind === "destination" ? "Điểm đến" : "Điểm dừng"}
-              </TableCell>
-              <TableCell>
-                <span className="flex items-center gap-3">
-                  <StopBadge kind={kind} index={i} />
-                  {validPoint(p) ? (
-                    p.name
-                  ) : (
-                    <span className="text-muted-foreground">(chưa chọn)</span>
-                  )}
+                <span
+                  className="flex cursor-grab items-center active:cursor-grabbing"
+                  onMouseDown={() => setArmed(i)}
+                  onMouseUp={() => setArmed(null)}
+                  title="Kéo để đổi thứ tự"
+                >
+                  <GripVertical className="h-4 w-4" />
                 </span>
               </TableCell>
-              <TableCell className="text-muted-foreground">{p.note || p.address || "—"}</TableCell>
-              <TableCell className="text-center">
-                {kind === "stop" && !readOnly ? (
-                  <span className="inline-flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => onEditStop(i - 1)}
-                      aria-label="Sửa điểm dừng"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => remove(i)}
-                      aria-label="Xoá điểm dừng"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+              <TableCell className="w-10 text-center text-muted-foreground">{i + 1}</TableCell>
+              <TableCell className="w-28 whitespace-nowrap">
+                {kind === "origin" ? "Điểm đi" : kind === "destination" ? "Điểm đến" : "Điểm dừng"}
+              </TableCell>
+              <TableCell className="py-1.5">
+                <span className="flex items-center gap-2">
+                  <StopBadge kind={kind} index={i} />
+                  <span className="min-w-0 flex-1">
+                    <LocationPicker
+                      inline
+                      value={p}
+                      onChange={(v) => update(i, v)}
+                      invalid={invalid}
+                      placeholder={
+                        kind === "origin"
+                          ? "Chọn điểm đi"
+                          : kind === "destination"
+                            ? "Chọn điểm đến"
+                            : "Chọn điểm dừng"
+                      }
+                    />
                   </span>
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5">
+                <Input
+                  value={p.note ?? ""}
+                  onChange={(e) => {
+                    const { note: _drop, ...rest } = p;
+                    update(i, e.target.value ? { ...rest, note: e.target.value } : rest);
+                  }}
+                  placeholder={p.address || "Ghi chú"}
+                  className="h-9 border-transparent bg-transparent shadow-none placeholder:text-muted-foreground hover:border-input focus-visible:bg-card"
+                />
+              </TableCell>
+              <TableCell className="w-20 text-center">
+                {kind === "stop" ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onChange(seq.filter((_, j) => j !== i))}
+                    aria-label="Xoá điểm dừng"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 ) : (
                   <span className="text-muted-foreground">--</span>
                 )}
@@ -190,95 +204,6 @@ export function StopList({
       </TableBody>
     </Table>
   );
-}
-
-export function StopDialog({
-  open,
-  onOpenChange,
-  initial,
-  onSave,
-  title,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  initial: RoutePoint | null;
-  onSave: (p: RoutePoint) => void;
-  title: string;
-}) {
-  const [p, setP] = useState<RoutePoint>(() => initial ?? emptyPoint());
-  const [error, setError] = useState<string | null>(null);
-  const [lastInitial, setLastInitial] = useState(initial);
-  if (initial !== lastInitial) {
-    setLastInitial(initial);
-    setP(initial ?? emptyPoint());
-    setError(null);
-  }
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Chọn địa điểm từ danh mục Location hoặc tìm kiếm.</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <Field label="Địa điểm" required error={error ?? undefined}>
-            <LocationPicker
-              value={p}
-              onChange={(v) => {
-                setP((x) => ({ ...v, ...(x.note ? { note: x.note } : {}) }));
-                setError(null);
-              }}
-              invalid={!!error}
-              placeholder="Tìm địa điểm…"
-            />
-          </Field>
-          <Field label="Ghi chú">
-            <Input
-              value={p.note ?? ""}
-              onChange={(e) => setP({ ...p, note: e.target.value })}
-              placeholder="VD: Lấy thêm hàng tại kho đối tác"
-            />
-          </Field>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Huỷ
-          </Button>
-          <Button
-            onClick={() => {
-              if (!validPoint(p)) {
-                setError("Hãy chọn một địa điểm trong danh sách.");
-                return;
-              }
-              const { note, ...rest } = p;
-              onSave(note?.trim() ? { ...rest, note: note.trim() } : rest);
-              onOpenChange(false);
-            }}
-          >
-            Lưu điểm dừng
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Nearest-neighbour ordering of waypoints between a fixed origin and destination. */
-export function optimizeStops(origin: RoutePoint, waypoints: RoutePoint[]): RoutePoint[] {
-  const left = [...waypoints];
-  const out: RoutePoint[] = [];
-  let cur = origin;
-  const d = (a: RoutePoint, b: RoutePoint) =>
-    (a.lat - b.lat) ** 2 + ((a.lng - b.lng) * Math.cos((a.lat * Math.PI) / 180)) ** 2;
-  while (left.length) {
-    let best = 0;
-    left.forEach((w, i) => {
-      if (d(cur, w) < d(cur, left[best]!)) best = i;
-    });
-    cur = left.splice(best, 1)[0]!;
-    out.push(cur);
-  }
-  return out;
 }
 
 // ---------- Road types (Địa hình tuyến đường) ----------
@@ -364,179 +289,7 @@ export function TollReference({ stations }: { stations: TollStation[] }) {
   );
 }
 
-// ---------- Return waypoints editor ----------
-export function WaypointEditor({
-  points,
-  onChange,
-  label = "Điểm dừng",
-  error,
-  addLabel = "Thêm điểm dừng",
-}: {
-  points: RoutePoint[];
-  onChange: (p: RoutePoint[]) => void;
-  label?: string;
-  error?: string | undefined;
-  addLabel?: string;
-}) {
-  const move = (i: number, d: -1 | 1) => {
-    const next = [...points];
-    const j = i + d;
-    if (j < 0 || j >= next.length) return;
-    [next[i], next[j]] = [next[j]!, next[i]!];
-    onChange(next);
-  };
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-semibold">
-        {label} ({points.length})
-      </span>
-      {points.map((w, i) => (
-        <div key={i} className="flex items-center gap-1">
-          <span className="flex h-9 w-6 items-center justify-center text-xs font-bold text-success">
-            R{i + 1}
-          </span>
-          <div className="flex-1">
-            <LocationPicker
-              value={w}
-              onChange={(p) => onChange(points.map((x, j) => (j === i ? p : x)))}
-              placeholder="Điểm dừng chiều về"
-              invalid={!!error && !Number.isFinite(w.lat)}
-            />
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            disabled={i === 0}
-            onClick={() => move(i, -1)}
-            aria-label="Lên"
-          >
-            <ArrowUp className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            disabled={i === points.length - 1}
-            onClick={() => move(i, 1)}
-            aria-label="Xuống"
-          >
-            <ArrowDown className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => onChange(points.filter((_, j) => j !== i))}
-            aria-label="Xoá"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ))}
-      {error && <span className="text-xs font-medium text-destructive">{error}</span>}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="self-start"
-        onClick={() => onChange([...points, emptyPoint()])}
-      >
-        <Plus className="h-4 w-4" />
-        {addLabel}
-      </Button>
-    </div>
-  );
-}
-
-// ---------- Vehicle ----------
-export function VehiclePanel({
-  r,
-  set,
-  errors,
-}: {
-  r: RouteRecord;
-  set: <K extends keyof RouteRecord>(k: K, v: RouteRecord[K]) => void;
-  errors: Record<string, string>;
-}) {
-  const heavy = profileNeedsCapacity(r.vehicleProfile);
-  return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <div className="mb-1.5 flex items-center gap-1 text-sm font-semibold">
-          Vehicle Profile{" "}
-          <span className="font-normal text-muted-foreground">(dùng cho routing API)</span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Info className="h-3.5 w-3.5 text-muted-foreground" />
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs">
-              Gửi cho routing engine (Vietmap <code>vehicle</code>) để chọn đường hợp lệ và giá vé
-              theo loại xe. Không dùng cho đơn giá chi phí MoveX.
-            </TooltipContent>
-          </Tooltip>
-        </div>
-        <div className="grid grid-cols-4 gap-2">
-          {VEHICLE_PROFILES.map((v: VehicleProfile) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => set("vehicleProfile", v)}
-              className={cn(
-                "rounded-lg border px-2 py-2.5 text-sm font-semibold transition",
-                r.vehicleProfile === v
-                  ? "border-primary bg-accent text-primary"
-                  : "hover:border-primary",
-              )}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <Field
-          label="Vehicle Group (nghiệp vụ MoveX)"
-          required
-          hint="Dùng cho đơn giá chi phí & bảng giá"
-        >
-          <NativeSelect
-            value={r.vehicleGroup}
-            onChange={(v) => set("vehicleGroup", v as VehicleGroup)}
-            options={VEHICLE_GROUPS}
-          />
-        </Field>
-        {heavy ? (
-          <Field
-            label="Tải trọng / Capacity (kg)"
-            required
-            error={errors["capacityKg"]}
-            hint="Map vào tham số capacity của Vietmap"
-          >
-            <Input
-              type="number"
-              min={0}
-              value={r.capacityKg ?? ""}
-              aria-invalid={!!errors["capacityKg"] || undefined}
-              onChange={(e) =>
-                set("capacityKg", e.target.value === "" ? undefined : Number(e.target.value))
-              }
-            />
-          </Field>
-        ) : (
-          <div className="flex items-end pb-2 text-xs text-muted-foreground">
-            Chỉ cần tải trọng với Truck / Container.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------- Toll / ferry cost breakdown ----------
+// ---------- Toll / ferry cost breakdown (MD-06 detail drawer) ----------
 type Row = {
   key: string;
   leg: "Outbound" | "Return" | "Manual";
@@ -552,16 +305,12 @@ export function TollBreakdown({
   manualCosts,
   onAddManual,
   onRemoveManual,
-  readOnly,
-  footerExtra,
 }: {
   outbound: LegFigures | null;
   ret: LegFigures | null;
   manualCosts: ManualCost[];
   onAddManual: () => void;
   onRemoveManual: (id: string) => void;
-  readOnly?: boolean;
-  footerExtra?: ReactNode;
 }) {
   const rows: Row[] = [
     ...(outbound?.tollStations ?? []).map((t, i) => ({
@@ -640,9 +389,6 @@ export function TollBreakdown({
                       {x.note && (
                         <div className="text-xs font-normal text-muted-foreground">{x.note}</div>
                       )}
-                      {x.t.positionApproximate && (
-                        <div className="text-[10px] text-muted-foreground">vị trí ước lượng</div>
-                      )}
                     </TableCell>
                     <TableCell>
                       {x.leg === "Manual"
@@ -657,15 +403,13 @@ export function TollBreakdown({
                     </TableCell>
                     <TableCell>
                       {x.t.source === "Mock" ? (
-                        <span title="Dữ liệu từ Mock provider — sẽ là Vietmap khi cấu hình VIETMAP_API_KEY">
-                          <Tag tone="Vietmap">Vietmap (mock)</Tag>
-                        </span>
+                        <Tag tone="Vietmap">Vietmap (mock)</Tag>
                       ) : (
                         <Tag>{x.t.source}</Tag>
                       )}
                     </TableCell>
                     <TableCell>
-                      {x.manualId && !readOnly && (
+                      {x.manualId && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -710,17 +454,10 @@ export function TollBreakdown({
           </TableFooter>
         </Table>
       </div>
-      <div className="mt-3 flex items-center justify-between">
-        {!readOnly ? (
-          <Button variant="outline" size="sm" onClick={onAddManual}>
-            <Plus className="h-4 w-4" />
-            Add Manual Cost
-          </Button>
-        ) : (
-          <span />
-        )}
-        {footerExtra}
-      </div>
+      <Button variant="outline" size="sm" className="mt-3" onClick={onAddManual}>
+        <Plus className="h-4 w-4" />
+        Add Manual Cost
+      </Button>
     </div>
   );
 }
@@ -809,96 +546,5 @@ export function ManualCostDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function CustomReturnEditor({
-  value,
-  onChange,
-}: {
-  value: LegFigures;
-  onChange: (v: LegFigures) => void;
-}) {
-  const setStation = (i: number, patch: Partial<TollStation>) =>
-    onChange({
-      ...value,
-      tollStations: value.tollStations.map((t, j) => (j === i ? { ...t, ...patch } : t)),
-    });
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Khoảng cách chiều về (km)" required>
-          <Input
-            type="number"
-            min={0}
-            step="0.1"
-            value={value.distance}
-            onChange={(e) => onChange({ ...value, distance: Number(e.target.value) })}
-          />
-        </Field>
-        <Field label="Thời gian chiều về (phút)" required>
-          <Input
-            type="number"
-            min={0}
-            value={value.estimatedTime}
-            onChange={(e) => onChange({ ...value, estimatedTime: Number(e.target.value) })}
-          />
-        </Field>
-      </div>
-      <div className="text-sm font-semibold">Trạm thu phí chiều về</div>
-      {value.tollStations.map((t, i) => (
-        <div key={i} className="grid grid-cols-[1fr_130px_70px_32px] items-center gap-2">
-          <Input value={t.name} onChange={(e) => setStation(i, { name: e.target.value })} />
-          <Input
-            type="number"
-            min={0}
-            value={t.price}
-            onChange={(e) => setStation(i, { price: Number(e.target.value), source: "Manual" })}
-          />
-          <Input
-            type="number"
-            min={1}
-            value={t.passCount}
-            onChange={(e) => setStation(i, { passCount: Math.max(1, Number(e.target.value)) })}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() =>
-              onChange({ ...value, tollStations: value.tollStations.filter((_, j) => j !== i) })
-            }
-            aria-label="Xoá trạm"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ))}
-      <Button
-        variant="outline"
-        size="sm"
-        className="self-start"
-        onClick={() =>
-          onChange({
-            ...value,
-            tollStations: [
-              ...value.tollStations,
-              {
-                id: uid("T-"),
-                name: "Trạm mới",
-                feeType: "Toll",
-                price: 0,
-                vehicleTollGroup: "—",
-                passCount: 1,
-                source: "Manual",
-              },
-            ],
-          })
-        }
-      >
-        <Plus className="h-4 w-4" />
-        Thêm trạm chiều về
-      </Button>
-    </div>
   );
 }
