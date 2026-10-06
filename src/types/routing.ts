@@ -36,6 +36,17 @@ export interface RoutePoint extends GeoPoint {
   note?: string;
 }
 
+/** Vehicle master record. Group / weight / routing profile / toll class all derive from it. */
+export interface VehicleRecord {
+  id: string;
+  plate: string;
+  name: string;
+  group: VehicleGroup;
+  weightKg: number;
+  /** Routing API profile (Vietmap `vehicle` param). */
+  profile: VehicleProfile;
+}
+
 export interface LocationRecord extends GeoPoint {
   id: string;
   name: string;
@@ -63,6 +74,8 @@ export interface TollStation {
   lat?: number;
   lng?: number;
   positionApproximate?: boolean;
+  /** Matched against Toll Station master data ("Đã đối chiếu"). */
+  reconciled?: boolean;
 }
 
 export interface RouteInstruction {
@@ -86,6 +99,10 @@ export interface RouteCalculation {
   roadTypes: RoadTypeSplit;
   provider: "vietmap" | "mock";
   calculatedAt: string;
+  /** Set when the result is one of several alternatives returned for the same request. */
+  id?: string;
+  label?: string;
+  recommended?: boolean;
 }
 
 export interface RoadTypeSplit {
@@ -98,6 +115,9 @@ export interface RouteRequest {
   points: (GeoPoint & { name?: string })[];
   vehicle: VehicleProfile;
   capacityKg?: number | undefined;
+  avoidFerry?: boolean;
+  /** Local date-time "YYYY-MM-DDTHH:mm". */
+  departureTime?: string;
 }
 
 export type ManualCostType = "Ferry" | "Peak-hour surcharge" | "Other route cost";
@@ -130,9 +150,17 @@ export interface RouteRecord extends BaseRecord {
   origin: RoutePoint;
   waypoints: RoutePoint[];
   destination: RoutePoint;
+  /** Vehicle master id. Profile / group / capacity below are copied from it for Cost & list screens. */
+  vehicleId?: string;
   vehicleProfile: VehicleProfile;
   vehicleGroup: VehicleGroup;
   capacityKg?: number | undefined;
+  /** Local date-time "YYYY-MM-DDTHH:mm". */
+  departureTime: string;
+  avoidFerry: boolean;
+  /** Outbound alternatives from the last calculation; `outbound` is the selected one. */
+  alternatives: RouteCalculation[];
+  selectedRouteId: string | null;
   outbound: RouteCalculation | null;
   returnMode: "auto" | "custom";
   returnWaypoints: RoutePoint[];

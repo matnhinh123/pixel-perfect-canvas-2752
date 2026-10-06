@@ -38,6 +38,14 @@ export class VietmapRouteProvider implements RouteProvider {
     });
   }
 
+  calculateRoutes(req: RouteRequest) {
+    return this.call<RouteCalculation[]>("routes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  }
+
   searchLocation(text: string) {
     return this.call<LocationSuggestion[]>(`search?text=${encodeURIComponent(text)}`);
   }

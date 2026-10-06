@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,8 +20,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { EmptyState, Field, NativeSelect, Tag, thClass } from "@/components/movex/common";
-import { LocationPicker } from "./LocationPicker";
+import { Field, NativeSelect, Tag, thClass } from "@/components/movex/common";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { LocationAutocomplete } from "./LocationAutocomplete";
 import { stationsTotal, type LegFigures } from "@/services/cost/costMath";
 import { uid } from "@/repositories/storage";
 import { formatVnd } from "@/lib/format";
@@ -30,8 +36,8 @@ import {
   MANUAL_COST_TYPES,
   type FeeType,
   type ManualCost,
+  type LocationRecord,
   type ManualCostType,
-  type RoadTypeSplit,
   type RoutePoint,
   type TollStation,
 } from "@/types";
@@ -44,7 +50,9 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
 };
 
 // ---------- Stop list (Danh sách điểm dừng) ----------
-function StopBadge({ kind, index }: { kind: "origin" | "stop" | "destination"; index: number }) {
+type StopKind = "origin" | "stop" | "destination";
+
+export function StopBadge({ kind, index }: { kind: StopKind; index: number }) {
   const cls =
     kind === "origin" ? "bg-success" : kind === "destination" ? "bg-destructive" : "bg-primary";
   return (
@@ -59,33 +67,57 @@ function StopBadge({ kind, index }: { kind: "origin" | "stop" | "destination"; i
   );
 }
 
+const toPoint = (l: LocationRecord, note?: string): RoutePoint => ({
+  name: l.name,
+  address: l.province,
+  lat: l.lat,
+  lng: l.lng,
+  locationId: l.id,
+  ...(note ? { note } : {}),
+});
+const emptyStop = (note?: string): RoutePoint => ({
+  name: "",
+  lat: NaN,
+  lng: NaN,
+  ...(note ? { note } : {}),
+});
+
 /**
- * The whole sequence [origin, ...waypoints, destination] edited in place: pick a location and type a
- * note directly in each row; drag a row by its handle to reorder. After a drop the first row becomes
- * the origin and the last row the destination.
+ * The sequence [origin, ...waypoints, destination] edited in place. Every row uses the same
+ * LocationAutocomplete. Waypoints can be reordered (drag handle or the row menu) and deleted;
+ * origin and destination stay first/last and cannot be deleted. With `lockEndpoints` the endpoints
+ * are read-only (custom return leg: B → … → A).
  */
 export function StopList({
   seq,
   onChange,
+  locations,
   errors,
+  lockEndpoints,
+  labels,
 }: {
   seq: RoutePoint[];
   onChange: (seq: RoutePoint[]) => void;
-  errors: {
+  locations: LocationRecord[];
+  errors?: {
     origin?: string | undefined;
     destination?: string | undefined;
     waypoints?: string | undefined;
   };
+  lockEndpoints?: boolean;
+  labels?: { origin: string; destination: string };
 }) {
   const [armed, setArmed] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
+  const last = seq.length - 1;
+  const isStop = (i: number) => i > 0 && i < last;
 
   const update = (i: number, p: RoutePoint) => onChange(seq.map((x, j) => (j === i ? p : x)));
-  const drop = (to: number) => {
-    if (dragFrom === null || dragFrom === to) return;
+  const move = (from: number, to: number) => {
+    if (!isStop(from) || !isStop(to) || from === to) return;
     const next = [...seq];
-    const [moved] = next.splice(dragFrom, 1);
+    const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved!);
     onChange(next);
   };
@@ -114,22 +146,24 @@ export function StopList({
       </TableHeader>
       <TableBody>
         {seq.map((p, i) => {
-          const kind = i === 0 ? "origin" : i === seq.length - 1 ? "destination" : "stop";
+          const kind: StopKind = i === 0 ? "origin" : i === last ? "destination" : "stop";
+          const locked = lockEndpoints && kind !== "stop";
           const invalid =
-            (kind === "origin" && !!errors.origin) ||
-            (kind === "destination" && !!errors.destination) ||
-            (kind === "stop" && !!errors.waypoints && !Number.isFinite(p.lat));
+            (kind === "origin" && !!errors?.origin) ||
+            (kind === "destination" && !!errors?.destination) ||
+            (kind === "stop" && !!errors?.waypoints && !Number.isFinite(p.lat));
           return (
             <TableRow
               key={i}
               draggable={armed === i}
               onDragStart={() => setDragFrom(i)}
               onDragOver={(e) => {
+                if (dragFrom === null || !isStop(i)) return;
                 e.preventDefault();
                 setOver(i);
               }}
               onDrop={() => {
-                drop(i);
+                if (dragFrom !== null) move(dragFrom, i);
                 reset();
               }}
               onDragEnd={reset}
@@ -139,63 +173,118 @@ export function StopList({
               )}
             >
               <TableCell className="w-8 text-muted-foreground">
-                <span
-                  className="flex cursor-grab items-center active:cursor-grabbing"
-                  onMouseDown={() => setArmed(i)}
-                  onMouseUp={() => setArmed(null)}
-                  title="Kéo để đổi thứ tự"
-                >
-                  <GripVertical className="h-4 w-4" />
-                </span>
+                {kind === "stop" ? (
+                  <span
+                    className="flex cursor-grab items-center active:cursor-grabbing"
+                    onMouseDown={() => setArmed(i)}
+                    onMouseUp={() => setArmed(null)}
+                    title="Kéo để đổi thứ tự điểm dừng"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </span>
+                ) : (
+                  <GripVertical className="h-4 w-4 opacity-20" />
+                )}
               </TableCell>
               <TableCell className="w-10 text-center text-muted-foreground">{i + 1}</TableCell>
               <TableCell className="w-28 whitespace-nowrap">
-                {kind === "origin" ? "Điểm đi" : kind === "destination" ? "Điểm đến" : "Điểm dừng"}
+                {kind === "origin"
+                  ? (labels?.origin ?? "Điểm đi")
+                  : kind === "destination"
+                    ? (labels?.destination ?? "Điểm đến")
+                    : "Điểm dừng"}
               </TableCell>
-              <TableCell className="py-1.5">
+              <TableCell className="min-w-56 py-1.5">
                 <span className="flex items-center gap-2">
-                  <StopBadge kind={kind} index={i} />
+                  {/* Locked endpoints = return leg, which runs B → A. */}
+                  <StopBadge
+                    kind={locked ? (kind === "origin" ? "destination" : "origin") : kind}
+                    index={i}
+                  />
                   <span className="min-w-0 flex-1">
-                    <LocationPicker
-                      inline
-                      value={p}
-                      onChange={(v) => update(i, v)}
-                      invalid={invalid}
-                      placeholder={
-                        kind === "origin"
-                          ? "Chọn điểm đi"
-                          : kind === "destination"
-                            ? "Chọn điểm đến"
-                            : "Chọn điểm dừng"
-                      }
-                    />
+                    {locked ? (
+                      <span className="block px-2 text-sm">{p.name || "—"}</span>
+                    ) : (
+                      <LocationAutocomplete
+                        inline
+                        locations={locations}
+                        value={p.locationId ?? null}
+                        {...(p.locationId ? {} : { fallbackLabel: p.name })}
+                        onChange={(l) => update(i, l ? toPoint(l, p.note) : emptyStop(p.note))}
+                        invalid={invalid}
+                        placeholder={
+                          kind === "origin"
+                            ? "Gõ để tìm điểm đi…"
+                            : kind === "destination"
+                              ? "Gõ để tìm điểm đến…"
+                              : "Gõ để tìm điểm dừng…"
+                        }
+                      />
+                    )}
                   </span>
                 </span>
               </TableCell>
               <TableCell className="py-1.5">
                 <Input
                   value={p.note ?? ""}
+                  disabled={locked}
                   onChange={(e) => {
                     const { note: _drop, ...rest } = p;
                     update(i, e.target.value ? { ...rest, note: e.target.value } : rest);
                   }}
                   placeholder={p.address || "Ghi chú"}
-                  className="h-9 border-transparent bg-transparent shadow-none placeholder:text-muted-foreground hover:border-input focus-visible:bg-card"
+                  className="h-9 border-transparent bg-transparent shadow-none placeholder:text-muted-foreground hover:border-input focus-visible:bg-card disabled:cursor-default disabled:opacity-100"
                 />
               </TableCell>
               <TableCell className="w-20 text-center">
-                {kind === "stop" ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => onChange(seq.filter((_, j) => j !== i))}
-                    aria-label="Xoá điểm dừng"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                ) : (
+                {locked ? (
                   <span className="text-muted-foreground">--</span>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label="Thao tác điểm"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {kind === "stop" ? (
+                        <>
+                          <DropdownMenuItem disabled={i <= 1} onSelect={() => move(i, i - 1)}>
+                            <ArrowUp className="h-4 w-4" />
+                            Di chuyển lên
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={i >= last - 1}
+                            onSelect={() => move(i, i + 1)}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                            Di chuyển xuống
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={() => onChange(seq.filter((_, j) => j !== i))}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Xoá điểm dừng
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <DropdownMenuItem
+                          disabled={!p.name}
+                          onSelect={() => update(i, emptyStop(p.note))}
+                        >
+                          <X className="h-4 w-4" />
+                          Bỏ chọn địa điểm
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </TableCell>
             </TableRow>
@@ -206,86 +295,91 @@ export function StopList({
   );
 }
 
-// ---------- Road types (Địa hình tuyến đường) ----------
-export function RoadTypes({ split }: { split: RoadTypeSplit | null }) {
-  if (!split)
-    return (
-      <EmptyState
-        title="Chưa có dữ liệu"
-        description='Bấm "Tính lại lộ trình" để phân tích loại đường.'
-      />
-    );
-  const total = split.national + split.expressway + split.other || 1;
-  const rows: [string, number][] = [
-    ["Quốc lộ", split.national],
-    ["Cao tốc", split.expressway],
-    ["Đường tỉnh/khác", split.other],
-  ];
+// ---------- Round trip: return leg (Chiều về) ----------
+export function ReturnRouteSection({
+  mode,
+  onModeChange,
+  origin,
+  waypoints,
+  destination,
+  returnWaypoints,
+  onReturnWaypointsChange,
+  locations,
+}: {
+  mode: "auto" | "custom";
+  onModeChange: (m: "auto" | "custom") => void;
+  origin: RoutePoint;
+  waypoints: RoutePoint[];
+  destination: RoutePoint;
+  returnWaypoints: RoutePoint[];
+  onReturnWaypointsChange: (w: RoutePoint[]) => void;
+  locations: LocationRecord[];
+}) {
+  const reversed = [destination, ...[...waypoints].reverse(), origin];
+  const custom = [destination, ...returnWaypoints, origin];
   return (
-    <div className="flex flex-col">
-      {rows.map(([label, km]) => {
-        const pct = Math.round((km / total) * 100);
-        return (
-          <div
-            key={label}
-            className="grid grid-cols-[130px_80px_1fr_48px] items-center gap-3 border-b py-2 text-sm last:border-0"
-          >
-            <span>{label}</span>
-            <span className="text-right text-muted-foreground">{km} km</span>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-            </div>
-            <span className="text-right text-muted-foreground">{pct}%</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---------- Toll reference (Trạm thu phí trên tuyến) ----------
-export function TollReference({ stations }: { stations: TollStation[] }) {
-  if (stations.length === 0)
-    return (
-      <EmptyState
-        title="Không có trạm thu phí"
-        description="Tuyến chưa được tính hoặc không đi qua trạm nào."
-      />
-    );
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          {["#", "Mã trạm", "Tên trạm", "Loại phí"].map((h) => (
-            <TableHead key={h} className="h-9 text-sm font-semibold text-foreground">
-              {h}
-            </TableHead>
+    <div className="border-t">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 px-4 py-2.5">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Tag tone="Return">Return</Tag>
+          Chiều về
+        </div>
+        <div className="flex flex-wrap items-center gap-5 text-sm" role="radiogroup">
+          {(
+            [
+              ["auto", "Same route reversed"],
+              ["custom", "Custom return route"],
+            ] as const
+          ).map(([v, label]) => (
+            <label key={v} className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                name="returnMode"
+                checked={mode === v}
+                onChange={() => onModeChange(v)}
+                className="h-4 w-4 accent-[var(--primary)]"
+              />
+              <span className={cn(mode === v && "text-primary")}>{label}</span>
+            </label>
           ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {stations.map((t, i) => (
-          <TableRow key={`${t.id}-${i}`}>
-            <TableCell className="w-10 py-2 text-center">{i + 1}</TableCell>
-            <TableCell className="py-2">
-              {t.code ? (
-                <Link
-                  to="/toll-station"
-                  search={{ q: t.code }}
-                  className="font-medium text-primary hover:underline"
-                >
-                  {t.code}
-                </Link>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-            </TableCell>
-            <TableCell className="py-2">{t.name}</TableCell>
-            <TableCell className="py-2">{FEE_TYPE_LABEL[t.feeType]}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </div>
+      </div>
+      {mode === "auto" ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 text-sm">
+          {reversed.map((p, i) => (
+            <span key={i} className="flex items-center gap-2">
+              {i > 0 && <span className="text-muted-foreground">→</span>}
+              <StopBadge
+                kind={i === 0 ? "destination" : i === reversed.length - 1 ? "origin" : "stop"}
+                index={i}
+              />
+              <span>{p.name || "—"}</span>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <>
+          <StopList
+            seq={custom}
+            onChange={(next) => onReturnWaypointsChange(next.slice(1, -1))}
+            locations={locations}
+            lockEndpoints
+            labels={{ origin: "Điểm đi (B)", destination: "Điểm về (A)" }}
+          />
+          <div className="px-4 pb-3 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 border-primary/40 text-primary"
+              onClick={() => onReturnWaypointsChange([...returnWaypoints, emptyStop()])}
+            >
+              <Plus className="h-4 w-4" />
+              Thêm điểm dừng chiều về
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

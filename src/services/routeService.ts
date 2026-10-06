@@ -1,11 +1,16 @@
 import type { RouteRecord, RoutePoint } from "@/types";
-import { profileNeedsCapacity } from "@/types";
 import { costRepository, routeRepository, uid } from "@/repositories";
 import { findLocationByName, LOCATIONS } from "@/mock-data/locations";
+import { findVehicle, routeVehicleFields, vehicleLabel, VEHICLES } from "@/mock-data/vehicles";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { routeTotals } from "./cost/costMath";
-import { formatVnd } from "@/lib/format";
+import { formatDate, formatVnd, todayYmd } from "@/lib/format";
+
+/** An editor action (recalculate, pick an alternative…) recorded in the audit trail on Save. */
+export type RouteAuditAction = Omit<AuditInput, "entityType" | "entityId" | "entityLabel">;
+
+export const formatDeparture = (s: string) => (s ? `${formatDate(s)} ${s.slice(11, 16)}` : "—");
 import type { ImportEntityConfig } from "./importExportService";
 
 const costRefs = (routeId: string) =>
@@ -35,6 +40,10 @@ export const newRouteDraft = (): RouteRecord => ({
   vehicleProfile: "Truck",
   vehicleGroup: "Medium Truck",
   capacityKg: 8000,
+  departureTime: `${todayYmd()}T08:00`,
+  avoidFerry: false,
+  alternatives: [],
+  selectedRouteId: null,
   outbound: null,
   returnMode: "auto",
   returnWaypoints: [],
@@ -67,8 +76,7 @@ export function validateRoute(r: RouteRecord): Record<string, string> {
     e["destination"] = "Pick a Destination from the search list.";
   if (r.waypoints.some((w) => !w.name || !Number.isFinite(w.lat)))
     e["waypoints"] = "Every waypoint needs a location (or remove empty ones).";
-  if (profileNeedsCapacity(r.vehicleProfile) && !(r.capacityKg && r.capacityKg > 0))
-    e["capacityKg"] = "Capacity / Weight is required for Truck / Container.";
+  if (!findVehicle(r.vehicleId)) e["vehicleId"] = "Vehicle is required.";
   if (r.status === "Active" && !r.outbound)
     e["status"] = "Calculate the route before activating it.";
   return e;
@@ -88,32 +96,26 @@ function diffRoute(prev: RouteRecord, next: RouteRecord): AuditInput[] {
   upd("CHANGE_ROUTE_TYPE", "Route Type", prev.type, next.type);
   upd("UPDATE", "Origin", prev.origin.name, next.origin.name);
   upd("UPDATE", "Destination", prev.destination.name, next.destination.name);
-  upd("CHANGE_WAYPOINT", "Waypoints", pts(prev.waypoints), pts(next.waypoints));
+  upd(
+    next.waypoints.length > prev.waypoints.length ? "ADD_WAYPOINT" : "CHANGE_WAYPOINT",
+    "Waypoints",
+    pts(prev.waypoints),
+    pts(next.waypoints),
+  );
   upd("CHANGE_WAYPOINT", "Return Waypoints", pts(prev.returnWaypoints), pts(next.returnWaypoints));
   upd("UPDATE", "Return Mode", prev.returnMode, next.returnMode);
-  upd("CHANGE_VEHICLE", "Vehicle Profile", prev.vehicleProfile, next.vehicleProfile);
-  upd("CHANGE_VEHICLE", "Vehicle Group", prev.vehicleGroup, next.vehicleGroup);
+  const veh = (id?: string) => {
+    const v = findVehicle(id);
+    return v ? vehicleLabel(v) : "—";
+  };
+  upd("CHANGE_VEHICLE", "Vehicle", veh(prev.vehicleId), veh(next.vehicleId));
   upd(
-    "CHANGE_VEHICLE",
-    "Capacity (kg)",
-    String(prev.capacityKg ?? "—"),
-    String(next.capacityKg ?? "—"),
+    "CHANGE_DEPARTURE_TIME",
+    "Departure Time",
+    formatDeparture(prev.departureTime),
+    formatDeparture(next.departureTime),
   );
-  if (
-    prev.outbound?.calculatedAt !== next.outbound?.calculatedAt ||
-    prev.returnLeg?.calculatedAt !== next.returnLeg?.calculatedAt
-  ) {
-    const a = routeTotals(prev),
-      b = routeTotals(next);
-    out.push({
-      ...base,
-      action: "CALCULATE_ROUTE",
-      field: "Distance",
-      oldValue: fmtKm(a.calculated ? a.distanceKm : undefined),
-      newValue: fmtKm(b.distanceKm),
-      note: `Toll ${formatVnd(a.tollCost)} → ${formatVnd(b.tollCost)} · provider ${next.outbound?.provider ?? "—"}`,
-    });
-  }
+  upd("UPDATE", "Avoid Ferry", prev.avoidFerry ? "Yes" : "No", next.avoidFerry ? "Yes" : "No");
   if (
     JSON.stringify(prev.customReturn) !== JSON.stringify(next.customReturn) &&
     next.returnMode === "custom"
@@ -150,12 +152,7 @@ function diffRoute(prev: RouteRecord, next: RouteRecord): AuditInput[] {
   if (prev.status !== next.status)
     out.push({
       ...base,
-      action:
-        next.status === "Inactive"
-          ? "DEACTIVATE"
-          : next.status === "Active"
-            ? "ACTIVATE"
-            : "UPDATE",
+      action: "UPDATE_STATUS",
       field: "Status",
       oldValue: prev.status,
       newValue: next.status,
@@ -167,7 +164,7 @@ export const routeService = {
   ...routeCrud,
   costReferences: costRefs,
 
-  save(draft: RouteRecord): RouteRecord {
+  save(draft: RouteRecord, actions: RouteAuditAction[] = []): RouteRecord {
     const errors = validateRoute(draft);
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please fix the highlighted fields.", errors);
@@ -176,28 +173,14 @@ export const routeService = {
     if (!existing) {
       const rec: RouteRecord = { ...clean, id: uid("R-"), ...stampCreate() };
       routeRepository.insert(rec);
-      const totals = routeTotals(rec);
+      const ref = { entityType: "Route" as const, entityId: rec.id, entityLabel: rec.code };
       auditService.logMany([
         {
           action: "CREATE",
-          entityType: "Route",
-          entityId: rec.id,
-          entityLabel: rec.code,
+          ...ref,
           note: `${rec.type} · ${pts([rec.origin, ...rec.waypoints, rec.destination])}`,
         },
-        ...(rec.outbound
-          ? [
-              {
-                action: "CALCULATE_ROUTE" as const,
-                entityType: "Route" as const,
-                entityId: rec.id,
-                entityLabel: rec.code,
-                field: "Distance",
-                newValue: fmtKm(totals.distanceKm),
-                note: `Toll ${formatVnd(totals.tollCost)}`,
-              },
-            ]
-          : []),
+        ...actions.map((a) => ({ ...a, ...ref })),
         ...rec.manualCosts.map((m) => ({
           action: "ADD_MANUAL_COST" as const,
           entityType: "Route" as const,
@@ -217,7 +200,15 @@ export const routeService = {
       createdBy: existing.createdBy,
     });
     routeRepository.update(existing.id, () => next);
-    auditService.logMany(diffRoute(existing, next));
+    auditService.logMany([
+      ...diffRoute(existing, next),
+      ...actions.map((a) => ({
+        ...a,
+        entityType: "Route" as const,
+        entityId: next.id,
+        entityLabel: next.code,
+      })),
+    ]);
     return next;
   },
 };
@@ -278,6 +269,8 @@ export const routeImportConfig: ImportEntityConfig = {
       const o = findLocationByName(r["origin"]!)!,
         d = findLocationByName(r["destination"]!)!;
       const kg = Number(r["capacityKg"] || 0);
+      // Imported rows name a vehicle group; link the first matching vehicle from Vehicle Master.
+      const vehicle = VEHICLES.find((v) => v.group === r["vehicleGroup"]);
       return {
         ...newRouteDraft(),
         id: uid("R-"),
@@ -290,6 +283,7 @@ export const routeImportConfig: ImportEntityConfig = {
         vehicleProfile: r["vehicleProfile"] as RouteRecord["vehicleProfile"],
         vehicleGroup: r["vehicleGroup"] as RouteRecord["vehicleGroup"],
         ...(kg > 0 ? { capacityKg: kg } : {}),
+        ...(vehicle ? { vehicleId: vehicle.id } : {}),
         status: "Draft",
         ...stampCreate(),
       };
@@ -302,10 +296,9 @@ export const routeImportConfig: ImportEntityConfig = {
     const header = routeImportConfig.columns.map((c) => c.header);
     const locs = LOCATIONS.filter(
       (l) =>
-        l.id.startsWith("L-HCM") ||
-        l.id.startsWith("L-BD") ||
-        l.id.startsWith("L-DNAI") ||
-        l.id === "L-CATLAI",
+        l.province === "TP. Hồ Chí Minh" ||
+        l.province === "Bình Dương" ||
+        l.province === "Đồng Nai",
     );
     const rows: string[][] = [];
     for (let i = 0; i < 20; i++) {

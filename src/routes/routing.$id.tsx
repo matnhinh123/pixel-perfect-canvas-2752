@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Info, Loader2, Plus, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, History, Info, Loader2, Plus, RefreshCw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sheet,
   SheetContent,
@@ -12,8 +13,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { EmptyState, Field, Panel, StatusBadge } from "@/components/movex/common";
+import { EmptyState, Field, Panel, StatusBadge, Tag } from "@/components/movex/common";
 import { RouteMapPanel, type MapToll } from "@/components/movex/RouteMapPanel";
+import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
   FormPageHeader,
@@ -21,20 +23,35 @@ import {
 } from "@/components/movex/general/FormPage";
 import {
   ManualCostDialog,
-  RoadTypes,
+  ReturnRouteSection,
   StopList,
   TollBreakdown,
-  TollReference,
 } from "@/components/movex/routing/RouteSections";
+import { VehicleSelector } from "@/components/movex/routing/VehicleSelector";
+import {
+  altTitle,
+  RouteAlternativeSelector,
+} from "@/components/movex/routing/RouteAlternativeSelector";
+import { RouteSummary } from "@/components/movex/routing/RouteSummary";
+import { TollStationTable, type TollRow } from "@/components/movex/routing/TollStationTable";
 import { useCollection } from "@/hooks/use-store";
 import { routeRepository } from "@/repositories";
-import { emptyPoint, newRouteDraft, routeService, validateRoute } from "@/services/routeService";
-import { routingService } from "@/services/routing/routingService";
+import {
+  emptyPoint,
+  newRouteDraft,
+  routeService,
+  validateRoute,
+  type RouteAuditAction,
+} from "@/services/routeService";
+import { routingService, validateRouteInput } from "@/services/routing/routingService";
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import { routeLegs, routeTotals } from "@/services/cost/costMath";
-import { formatDuration, formatVnd } from "@/lib/format";
-import type { RoadTypeSplit, RoutePoint, RouteRecord, RouteType, Status } from "@/types";
+import { LOCATIONS } from "@/mock-data/locations";
+import { routeVehicleFields, VEHICLES } from "@/mock-data/vehicles";
+import type { MockTollGate } from "@/mock-data/tollCatalog";
+import { formatVnd } from "@/lib/format";
+import type { RouteCalculation, RoutePoint, RouteRecord, RouteType, Status } from "@/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/routing/$id")({
@@ -46,7 +63,7 @@ export const Route = createFileRoute("/routing/$id")({
       { title: params.id === "new" ? "Tạo mới Route — MoveX" : "Chỉnh sửa Route — MoveX" },
       {
         name: "description",
-        content: "Route create/edit with map, stops, road types and toll stations.",
+        content: "Route create/edit with vehicle, stops, route alternatives and toll stations.",
       },
     ],
   }),
@@ -75,49 +92,54 @@ function RouteDetailPage() {
   return <RouteEditor key={source?.id ?? "new"} source={source} />;
 }
 
+/** Records saved before alternatives existed: fill in the new fields. */
+const normalize = (r: RouteRecord): RouteRecord => ({
+  ...newRouteDraft(),
+  ...r,
+  alternatives: r.alternatives ?? (r.outbound ? [r.outbound] : []),
+  selectedRouteId: r.selectedRouteId ?? r.outbound?.id ?? null,
+});
+
 /** Signature of inputs that affect the routing result — used to flag a stale calculation. */
 const calcSig = (r: RouteRecord) =>
   JSON.stringify([
     r.type,
     r.returnMode,
-    r.vehicleProfile,
-    r.capacityKg,
+    r.vehicleId,
+    r.departureTime,
+    r.avoidFerry,
     [r.origin, ...r.waypoints, r.destination].map((p) => [p.lat, p.lng]),
     r.returnWaypoints.map((p) => [p.lat, p.lng]),
   ]);
 
-const sumSplit = (a: RoadTypeSplit, b?: RoadTypeSplit | null): RoadTypeSplit =>
-  b
-    ? {
-        national: a.national + b.national,
-        expressway: a.expressway + b.expressway,
-        other: a.other + b.other,
-      }
-    : a;
+const altId = (a: RouteCalculation, i: number) => a.id ?? `ALT-${i + 1}`;
+const altName = (alts: RouteCalculation[], id: string | null) => {
+  const i = alts.findIndex((a, j) => altId(a, j) === id);
+  if (i < 0) return "—";
+  const a = alts[i]!;
+  return `${altTitle(a, i)}${a.recommended ? " (Đề xuất)" : ""}`;
+};
 
 function RouteEditor({ source }: { source: RouteRecord | null }) {
   const navigate = useNavigate();
   const isNew = !source;
-  const [r, setR] = useState<RouteRecord>(() => structuredClone(source ?? newRouteDraft()));
+  const initial = useMemo(() => normalize(source ?? newRouteDraft()), [source]);
+  const [r, setR] = useState<RouteRecord>(() => structuredClone(initial));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [calcState, setCalcState] = useState<"idle" | "loading" | "error">("idle");
   const [calcError, setCalcError] = useState<string | null>(null);
-  const [lastSig, setLastSig] = useState(() => (source?.outbound ? calcSig(source) : ""));
+  const [lastSig, setLastSig] = useState(() => (initial.outbound ? calcSig(initial) : ""));
   const [detailOpen, setDetailOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [provider, setProvider] = useState<"vietmap" | "mock" | null>(null);
+  /** Editor actions (recalculate, pick alternative) written to the audit trail on Save. */
+  const [pending, setPending] = useState<RouteAuditAction[]>([]);
 
-  const dirty = useMemo(
-    () => JSON.stringify(r) !== JSON.stringify(source ?? newRouteDraft()),
-    [r, source],
-  );
+  const dirty = useMemo(() => JSON.stringify(r) !== JSON.stringify(initial), [r, initial]);
   const guard = useUnsavedChangesGuard(dirty);
 
-  useEffect(() => {
-    void routingService.providerName().then(setProvider);
-  }, []);
   useEffect(() => {
     if (source) auditService.logView("Route", source.id, source.code);
   }, [source?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -150,39 +172,100 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const { outbound, ret } = routeLegs(r);
   const round = r.type === "Round Trip";
   const stale = !!r.outbound && lastSig !== calcSig(r);
-  const roadSplit = r.outbound
-    ? sumSplit(r.outbound.roadTypes, round ? r.returnLeg?.roadTypes : null)
-    : null;
-  const refStations = [
-    ...(outbound?.tollStations ?? []),
-    ...(round ? (ret?.tollStations ?? []) : []),
-  ];
+  const inputError = validateRouteInput(r);
+  const loading = calcState === "loading";
+  const selectedName = altName(r.alternatives, r.selectedRouteId);
 
   const calculate = async () => {
+    if (inputError) {
+      toast.error(inputError);
+      return;
+    }
     setCalcState("loading");
     setCalcError(null);
     try {
       const res = await routingService.calculate(r);
-      setR((p) => ({ ...p, outbound: res.outbound, returnLeg: res.returnLeg }));
+      const best = res.alternatives.find((a) => a.recommended) ?? res.alternatives[0]!;
+      const bestId = altId(best, res.alternatives.indexOf(best));
+      setR((p) => {
+        const { customReturn: _drop, ...rest } = p;
+        return {
+          ...rest,
+          alternatives: res.alternatives,
+          selectedRouteId: bestId,
+          outbound: best,
+          returnLeg: res.returnLeg,
+        };
+      });
       setLastSig(calcSig(r));
       setCalcState("idle");
-      const w = [...res.outbound.warnings, ...(res.returnLeg?.warnings ?? [])];
+      setPending((q) => [
+        ...q,
+        {
+          action: "CALCULATE_ROUTE",
+          field: "Alternatives",
+          newValue: `${res.alternatives.length} tuyến`,
+          note: `${best.provider === "vietmap" ? "Vietmap" : "Mock provider"} · ${altName(res.alternatives, bestId)}: ${best.distance} km`,
+        },
+      ]);
+      const w = [...best.warnings, ...(res.returnLeg?.warnings ?? [])];
       toast.success(
-        `Đã tính lộ trình: ${res.outbound.distance} km${res.returnLeg ? ` + ${res.returnLeg.distance} km chiều về` : ""}`,
+        `Đã tính lộ trình: ${res.alternatives.length} phương án tuyến`,
         w.length ? { description: w[0] } : undefined,
       );
     } catch (e) {
+      const msg = e instanceof Error ? e.message : "Không tính được lộ trình";
       setCalcState("error");
-      setCalcError(e instanceof Error ? e.message : "Không tính được lộ trình");
-      toast.error(e instanceof Error ? e.message : "Không tính được lộ trình");
+      setCalcError(msg);
+      toast.error(msg);
     }
+  };
+
+  const selectAlternative = (id: string) => {
+    if (id === r.selectedRouteId) return;
+    const i = r.alternatives.findIndex((a, j) => altId(a, j) === id);
+    const alt = r.alternatives[i];
+    if (!alt) return;
+    setPending((q) => [
+      ...q,
+      {
+        action: "SELECT_ALTERNATIVE",
+        field: "Selected Route",
+        oldValue: altName(r.alternatives, r.selectedRouteId),
+        newValue: altName(r.alternatives, id),
+        note: `${alt.distance} km · toll ${formatVnd(alt.tollCost)}`,
+      },
+    ]);
+    setR((p) => ({ ...p, selectedRouteId: id, outbound: alt }));
+  };
+
+  /** Link a provider toll gate to Toll Station master; kept on the alternative so re-selecting keeps it. */
+  const mapStation = (row: TollRow, gate: MockTollGate) => {
+    const patch = (c: RouteCalculation): RouteCalculation => ({
+      ...c,
+      tollStations: c.tollStations.map((t) =>
+        t.id === row.station.id
+          ? { ...t, code: gate.code, name: gate.name, address: gate.province, reconciled: true }
+          : t,
+      ),
+    });
+    setR((p) => {
+      if (row.leg === "Return") return { ...p, returnLeg: p.returnLeg && patch(p.returnLeg) };
+      return {
+        ...p,
+        outbound: p.outbound && patch(p.outbound),
+        alternatives: p.alternatives.map((a, j) =>
+          altId(a, j) === p.selectedRouteId ? patch(a) : a,
+        ),
+      };
+    });
+    toast.success(`Đã đối chiếu với ${gate.code} · ${gate.name}`);
   };
 
   const save = () => {
     setFormError(null);
     const e = validateRoute(r);
-    if (stale)
-      e["calc"] = "Dữ liệu tuyến đã thay đổi sau lần tính gần nhất — hãy bấm Tính lại lộ trình.";
+    if (stale) e["calc"] = "Route needs recalculation — bấm Tính lại lộ trình trước khi lưu.";
     if (Object.keys(e).length) {
       setErrors(e);
       setFormError("Chưa thể lưu — vui lòng kiểm tra:");
@@ -191,7 +274,8 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
     }
     setSaving(true);
     try {
-      const saved = routeService.save(r);
+      const saved = routeService.save(r, pending);
+      setPending([]);
       guard.allowNext();
       toast.success(isNew ? `Đã tạo route ${saved.code}` : `Đã lưu route ${saved.code}`);
       if (isNew) void navigate({ to: "/routing/$id", params: { id: saved.id } });
@@ -207,50 +291,30 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
     }
   };
 
-  const mapTolls: MapToll[] = [
-    ...(outbound?.tollStations ?? []).map((t) => ({ ...t, leg: "Outbound" as const })),
-    ...(round ? (ret?.tollStations ?? []).map((t) => ({ ...t, leg: "Return" as const })) : []),
+  const tollRows: TollRow[] = [
+    ...(outbound?.tollStations ?? []).map((t, i) => ({
+      key: `o-${t.id}-${i}`,
+      leg: "Outbound" as const,
+      station: t,
+    })),
+    ...(round ? (ret?.tollStations ?? []) : []).map((t, i) => ({
+      key: `r-${t.id}-${i}`,
+      leg: "Return" as const,
+      station: t,
+    })),
   ];
-  const providerLabel = r.outbound
-    ? r.outbound.provider === "vietmap"
-      ? "Vietmap Route v4"
-      : "Mock route data"
-    : provider === "vietmap"
-      ? "Vietmap sẵn sàng"
-      : "Mock provider";
+  const mapTolls: MapToll[] = tollRows.map((x) => ({ ...x.station, leg: x.leg }));
 
-  const summary = (
-    <div className="w-64 rounded-lg bg-card/95 px-4 py-3 text-sm shadow-lg">
-      {[
-        ["Tổng khoảng cách", totals.calculated ? `${totals.distanceKm} km` : "—"],
-        ["Thời gian ước tính", totals.calculated ? formatDuration(totals.estimatedTimeMin) : "—"],
-        ["Số điểm dừng", String(r.waypoints.length)],
-        ["Số trạm thu phí (dự kiến)", String(totals.stationCount)],
-      ].map(([k, v]) => (
-        <div key={k} className="flex justify-between gap-3 py-1">
-          <span className="text-muted-foreground">{k}</span>
-          <span className="font-bold">{v}</span>
-        </div>
-      ))}
-    </div>
-  );
-
-  const recalcButton = (label: string) => (
+  const recalcButton = (
     <Button
-      type="button"
       variant="outline"
-      size="icon"
-      className="h-10 w-10 shrink-0 text-primary"
+      size="lg"
       onClick={() => void calculate()}
-      disabled={calcState === "loading"}
-      aria-label={label}
-      title="Tính lại"
+      disabled={loading || !!inputError}
+      title={inputError ?? "Tính lại lộ trình"}
     >
-      {calcState === "loading" ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <RefreshCw className="h-4 w-4" />
-      )}
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+      Tính lại lộ trình
     </Button>
   );
 
@@ -258,93 +322,70 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
     <div>
       <FormPageHeader
         crumbs={[{ label: "Routing", to: "/routing" }, { label: isNew ? "Tạo mới" : "Chỉnh sửa" }]}
-        title="Tạo mới / Chỉnh sửa Route"
+        title={isNew ? "Tạo mới Route" : "Chỉnh sửa Route"}
         badge={<StatusBadge status={(source ?? r).status} />}
         dirty={dirty}
         saving={saving}
         onBack={() => void navigate({ to: "/routing" })}
         onCancel={() => void navigate({ to: "/routing" })}
         onSave={save}
+        extra={
+          <>
+            <Button variant="outline" size="lg" onClick={() => setAuditOpen(true)}>
+              <History className="h-4 w-4" />
+              Lịch sử thay đổi
+            </Button>
+            {recalcButton}
+          </>
+        }
       />
 
       <FormErrorBanner message={formError} errors={errors} />
 
-      {/* Row 1 — Thông tin chung | Bản đồ lộ trình */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_1fr]">
-        <Panel title="Thông tin chung" className="min-w-0">
-          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-            <Field label="Mã route" required error={errors["code"]}>
-              <Input
-                className="h-10"
-                value={r.code}
-                onChange={(e) => set("code", e.target.value.toUpperCase())}
-                placeholder="RT-XXX"
-                aria-invalid={!!errors["code"] || undefined}
-              />
-            </Field>
-            <Field label="Tên route" required error={errors["name"]}>
-              <Input
-                className="h-10"
-                value={r.name}
-                onChange={(e) => set("name", e.target.value)}
-                placeholder="VD: HCM - Đà Nẵng"
-                aria-invalid={!!errors["name"] || undefined}
-              />
-            </Field>
-            <Field label="Loại route" required className="col-span-2">
-              <div className="flex flex-wrap gap-8 pt-1" role="radiogroup">
-                {(
-                  [
-                    ["Single Trip", "Single-trip", "Một chiều"],
-                    ["Round Trip", "Round-trip", "Khứ hồi"],
-                  ] as [RouteType, string, string][]
-                ).map(([v, en, vi]) => (
-                  <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
-                    <input
-                      type="radio"
-                      name="routeType"
-                      checked={r.type === v}
-                      onChange={() => set("type", v)}
-                      className="h-4 w-4 accent-[var(--primary)]"
-                    />
-                    <span className={cn(r.type === v && "text-primary")}>{en}</span>{" "}
-                    <span>({vi})</span>
-                  </label>
-                ))}
-              </div>
-            </Field>
-            <Field label="Tổng khoảng cách (km)">
-              <div className="flex gap-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_1.05fr]">
+        {/* ---------- LEFT ---------- */}
+        <div className="flex min-w-0 flex-col gap-5">
+          <Panel title="1. Thông tin chung">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+              <Field label="Mã route" required error={errors["code"]}>
                 <Input
-                  className="h-10 bg-muted/60"
-                  readOnly
-                  tabIndex={-1}
-                  value={totals.calculated ? String(totals.distanceKm) : ""}
-                  placeholder="Chưa tính"
+                  className="h-10"
+                  value={r.code}
+                  onChange={(e) => set("code", e.target.value.toUpperCase())}
+                  placeholder="RT-XXX"
+                  aria-invalid={!!errors["code"] || undefined}
                 />
-                {recalcButton("Tính lại khoảng cách")}
-              </div>
-            </Field>
-            <Field label="Thời gian ước tính">
-              <div className="flex gap-2">
+              </Field>
+              <Field label="Tên route" required error={errors["name"]}>
                 <Input
-                  className="h-10 bg-muted/60"
-                  readOnly
-                  tabIndex={-1}
-                  value={totals.calculated ? formatDuration(totals.estimatedTimeMin) : ""}
-                  placeholder="Chưa tính"
+                  className="h-10"
+                  value={r.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  placeholder="VD: HCM → Đà Nẵng"
+                  aria-invalid={!!errors["name"] || undefined}
                 />
-                {recalcButton("Tính lại thời gian")}
-              </div>
-            </Field>
-            <div className="col-span-2 grid grid-cols-[1fr_200px] gap-5">
-              <Field label="Mô tả">
-                <Textarea
-                  rows={2}
-                  value={r.description ?? ""}
-                  onChange={(e) => set("description", e.target.value)}
-                  placeholder="VD: Tuyến vận chuyển hàng từ TP.HCM đi Đà Nẵng"
-                />
+              </Field>
+              <Field label="Loại route" required>
+                <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
+                  {(
+                    [
+                      ["Single Trip", "Single-trip", "Một chiều"],
+                      ["Round Trip", "Round-trip", "Khứ hồi"],
+                    ] as [RouteType, string, string][]
+                  ).map(([v, en, vi]) => (
+                    <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
+                      <input
+                        type="radio"
+                        name="routeType"
+                        checked={r.type === v}
+                        onChange={() => set("type", v)}
+                        className="h-4 w-4 accent-[var(--primary)]"
+                      />
+                      <span className={cn(r.type === v && "text-primary")}>{en}</span>
+                      <span className={cn(r.type === v && "text-primary")}>({vi})</span>
+                    </label>
+                  ))}
+                </div>
               </Field>
               <Field label="Trạng thái" error={errors["status"]}>
                 <div className="relative">
@@ -377,61 +418,75 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                   </span>
                 </div>
               </Field>
+              <Field label="Mô tả" className="col-span-2">
+                <Textarea
+                  rows={2}
+                  maxLength={500}
+                  value={r.description ?? ""}
+                  onChange={(e) => set("description", e.target.value)}
+                  placeholder="VD: Tuyến vận chuyển hàng từ TP.HCM đi Đà Nẵng"
+                />
+                <span className="self-end text-xs text-muted-foreground">
+                  {(r.description ?? "").length}/500
+                </span>
+              </Field>
             </div>
-          </div>
-        </Panel>
+          </Panel>
 
-        <Panel title="Bản đồ lộ trình" className="min-w-0" bodyClassName="p-0">
-          {stale && (
-            <div className="flex items-center justify-between gap-2 border-b bg-warning-soft px-4 py-2 text-sm text-warning">
-              <span className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Điểm dừng đã thay đổi — bấm Tính lại lộ trình.
-              </span>
-            </div>
-          )}
-          {calcState === "error" && calcError && (
-            <div className="flex items-center justify-between gap-2 border-b bg-danger-soft px-4 py-2 text-sm text-destructive">
-              <span className="flex items-center gap-2">
-                <XCircle className="h-4 w-4" />
-                {calcError}
-              </span>
-              <Button size="sm" variant="outline" className="h-7" onClick={() => void calculate()}>
-                Thử lại
-              </Button>
-            </div>
-          )}
-          <div className="relative">
-            <RouteMapPanel
-              origin={r.origin}
-              waypoints={r.waypoints}
-              destination={r.destination}
-              outboundGeometry={r.outbound?.geometry}
-              returnGeometry={round ? r.returnLeg?.geometry : undefined}
-              tolls={mapTolls}
-              roundTrip={round}
-              providerLabel={providerLabel}
-              height={stale || calcState === "error" ? 318 : 356}
-              overlay={summary}
-            />
-            {calcState === "loading" && (
-              <div className="absolute inset-0 z-[500] flex items-center justify-center bg-card/60 text-sm font-medium">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary" />
-                Đang tính lộ trình…
-              </div>
-            )}
-          </div>
-        </Panel>
-      </div>
+          <Panel title="2. Phương tiện">
+            <Field label="Xe" required error={errors["vehicleId"]}>
+              <VehicleSelector
+                vehicles={VEHICLES}
+                value={r.vehicleId}
+                invalid={!!errors["vehicleId"]}
+                onChange={(v) => {
+                  setR((p) => {
+                    if (v) return { ...p, ...routeVehicleFields(v) };
+                    const { vehicleId: _drop, ...rest } = p;
+                    return rest;
+                  });
+                  clearErrors("vehicleId");
+                }}
+              />
+            </Field>
+          </Panel>
 
-      {/* Row 2 — Danh sách điểm dừng | Địa hình + Trạm thu phí */}
-      <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[1.3fr_1fr]">
-        <Panel
-          title="Danh sách điểm dừng"
-          bodyClassName="p-0"
-          className="min-w-0"
-          actions={
-            <div className="flex gap-2">
+          <Panel title="3. Tùy chọn tính tuyến">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="w-40 text-sm">Thời gian khởi hành</span>
+              <Input
+                type="date"
+                className="h-10 w-44"
+                value={r.departureTime.slice(0, 10)}
+                onChange={(e) =>
+                  set(
+                    "departureTime",
+                    `${e.target.value}T${r.departureTime.slice(11, 16) || "08:00"}`,
+                  )
+                }
+              />
+              <Input
+                type="time"
+                className="h-10 w-32"
+                value={r.departureTime.slice(11, 16)}
+                onChange={(e) =>
+                  set("departureTime", `${r.departureTime.slice(0, 10)}T${e.target.value}`)
+                }
+              />
+            </div>
+            <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={r.avoidFerry}
+                onCheckedChange={(c) => set("avoidFerry", c === true)}
+              />
+              Tránh đi qua phà
+            </label>
+          </Panel>
+
+          <Panel
+            title="4. Danh sách điểm dừng"
+            bodyClassName="p-0"
+            actions={
               <Button
                 variant="outline"
                 size="sm"
@@ -441,54 +496,161 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 <Plus className="h-4 w-4" />
                 Thêm điểm dừng
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 border-primary/40 text-primary"
-                onClick={() => void calculate()}
-                disabled={calcState === "loading"}
-              >
-                {calcState === "loading" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                Tính lại lộ trình
-              </Button>
-            </div>
-          }
-        >
-          <StopList
-            seq={seq}
-            onChange={setSequence}
-            errors={{
-              origin: errors["origin"],
-              destination: errors["destination"],
-              waypoints: errors["waypoints"],
-            }}
-          />
-        </Panel>
-
-        <div className="flex min-w-0 flex-col gap-5">
-          <Panel title="Địa hình tuyến đường" bodyClassName="px-4 py-1">
-            <RoadTypes split={roadSplit} />
-          </Panel>
-          <Panel
-            title="Trạm thu phí trên tuyến (tham khảo)"
-            bodyClassName="p-0"
-            actions={
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 border-primary/40 text-primary"
-                onClick={() => setDetailOpen(true)}
-              >
-                <Info className="h-3.5 w-3.5" />
-                Xem chi tiết (MD-06)
-              </Button>
             }
           >
-            <TollReference stations={refStations} />
+            {round && (
+              <div className="flex items-center gap-2 bg-muted/40 px-4 py-2.5 text-sm font-semibold">
+                <Tag tone="Outbound">Outbound</Tag>
+                Chiều đi
+              </div>
+            )}
+            <StopList
+              seq={seq}
+              onChange={setSequence}
+              locations={LOCATIONS}
+              errors={{
+                origin: errors["origin"],
+                destination: errors["destination"],
+                waypoints: errors["waypoints"],
+              }}
+            />
+            {round && (
+              <ReturnRouteSection
+                mode={r.returnMode}
+                onModeChange={(m) => set("returnMode", m)}
+                origin={r.origin}
+                waypoints={r.waypoints}
+                destination={r.destination}
+                returnWaypoints={r.returnWaypoints}
+                onReturnWaypointsChange={(w) => set("returnWaypoints", w)}
+                locations={LOCATIONS}
+              />
+            )}
+          </Panel>
+        </div>
+
+        {/* ---------- RIGHT ---------- */}
+        <div className="flex min-w-0 flex-col gap-5">
+          <Panel title="Bản đồ lộ trình" bodyClassName="flex flex-col gap-3 p-4">
+            <RouteAlternativeSelector
+              alternatives={r.alternatives}
+              selectedId={r.selectedRouteId}
+              onSelect={selectAlternative}
+              disabled={loading}
+            />
+            {stale && (
+              <div className="flex items-center gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
+                <AlertTriangle className="h-4 w-4" />
+                Route needs recalculation — dữ liệu đã thay đổi sau lần tính gần nhất.
+              </div>
+            )}
+            {calcState === "error" && calcError && (
+              <div className="flex items-center justify-between gap-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-destructive">
+                <span className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4" />
+                  {calcError}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7"
+                  onClick={() => void calculate()}
+                >
+                  Thử lại
+                </Button>
+              </div>
+            )}
+            <div className="relative">
+              <RouteMapPanel
+                origin={r.origin}
+                waypoints={r.waypoints}
+                destination={r.destination}
+                outboundGeometry={r.outbound?.geometry}
+                returnGeometry={round ? r.returnLeg?.geometry : undefined}
+                returnWaypoints={round && r.returnMode === "custom" ? r.returnWaypoints : []}
+                tolls={mapTolls}
+                roundTrip={round}
+                providerLabel={
+                  r.outbound
+                    ? r.outbound.provider === "vietmap"
+                      ? "Vietmap Route v4"
+                      : "Mock route data"
+                    : "Chưa tính lộ trình"
+                }
+                height={340}
+                alternatives={r.alternatives.map((a, i) => ({
+                  id: altId(a, i),
+                  label: altTitle(a, i),
+                  geometry: a.geometry,
+                }))}
+                selectedAlternativeId={r.selectedRouteId}
+                onSelectAlternative={selectAlternative}
+              />
+              {loading && (
+                <div className="absolute inset-0 z-[500] flex items-center justify-center rounded-lg bg-card/60 text-sm font-medium">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary" />
+                  Đang tính lộ trình…
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          <Panel
+            title={
+              <>
+                Thông tin tuyến{" "}
+                {r.outbound && <span className="text-primary">({selectedName})</span>}
+              </>
+            }
+          >
+            <RouteSummary
+              calculated={totals.calculated}
+              distanceKm={totals.distanceKm}
+              estimatedTimeMin={totals.estimatedTimeMin}
+              tollCost={totals.totalRouteCost}
+              stationCount={totals.stationCount}
+            />
+          </Panel>
+
+          <Panel
+            title={`Danh sách trạm thu phí${r.outbound ? ` (${selectedName.replace(" (Đề xuất)", "")})` : ""}`}
+            bodyClassName="p-0"
+            actions={
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/40 text-primary"
+                  onClick={() => setManualOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Thêm phí thủ công
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/40 text-primary"
+                  onClick={() => setDetailOpen(true)}
+                >
+                  <Info className="h-3.5 w-3.5" />
+                  Xem chi tiết (MD-06)
+                </Button>
+              </div>
+            }
+          >
+            <TollStationTable
+              rows={tollRows}
+              showLeg={round}
+              manualCosts={r.manualCosts}
+              calculated={totals.calculated}
+              onMap={mapStation}
+              onRemoveManual={(mid) =>
+                set(
+                  "manualCosts",
+                  r.manualCosts.filter((m) => m.id !== mid),
+                )
+              }
+            />
           </Panel>
         </div>
       </div>
@@ -527,6 +689,13 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
           set("manualCosts", [...r.manualCosts, m]);
           toast.success(`Đã thêm: ${m.reason} +${formatVnd(m.amount)} (bấm Save để lưu)`);
         }}
+      />
+      <AuditHistoryDrawer
+        open={auditOpen}
+        onOpenChange={setAuditOpen}
+        entityType="Route"
+        entityId={source?.id}
+        title={r.code || "Route mới"}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import { useCollection } from "@/hooks/use-store";
 import { routeRepository } from "@/repositories";
 import { routeCrud, routeImportConfig } from "@/services/routeService";
 import { routeTotals } from "@/services/cost/costMath";
+import { findVehicle, vehicleLabel } from "@/mock-data/vehicles";
 import { formatDateTime, formatDuration, formatVnd } from "@/lib/format";
 import { VEHICLE_GROUPS, VEHICLE_PROFILES, type RouteRecord } from "@/types";
 
@@ -60,6 +61,16 @@ const columns: ListColumn<RouteRecord>[] = [
     options: ["Single Trip", "Round Trip"],
     value: (r) => r.type,
     render: (r) => <Tag>{r.type}</Tag>,
+  },
+  {
+    key: "vehicle",
+    label: "Xe",
+    type: "text",
+    value: (r) => {
+      const v = findVehicle(r.vehicleId);
+      return v ? vehicleLabel(v) : "";
+    },
+    className: "whitespace-nowrap",
   },
   {
     key: "vehicleProfile",

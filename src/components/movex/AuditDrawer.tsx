@@ -47,7 +47,9 @@ export function AuditTimeline({
             <span>{e.user}</span>
           </div>
           <div className="text-sm font-semibold">
-            {AUDIT_ACTION_LABEL[e.action] ?? e.action}
+            {e.action === "CREATE"
+              ? `Created ${e.entityType}`
+              : (AUDIT_ACTION_LABEL[e.action] ?? e.action)}
             <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
               {e.action}
             </span>
@@ -95,7 +97,7 @@ export function AuditHistoryDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[460px] overflow-y-auto sm:max-w-[460px]">
         <SheetHeader>
-          <SheetTitle>Audit History</SheetTitle>
+          <SheetTitle>Lịch sử thay đổi</SheetTitle>
           <SheetDescription>
             {entityType} · {title}
           </SheetDescription>

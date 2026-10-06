@@ -1,7 +1,7 @@
 // One filtering/sorting engine for every list screen (GEN-06). Quick search, quick filters and
 // advanced filter conditions all end up here, so every module behaves the same.
 import type { FieldType, FilterCondition, FilterOperator, SortState } from "@/types";
-import { normalizeText } from "./routing/MockRouteProvider";
+import { normalizeText } from "./routing/locationSearch";
 
 export type CellValue = string | number | null | undefined;
 

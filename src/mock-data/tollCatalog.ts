@@ -174,4 +174,22 @@ export const MOCK_TOLL_GATES: MockTollGate[] = [
     lng: 108.2479,
     prices: [60000, 90000, 120000, 190000, 260000],
   },
+  {
+    id: "T-PHACL",
+    code: "PHA-CL",
+    name: "Phà Cát Lái",
+    address: "TP. Thủ Đức",
+    province: "TP. Hồ Chí Minh",
+    road: "Phà Cát Lái – Nhơn Trạch",
+    feeType: "Ferry",
+    lat: 10.7593,
+    lng: 106.794,
+    prices: [35000, 45000, 60000, 80000, 100000],
+  },
+];
+
+/** Gates the routing engine returns that are not (yet) in Toll Station master data — "Chưa đối chiếu". */
+export const PROVIDER_ONLY_GATES: { name: string; prices: MockTollGate["prices"] }[] = [
+  { name: "Trạm BOT Ninh Lộc", prices: [15000, 20000, 30000, 45000, 60000] },
+  { name: "Trạm BOT tuyến tránh Phan Rang", prices: [25000, 35000, 50000, 65000, 90000] },
 ];

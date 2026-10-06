@@ -13,6 +13,8 @@ import type {
 export interface RouteProvider {
   readonly name: "vietmap" | "mock";
   calculateRoute(req: RouteRequest): Promise<RouteCalculation>;
+  /** All alternatives for the request; the first one is the recommended route. */
+  calculateRoutes(req: RouteRequest): Promise<RouteCalculation[]>;
   searchLocation(text: string): Promise<LocationSuggestion[]>;
   /** Resolve a suggestion that came without coordinates (Vietmap autocomplete → place). */
   resolveLocation(s: LocationSuggestion): Promise<LocationSuggestion>;

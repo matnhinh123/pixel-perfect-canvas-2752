@@ -1,12 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, History, Lock, Pencil, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, History, Lock, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   EmptyState,
   Field,
@@ -23,9 +21,8 @@ import {
 } from "@/components/movex/general/FormPage";
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { useEntityActions } from "@/components/movex/general/useEntityActions";
-import { useCollection, useTemplateConfig } from "@/hooks/use-store";
+import { useCollection } from "@/hooks/use-store";
 import { serviceRepository } from "@/repositories";
-import { TEMPLATE_FIELDS } from "@/mock-data/templates";
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import {
@@ -35,13 +32,7 @@ import {
   templateOf,
   validateService,
 } from "@/services/serviceCatalogService";
-import {
-  TEMPLATES,
-  type ServiceRecord,
-  type Status,
-  type TemplateType,
-  type TenantFieldSetting,
-} from "@/types";
+import { TEMPLATES, type ServiceRecord, type Status, type TemplateType } from "@/types";
 import { cn } from "@/lib/utils";
 
 type Mode = "view" | "edit";
@@ -52,9 +43,9 @@ export const Route = createFileRoute("/service/$id")({
   head: ({ params }) => ({
     meta: [
       { title: params.id === "new" ? "Add Service — MoveX" : "Service Detail — MoveX" },
-      { name: "description", content: "Edit service and per-tenant field configuration." },
+      { name: "description", content: "Create and edit services and their template." },
       { property: "og:title", content: "Service Detail — MoveX" },
-      { property: "og:description", content: "Edit service and per-tenant field configuration." },
+      { property: "og:description", content: "Create and edit services and their template." },
     ],
   }),
   component: ServiceDetailPage,
@@ -88,8 +79,6 @@ function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: Ser
   const isNew = !source;
   const readOnly = !isNew && (search.mode ?? "view") === "view";
   const [s, setS] = useState<ServiceRecord>(() => structuredClone(source ?? newServiceDraft()));
-  const savedCfg = useTemplateConfig();
-  const [cfg, setCfg] = useState(() => structuredClone(savedCfg));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [auditOpen, setAuditOpen] = useState(false);
@@ -105,26 +94,16 @@ function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: Ser
   const descendants = source ? serviceCatalogService.descendantsOf(source.id) : [];
   const parentOptions = alive.filter((x) => x.id !== s.id && !descendants.includes(x.id));
   const children = source ? alive.filter((x) => x.parentId === source.id) : [];
-  const usingTemplate = effectiveTemplate
-    ? alive.filter((x) => templateOf(x, all) === effectiveTemplate).length
-    : 0;
 
-  const dirtyForm = JSON.stringify(s) !== JSON.stringify(source ?? newServiceDraft());
-  const dirtyCfg = effectiveTemplate
-    ? JSON.stringify(cfg[effectiveTemplate]) !== JSON.stringify(savedCfg[effectiveTemplate])
-    : false;
-  const dirty = dirtyForm || dirtyCfg;
+  const dirty = JSON.stringify(s) !== JSON.stringify(source ?? newServiceDraft());
   const guard = useUnsavedChangesGuard(dirty && !readOnly);
 
   useEffect(() => {
     if (source) auditService.logView("Service", source.id, source.code);
   }, [source?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (readOnly && source) {
-      setS(structuredClone(source));
-      setCfg(structuredClone(savedCfg));
-    }
-  }, [source, savedCfg, readOnly]);
+    if (readOnly && source) setS(structuredClone(source));
+  }, [source, readOnly]);
 
   const set = <K extends keyof ServiceRecord>(k: K, v: ServiceRecord[K]) => {
     setS((p) => ({ ...p, [k]: v }));
@@ -134,17 +113,6 @@ function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: Ser
         delete n[k as string];
         return n;
       });
-  };
-
-  const toggle = (key: string, prop: keyof TenantFieldSetting) => {
-    if (!effectiveTemplate) return;
-    setCfg((c) => {
-      const cur = c[effectiveTemplate][key] ?? { visible: true, required: false };
-      const next = { ...cur, [prop]: !cur[prop] };
-      if (prop === "visible" && !next.visible) next.required = false;
-      if (prop === "required" && next.required) next.visible = true;
-      return { ...c, [effectiveTemplate]: { ...c[effectiveTemplate], [key]: next } };
-    });
   };
 
   const save = async () => {
@@ -167,17 +135,8 @@ function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: Ser
     }
     try {
       const saved = serviceCatalogService.save(s);
-      const changes =
-        effectiveTemplate && dirtyCfg
-          ? serviceCatalogService.saveTemplateConfig(effectiveTemplate, cfg[effectiveTemplate], {
-              id: saved.id,
-              label: saved.code,
-            })
-          : 0;
       guard.allowNext();
-      toast.success(
-        `Đã lưu service ${saved.code}${changes ? ` · ${changes} field setting change(s)` : ""}`,
-      );
+      toast.success(`Đã lưu service ${saved.code}`);
       void navigate({ to: "/service/$id", params: { id: saved.id }, search: { mode: "view" } });
     } catch (err) {
       if (err instanceof BusinessRuleError) {
@@ -187,8 +146,6 @@ function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: Ser
       toast.error(err instanceof Error ? err.message : "Lưu thất bại");
     }
   };
-
-  const fields = effectiveTemplate ? TEMPLATE_FIELDS[effectiveTemplate] : [];
 
   return (
     <div>
@@ -263,8 +220,8 @@ function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: Ser
       />
       <FormErrorBanner message={formError} errors={errors} />
 
-      <fieldset disabled={readOnly} className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-5">
-        <Panel title="Thông tin chung" className="xl:col-span-2">
+      <fieldset disabled={readOnly} className="min-w-0 max-w-3xl">
+        <Panel title="Thông tin chung">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Mã dịch vụ" required error={errors["code"]}>
               <Input
@@ -355,7 +312,7 @@ function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: Ser
                 required
                 error={errors["template"]}
                 className="col-span-2"
-                hint="Chỉ có 3 template hệ thống. Tenant không được tạo template thứ 4."
+                hint="Chỉ có 3 template hệ thống."
               >
                 <div className="grid grid-cols-3 gap-2">
                   {TEMPLATES.map((t) => (
@@ -407,139 +364,6 @@ function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: Ser
                 ))}
               </div>
             </div>
-          )}
-        </Panel>
-
-        <Panel
-          title="Cấu hình trường theo Tenant"
-          className="xl:col-span-3"
-          actions={effectiveTemplate && <Tag tone="tpl">{effectiveTemplate} template</Tag>}
-        >
-          {!effectiveTemplate ? (
-            <EmptyState
-              title="Chọn template"
-              description="Chọn Trucking, Customs hoặc Freight để cấu hình các trường."
-            />
-          ) : (
-            <>
-              <p className="mb-3 text-xs text-muted-foreground">
-                Tenant <b>MoveX Việt Nam</b> · áp dụng cho {usingTemplate} dịch vụ dùng template{" "}
-                {effectiveTemplate}. Cấu trúc trường do hệ thống cố định — chỉ được bật/tắt Visible
-                / Required.
-              </p>
-              <div className="overflow-hidden rounded-lg border">
-                <div className="grid grid-cols-[1fr_100px_100px] bg-muted/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <span>Trường của {effectiveTemplate}</span>
-                  <span className="text-center">Visible</span>
-                  <span className="text-center">Required</span>
-                </div>
-                {fields.map((f) => {
-                  const st = cfg[effectiveTemplate][f.key] ?? {
-                    visible: f.defaultVisible,
-                    required: f.defaultRequired,
-                  };
-                  const lockMsg =
-                    "Trường core bắt buộc — luôn hiển thị và bắt buộc, không thể tắt hoặc xoá.";
-                  return (
-                    <div
-                      key={f.key}
-                      className="grid grid-cols-[1fr_100px_100px] items-center border-t px-4 py-3 text-sm"
-                    >
-                      <span className="flex items-center gap-2 font-medium">
-                        {f.label}
-                        {f.coreMandatory ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="flex cursor-help items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                <Lock className="h-3 w-3" />
-                                Core · Mandatory
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">{lockMsg}</TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="flex cursor-help items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                <ShieldCheck className="h-3 w-3" />
-                                Core
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">
-                              Trường core của template — không thể xoá, nhưng có thể cấu hình
-                              Visible / Required theo tenant.
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </span>
-                      <div className="flex justify-center">
-                        {f.coreMandatory ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Switch checked disabled />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{lockMsg}</TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Switch
-                            checked={st.visible}
-                            onCheckedChange={() => toggle(f.key, "visible")}
-                            aria-label={`${f.label} visible`}
-                          />
-                        )}
-                      </div>
-                      <div className="flex justify-center">
-                        {f.coreMandatory ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Switch checked disabled />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{lockMsg}</TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Switch
-                            checked={st.required}
-                            onCheckedChange={() => toggle(f.key, "required")}
-                            aria-label={`${f.label} required`}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {dirtyCfg && !readOnly && (
-                <p className="mt-2 text-xs font-medium text-warning">
-                  Cấu hình trường đã thay đổi — bấm Save để áp dụng.
-                </p>
-              )}
-              <div className="mt-5 rounded-lg border border-dashed p-4">
-                <div className="mb-3 text-xs font-semibold text-muted-foreground">
-                  XEM TRƯỚC — form đơn hàng cho “{s.name || "dịch vụ này"}”
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {fields
-                    .filter(
-                      (f) =>
-                        (cfg[effectiveTemplate][f.key]?.visible ?? f.defaultVisible) ||
-                        f.coreMandatory,
-                    )
-                    .map((f) => (
-                      <Field
-                        key={f.key}
-                        label={f.label}
-                        required={f.coreMandatory || !!cfg[effectiveTemplate][f.key]?.required}
-                      >
-                        <Input placeholder={f.label} tabIndex={-1} readOnly />
-                      </Field>
-                    ))}
-                </div>
-              </div>
-            </>
           )}
         </Panel>
       </fieldset>

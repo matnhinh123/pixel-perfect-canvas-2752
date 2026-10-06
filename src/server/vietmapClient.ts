@@ -6,6 +6,7 @@ import {
   normalizeVietmapAutocomplete,
   normalizeVietmapPlace,
   normalizeVietmapRoute,
+  normalizeVietmapRoutes,
   type VietmapRouteResponse,
 } from "@/services/routing/vietmapNormalize";
 
@@ -53,6 +54,14 @@ async function getJson(url: URL) {
 }
 
 export async function vietmapRoute(req: RouteRequest, key: string) {
+  return normalizeVietmapRoute(await fetchVietmapRoute(req, key), req);
+}
+
+export async function vietmapRoutes(req: RouteRequest, key: string) {
+  return normalizeVietmapRoutes(await fetchVietmapRoute(req, key), req);
+}
+
+async function fetchVietmapRoute(req: RouteRequest, key: string) {
   const url = new URL(`${BASE}/route/v4`);
   url.searchParams.set("apikey", key);
   for (const p of req.points) url.searchParams.append("point", `${p.lat},${p.lng}`);
@@ -65,7 +74,7 @@ export async function vietmapRoute(req: RouteRequest, key: string) {
   const body = (await getJson(url)) as VietmapRouteResponse;
   if (body.code && body.code !== "OK")
     throw new VietmapHttpError(body.messages || body.code, 422, body.code);
-  return normalizeVietmapRoute(body, req);
+  return body;
 }
 
 export async function vietmapSearch(text: string, key: string) {

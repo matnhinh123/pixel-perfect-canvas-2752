@@ -1,4 +1,4 @@
-// Internal Vietmap proxy: /api/vietmap/{status|route|search|place}
+// Internal Vietmap proxy: /api/vietmap/{status|route|routes|search|place}
 // Keeps VIETMAP_API_KEY server-side. Works on any nitro target (Vercel, Cloudflare, Node).
 import { createFileRoute } from "@tanstack/react-router";
 import type { RouteRequest } from "@/types";
@@ -6,6 +6,7 @@ import {
   getVietmapKey,
   vietmapPlace,
   vietmapRoute,
+  vietmapRoutes,
   vietmapSearch,
   VietmapHttpError,
 } from "@/server/vietmapClient";
@@ -64,7 +65,8 @@ export const Route = createFileRoute("/api/vietmap/$")({
         return json({ code: "NOT_FOUND", message: `Unknown action ${action}` }, 404);
       },
       POST: async ({ request, params }) => {
-        if (params._splat !== "route")
+        const action = params._splat;
+        if (action !== "route" && action !== "routes")
           return json({ code: "NOT_FOUND", message: "Unknown action" }, 404);
         const key = getVietmapKey();
         if (!key) return noKey();
@@ -83,7 +85,9 @@ export const Route = createFileRoute("/api/vietmap/$")({
             400,
           );
         try {
-          return json(await vietmapRoute(body, key));
+          return json(
+            action === "routes" ? await vietmapRoutes(body, key) : await vietmapRoute(body, key),
+          );
         } catch (e) {
           return fail(e);
         }

@@ -70,11 +70,26 @@ export function classifyRoads(ins: { distance?: number; street_name?: string; te
   };
 }
 
+/** Every path Vietmap returned, as MoveX alternatives (the first path is the recommended one). */
+export function normalizeVietmapRoutes(
+  res: VietmapRouteResponse,
+  req: RouteRequest,
+): RouteCalculation[] {
+  const n = Math.max(1, res.paths?.length ?? 0);
+  return Array.from({ length: n }, (_, i) => ({
+    ...normalizeVietmapRoute(res, req, i),
+    id: `ALT-${i + 1}`,
+    label: `Tuyến ${i + 1}`,
+    recommended: i === 0,
+  }));
+}
+
 export function normalizeVietmapRoute(
   res: VietmapRouteResponse,
   req: RouteRequest,
+  index = 0,
 ): RouteCalculation {
-  const path = res.paths?.[0];
+  const path = res.paths?.[index];
   if (!path)
     throw new Error(res.messages || `Vietmap returned no route (${res.code ?? "ZERO_RESULTS"})`);
   const geometry = toLatLngGeometry(path.points, path.points_encoded);

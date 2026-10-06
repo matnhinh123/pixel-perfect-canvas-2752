@@ -9,11 +9,11 @@ import type {
   ServiceRecord,
   TenantTemplateConfig,
   VehicleGroup,
-  VehicleProfile,
   RouteType,
 } from "@/types";
-import { computeMockRoute } from "@/services/routing/MockRouteProvider";
+import { computeMockRoute, computeMockRoutes } from "@/services/routing/MockRouteProvider";
 import { LOCATIONS } from "./locations";
+import { findVehicle, routeVehicleFields } from "./vehicles";
 import { TEMPLATE_FIELDS } from "./templates";
 import { defaultCostLines } from "./rates";
 import { snapshotOf, summarize } from "@/services/cost/costMath";
@@ -40,10 +40,12 @@ interface RouteSeed {
   o: string;
   wps: string[];
   d: string;
-  profile: VehicleProfile;
-  group: VehicleGroup;
-  kg?: number;
+  vehicle: string;
   status: RouteRecord["status"];
+  departure: string;
+  avoidFerry?: boolean;
+  /** Index of the alternative the user picked (0 = recommended). */
+  selected?: number;
   returnMode?: "auto" | "custom";
   returnWps?: string[];
   calc?: boolean;
@@ -55,15 +57,16 @@ const routeSeeds: RouteSeed[] = [
   {
     id: "R000",
     code: "RT-HCM-DN",
-    name: "HCM - Đà Nẵng",
-    description: "Tuyến vận chuyển hàng từ TP.HCM đi Đà Nẵng",
+    name: "HCM → Đà Nẵng",
+    description:
+      "Tuyến vận chuyển hàng từ TP.HCM đi Đà Nẵng qua QL1A và cao tốc, áp dụng cho xe tải.",
     type: "Single Trip",
-    o: "L-HCM",
-    wps: ["L-DNAI-LT", "L-DNAI-DG", "L-QN"],
-    d: "L-DANANG",
-    profile: "Truck",
-    group: "Heavy Truck",
-    kg: 15000,
+    o: "LOC-HCM",
+    wps: ["LOC-LONGTHANH", "LOC-DAUGIAY", "LOC-QUYNHON"],
+    d: "LOC-DANANG",
+    vehicle: "V-51D12345",
+    departure: "2026-10-06T14:30",
+    avoidFerry: true,
     status: "Active",
   },
   {
@@ -71,107 +74,121 @@ const routeSeeds: RouteSeed[] = [
     code: "RT-HCM-CL",
     name: "HCM → Cảng Cát Lái",
     type: "Round Trip",
-    o: "L-HCM-TB",
-    wps: ["L-TD-NT"],
-    d: "L-CATLAI",
-    profile: "Container",
-    group: "Tractor / Container Truck",
-    kg: 28000,
+    o: "LOC-HCM-TB",
+    wps: ["LOC-TD-NT"],
+    d: "LOC-CATLAI",
+    vehicle: "V-51R88888",
+    departure: "2026-10-06T07:00",
     status: "Active",
     returnMode: "auto",
     manual: [
       {
         id: "MC-1",
-        costType: "Ferry",
+        costType: "Peak-hour surcharge",
         amount: 50000,
-        reason: "Ferry surcharge",
-        note: "Phà Cát Lái khi kẹt cầu Phú Mỹ",
+        reason: "Phụ phí vào cảng giờ cao điểm",
+        note: "Áp dụng khung 6h–9h",
       },
     ],
   },
   {
     id: "R002",
     code: "RT-HCM-BD",
-    name: "HCM → KCN VSIP Bình Dương",
+    name: "HCM → Bình Dương",
     type: "Single Trip",
-    o: "L-HCM-Q7",
-    wps: ["L-BD-ST"],
-    d: "L-BD-VSIP",
-    profile: "Truck",
-    group: "Medium Truck",
-    kg: 8000,
+    o: "LOC-HCM-Q7",
+    wps: ["LOC-SONGTHAN"],
+    d: "LOC-BINHDUONG",
+    vehicle: "V-51C67890",
+    departure: "2026-10-07T09:30",
     status: "Active",
   },
   {
     id: "R003",
-    code: "RT-HCM-DNAI",
-    name: "HCM → KCN Biên Hòa 2, Đồng Nai",
+    code: "RT-HCM-DN01",
+    name: "HCM → Đồng Nai",
     type: "Single Trip",
-    o: "L-HCM-TD",
+    o: "LOC-HCM-TD",
     wps: [],
-    d: "L-DNAI-BH2",
-    profile: "Truck",
-    group: "Medium Truck",
-    kg: 9000,
+    d: "LOC-BIENHOA2",
+    vehicle: "V-29H13579",
+    departure: "2026-10-07T13:00",
     status: "Active",
   },
   {
     id: "R004",
     code: "RT-HN-HP",
-    name: "Hà Nội → Cảng Đình Vũ, Hải Phòng",
+    name: "Hà Nội → Hải Phòng",
     type: "Round Trip",
-    o: "L-HN-GL",
-    wps: ["L-HD"],
-    d: "L-HP-DV",
-    profile: "Container",
-    group: "Tractor / Container Truck",
-    kg: 30000,
+    o: "LOC-GIALAM",
+    wps: ["LOC-HAIDUONG"],
+    d: "LOC-DINHVU",
+    vehicle: "V-51R88888",
+    departure: "2026-10-08T05:30",
+    selected: 1,
     status: "Active",
     returnMode: "custom",
-    returnWps: ["L-HP"],
+    returnWps: ["LOC-HAIPHONG"],
   },
   {
     id: "R005",
     code: "RT-DAD-CL",
     name: "Đà Nẵng → KKT Chu Lai",
     type: "Single Trip",
-    o: "L-DANANG-TS",
-    wps: ["L-HOIAN"],
-    d: "L-CHULAI",
-    profile: "Truck",
-    group: "Heavy Truck",
-    kg: 15000,
+    o: "LOC-TIENSA",
+    wps: ["LOC-HOIAN"],
+    d: "LOC-CHULAI",
+    vehicle: "V-51D12345",
+    departure: "2026-10-09T08:00",
     status: "Draft",
     calc: false,
   },
   {
     id: "R006",
     code: "RT-HCM-LT",
-    name: "HCM → Long Thành (Van)",
+    name: "HCM → Long Thành",
     type: "Single Trip",
-    o: "L-HCM",
+    o: "LOC-HCM",
     wps: [],
-    d: "L-DNAI-LT",
-    profile: "Car",
-    group: "Van / Pickup",
+    d: "LOC-LONGTHANH",
+    vehicle: "V-50H24680",
+    departure: "2026-09-20T10:00",
     status: "Inactive",
+  },
+  {
+    id: "R007",
+    code: "RT-DN-QN",
+    name: "Đà Nẵng → Quy Nhơn",
+    type: "Single Trip",
+    o: "LOC-DANANG",
+    wps: ["LOC-TAMKY"],
+    d: "LOC-QUYNHON",
+    vehicle: "V-51D12345",
+    departure: "2026-10-10T20:00",
+    selected: 2,
+    status: "Active",
   },
 ];
 
 function buildRoute(s: RouteSeed): RouteRecord {
+  const vehicle = findVehicle(s.vehicle);
+  if (!vehicle) throw new Error(`Unknown vehicle ${s.vehicle}`);
   const origin = pt(s.o),
     destination = pt(s.d),
     waypoints = s.wps.map(pt),
     returnWaypoints = (s.returnWps ?? []).map(pt);
   const req = (pts: RoutePoint[]) => ({
     points: pts,
-    vehicle: s.profile,
-    ...(s.kg ? { capacityKg: s.kg } : {}),
+    vehicle: vehicle.profile,
+    capacityKg: vehicle.weightKg,
+    avoidFerry: !!s.avoidFerry,
+    departureTime: s.departure,
   });
   const calc = s.calc !== false;
-  const outbound = calc
-    ? computeMockRoute(req([origin, ...waypoints, destination]), SEED_TIME)
-    : null;
+  const alternatives = calc
+    ? computeMockRoutes(req([origin, ...waypoints, destination]), SEED_TIME)
+    : [];
+  const outbound = alternatives[s.selected ?? 0] ?? null;
   const back = s.returnMode === "custom" ? returnWaypoints : [...waypoints].reverse();
   const returnLeg =
     calc && s.type === "Round Trip"
@@ -186,22 +203,15 @@ function buildRoute(s: RouteSeed): RouteRecord {
     origin,
     waypoints,
     destination,
-    vehicleProfile: s.profile,
-    vehicleGroup: s.group,
-    ...(s.kg ? { capacityKg: s.kg } : {}),
+    ...routeVehicleFields(vehicle),
+    departureTime: s.departure,
+    avoidFerry: !!s.avoidFerry,
+    alternatives,
+    selectedRouteId: outbound?.id ?? null,
     outbound,
     returnMode: s.returnMode ?? "auto",
     returnWaypoints,
     returnLeg,
-    ...(s.returnMode === "custom" && returnLeg
-      ? {
-          customReturn: {
-            distance: returnLeg.distance,
-            estimatedTime: returnLeg.estimatedTime + 10,
-            tollStations: returnLeg.tollStations,
-          },
-        }
-      : {}),
     manualCosts: s.manual ?? [],
     status: s.status,
     ...meta("Thuy Vu"),
@@ -387,47 +397,76 @@ export const seedAudit = (): AuditEvent[] => {
   });
   return [
     e("2026-09-15T03:00:00.000Z", "Thuy Vu", "CREATE", "Route", "R001", "RT-HCM-CL"),
-    e("2026-10-06T03:10:00.000Z", "Thuy Vu", "CREATE", "Route", "R000", "RT-HCM-DN", {
-      note: "Single Trip · TP.HCM (HCM) → Long Thành → Dầu Giây → Quy Nhơn → Đà Nẵng (DAD)",
+    // RT-HCM-DN — full editing story for the demo audit drawer.
+    e("2026-10-05T02:10:00.000Z", "Thuy Vu", "CREATE", "Route", "R000", "RT-HCM-DN", {
+      note: "Single Trip · TP. Hồ Chí Minh → Long Thành → Dầu Giây → Đà Nẵng",
     }),
-    e("2026-10-06T03:20:00.000Z", "Thuy Vu", "CHANGE_VEHICLE", "Route", "R000", "RT-HCM-DN", {
-      field: "Vehicle Group",
-      oldValue: "Medium Truck",
-      newValue: "Heavy Truck",
+    e("2026-10-05T02:15:00.000Z", "Thuy Vu", "CHANGE_VEHICLE", "Route", "R000", "RT-HCM-DN", {
+      field: "Vehicle",
+      oldValue: "51C-67890 — Isuzu 5T",
+      newValue: "51D-12345 — Hino 15T",
     }),
-    e("2026-10-06T03:24:00.000Z", "Thuy Vu", "CALCULATE_ROUTE", "Route", "R000", "RT-HCM-DN", {
-      field: "Distance",
-      oldValue: "938 km",
-      newValue: "Recalculated",
-      note: "Mock provider",
+    e("2026-10-05T02:18:00.000Z", "Thuy Vu", "ADD_WAYPOINT", "Route", "R000", "RT-HCM-DN", {
+      field: "Waypoints",
+      oldValue: "Long Thành → Dầu Giây",
+      newValue: "Long Thành → Dầu Giây → Quy Nhơn",
+    }),
+    e(
+      "2026-10-05T02:20:00.000Z",
+      "Thuy Vu",
+      "CHANGE_DEPARTURE_TIME",
+      "Route",
+      "R000",
+      "RT-HCM-DN",
+      { field: "Departure Time", oldValue: "06/10/2026 08:00", newValue: "06/10/2026 14:30" },
+    ),
+    e("2026-10-05T02:22:00.000Z", "Thuy Vu", "CALCULATE_ROUTE", "Route", "R000", "RT-HCM-DN", {
+      field: "Alternatives",
+      newValue: "3 tuyến",
+      note: "Mock provider · Tuyến 1 (đề xuất) được chọn mặc định",
+    }),
+    e("2026-10-05T02:24:00.000Z", "Thuy Vu", "SELECT_ALTERNATIVE", "Route", "R000", "RT-HCM-DN", {
+      field: "Selected Route",
+      oldValue: "Tuyến 2",
+      newValue: "Tuyến 1 (Đề xuất)",
+    }),
+    e("2026-10-05T02:30:00.000Z", "Thuy Vu", "UPDATE_STATUS", "Route", "R000", "RT-HCM-DN", {
+      field: "Status",
+      oldValue: "Draft",
+      newValue: "Active",
     }),
     e("2026-10-05T03:20:00.000Z", "Thuy Vu", "CHANGE_VEHICLE", "Route", "R001", "RT-HCM-CL", {
-      field: "Vehicle Group",
-      oldValue: "Heavy Truck",
-      newValue: "Tractor / Container Truck",
+      field: "Vehicle",
+      oldValue: "51D-12345 — Hino 15T",
+      newValue: "51R-88888 — Đầu kéo Container 40FT",
     }),
     e("2026-10-05T03:24:00.000Z", "Thuy Vu", "CALCULATE_ROUTE", "Route", "R001", "RT-HCM-CL", {
-      field: "Distance",
-      oldValue: "24.1 km",
-      newValue: "24.6 km",
+      field: "Alternatives",
+      newValue: "3 tuyến",
       note: "Mock provider",
     }),
     e("2026-10-05T03:25:00.000Z", "Thuy Vu", "ADD_MANUAL_COST", "Route", "R001", "RT-HCM-CL", {
-      field: "Manual Cost",
-      newValue: "Ferry surcharge +50,000 VND",
+      field: "Peak-hour surcharge",
+      newValue: "Phụ phí vào cảng giờ cao điểm +50.000 ₫",
     }),
     e("2026-09-15T03:05:00.000Z", "Thuy Vu", "CREATE", "Route", "R002", "RT-HCM-BD"),
-    e("2026-09-15T03:10:00.000Z", "Thuy Vu", "CREATE", "Route", "R003", "RT-HCM-DNAI"),
+    e("2026-09-15T03:10:00.000Z", "Thuy Vu", "CREATE", "Route", "R003", "RT-HCM-DN01"),
     e("2026-09-20T07:00:00.000Z", "Lê Thu Hà", "CHANGE_ROUTE_TYPE", "Route", "R004", "RT-HN-HP", {
       field: "Route Type",
       oldValue: "Single Trip",
       newValue: "Round Trip",
     }),
-    e("2026-09-22T02:00:00.000Z", "Trần Quốc Bảo", "DEACTIVATE", "Route", "R006", "RT-HCM-LT", {
+    e("2026-09-20T07:05:00.000Z", "Lê Thu Hà", "SELECT_ALTERNATIVE", "Route", "R004", "RT-HN-HP", {
+      field: "Selected Route",
+      oldValue: "Tuyến 1 (Đề xuất)",
+      newValue: "Tuyến 2",
+    }),
+    e("2026-09-22T02:00:00.000Z", "Trần Quốc Bảo", "UPDATE_STATUS", "Route", "R006", "RT-HCM-LT", {
       field: "Status",
       oldValue: "Active",
       newValue: "Inactive",
     }),
+    e("2026-10-01T04:00:00.000Z", "Thuy Vu", "CREATE", "Route", "R007", "RT-DN-QN"),
     e("2026-09-01T03:00:00.000Z", "Nguyễn Minh Anh", "CREATE", "Service", "S-TRK", "SG-TRK"),
     e(
       "2026-10-04T07:11:00.000Z",

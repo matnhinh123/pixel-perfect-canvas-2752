@@ -58,6 +58,9 @@ export function RouteMapPanel({
   providerLabel,
   height = 420,
   overlay,
+  alternatives = [],
+  selectedAlternativeId,
+  onSelectAlternative,
 }: {
   origin: RoutePoint;
   waypoints: RoutePoint[];
@@ -71,7 +74,13 @@ export function RouteMapPanel({
   height?: number;
   /** Summary box rendered over the bottom-right of the map. */
   overlay?: ReactNode;
+  /** Non-selected alternatives are drawn as faint lines behind the selected route; click one to select it. */
+  alternatives?: { id: string; label: string; geometry: [number, number][] }[];
+  selectedAlternativeId?: string | null;
+  onSelectAlternative?: (id: string) => void;
 }) {
+  const selectRef = useRef(onSelectAlternative);
+  selectRef.current = onSelectAlternative;
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const layerRef = useRef<Leaflet.LayerGroup | null>(null);
@@ -131,7 +140,9 @@ export function RouteMapPanel({
     outboundGeometry?.length,
     returnGeometry?.length,
     roundTrip,
-    tolls.length,
+    tolls.map((t) => [t.lat, t.lng]),
+    alternatives.map((a) => a.id),
+    selectedAlternativeId,
   ]);
   useEffect(() => {
     const L = LRef.current,
@@ -160,6 +171,14 @@ export function RouteMapPanel({
         .addTo(layer);
     };
 
+    for (const a of alternatives) {
+      if (a.id === selectedAlternativeId || !a.geometry.length) continue;
+      L.polyline(a.geometry, { color: "#64748b", weight: 5, opacity: 0.45 })
+        .bindTooltip(`${a.label} — bấm để chọn`, { sticky: true })
+        .on("click", () => selectRef.current?.(a.id))
+        .addTo(layer);
+      all.push(...a.geometry);
+    }
     if (roundTrip && returnGeometry?.length) {
       L.polyline(returnGeometry, { color: "#16a34a", weight: 4, dashArray: "8 6" })
         .bindTooltip("Chiều về")
