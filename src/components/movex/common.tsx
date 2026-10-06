@@ -22,7 +22,7 @@ export function Tag({ children, tone }: { children: ReactNode; tone?: string }) 
   );
 }
 
-export function PageHeader({ title, subtitle, crumbs, actions }: { title: string; subtitle?: string; crumbs?: { label: string; to?: string }[]; actions?: ReactNode }) {
+export function PageHeader({ title, subtitle, crumbs, actions }: { title: string; subtitle?: string | undefined; crumbs?: { label: string; to?: string }[]; actions?: ReactNode }) {
   return (
     <div className="mb-6">
       {crumbs && (

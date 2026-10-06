@@ -46,7 +46,7 @@ function RouteDetail() {
   const totalToll = (round ? oneWayToll * 2 : oneWayToll) + manualTotal(r.manualCosts);
 
   const calculate = () => {
-    if (!r.origin.name || !r.destination.name) return toast.error("Nhập Origin và Destination trước");
+    if (!r.origin.name || !r.destination.name) { toast.error("Nhập Origin và Destination trước"); return; }
     if (r.distanceKm === 0) {
       setR((p) => ({
         ...p, distanceKm: 46.8, durationMin: 70,
@@ -200,7 +200,7 @@ function RouteDetail() {
             <Field label="Reason" className="flex-1"><Input value={mc.reason} onChange={(e) => setMc({ ...mc, reason: e.target.value })} placeholder="VD: Phụ phí phà ban đêm" /></Field>
             <Field label="Amount (₫)" className="w-48"><Input type="number" value={mc.amount} onChange={(e) => setMc({ ...mc, amount: e.target.value })} /></Field>
             <Button variant="outline" onClick={() => {
-              if (!mc.reason || !mc.amount) return toast.error("Nhập lý do và số tiền");
+              if (!mc.reason || !mc.amount) { toast.error("Nhập lý do và số tiền"); return; }
               set("manualCosts", [...r.manualCosts, { id: crypto.randomUUID(), reason: mc.reason, amount: Number(mc.amount) }]);
               setMc({ reason: "", amount: "" });
             }}><Plus className="h-4 w-4" />Add Manual Cost</Button>
