@@ -9,6 +9,7 @@ import type {
 } from "@/types";
 import { bboxOf, haversineKm, nearestVertex, pointAlong, polylineLengthKm } from "./geo";
 import { searchLocations } from "./locationSearch";
+import { fetchRoadRoutes, type RoadPath } from "./roadRouting";
 import {
   RouteProviderError,
   tollClassIndex,
@@ -65,10 +66,28 @@ const isPeakHour = (departure?: string) => {
   return Number.isFinite(h) && ((h >= 6 && h < 9) || (h >= 16 && h < 19));
 };
 
-/** Synchronous core, also used to build seed data so seeded numbers match a recalculation. */
+/** Extra vertices so every segment is ≤ ~1 km — toll gates are matched against this, not the simplified line. */
+function densify(g: [number, number][]): [number, number][] {
+  const out: [number, number][] = g.length ? [g[0]!] : [];
+  for (let i = 1; i < g.length; i++) {
+    const a = g[i - 1]!,
+      b = g[i]!;
+    const n = Math.ceil(haversineKm({ lat: a[0], lng: a[1] }, { lat: b[0], lng: b[1] }));
+    for (let k = 1; k <= n; k++)
+      out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+  }
+  return out;
+}
+
+/**
+ * Synchronous core, also used to build seed data so seeded numbers match a recalculation.
+ * With `roads` (real road geometry, one per alternative) the routes follow actual roads;
+ * without, a deterministic curved line between the stops is used.
+ */
 export function computeMockRoutes(
   req: RouteRequest,
   calculatedAt = new Date().toISOString(),
+  roads?: RoadPath[] | null,
 ): RouteCalculation[] {
   if (req.points.length < 2)
     throw new RouteProviderError(
@@ -92,7 +111,7 @@ export function computeMockRoutes(
   const peak = isPeakHour(req.departureTime);
   if (peak) baseWarnings.push("Khởi hành giờ cao điểm — thời gian ước tính đã cộng thêm 10%.");
 
-  const geometries = VARIANTS.map((v) => {
+  const curved = VARIANTS.map((v) => {
     const g: [number, number][] = [];
     for (let i = 1; i < req.points.length; i++) {
       const a = req.points[i - 1]!;
@@ -104,9 +123,11 @@ export function computeMockRoutes(
     }
     return g;
   });
+  const geometries = roads?.length ? roads.map((r) => r.geometry) : curved;
+  const dense = geometries.map(densify);
 
   // Toll gates are detected on the recommended geometry; the other variants swap some of them.
-  const base = geometries[0]!;
+  const base = dense[0]!;
   let ferrySkipped = false;
   const baseStations: TollStation[] =
     cls === null
@@ -164,16 +185,18 @@ export function computeMockRoutes(
   return geometries.map((geometry, v) => {
     const warnings = [...baseWarnings];
     const detourKm = ferrySkipped ? 4 : 0;
-    const distance = Math.round((polylineLengthKm(geometry) * ROAD_FACTOR + detourKm) * 10) / 10;
+    const roadKm = roads?.[v]?.distanceKm ?? polylineLengthKm(geometry) * ROAD_FACTOR;
+    const distance = Math.round((roadKm + detourKm) * 10) / 10;
     const speed = SPEED_KMH[req.vehicle] + (distance > 80 ? 14 : 0);
     const estimatedTime = Math.round(
-      ((distance / speed) * 60 * VARIANTS[v]!.timeFactor + (req.points.length - 2) * 5) *
+      ((distance / speed) * 60 * (VARIANTS[v]?.timeFactor ?? 1) + (req.points.length - 2) * 5) *
         (peak ? 1.1 : 1),
     );
     // Snap toll markers onto this variant's polyline.
-    const tollStations = stationsFor(v, geometry).map((t) => {
+    const line = dense[v]!;
+    const tollStations = stationsFor(v, line).map((t) => {
       if (t.lat == null || t.lng == null) return t;
-      const p = geometry[nearestVertex(geometry, { lat: t.lat, lng: t.lng }).index]!;
+      const p = line[nearestVertex(line, { lat: t.lat, lng: t.lng }).index]!;
       return { ...t, lat: p[0], lng: p[1] };
     });
 
@@ -209,25 +232,41 @@ export function computeMockRoutes(
 }
 
 /** Single best route (return legs, seed data). */
-export const computeMockRoute = (req: RouteRequest, calculatedAt?: string): RouteCalculation => {
-  const best = computeMockRoutes(req, calculatedAt)[0]!;
+export const computeMockRoute = (
+  req: RouteRequest,
+  calculatedAt?: string,
+  road?: RoadPath | null,
+): RouteCalculation => {
+  const best = computeMockRoutes(req, calculatedAt, road ? [road] : null)[0]!;
   const { id: _id, label: _label, recommended: _rec, ...rest } = best;
   return rest;
 };
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Real road geometry when the OSRM demo server is reachable; null → curved fallback. */
+async function roadsFor(req: RouteRequest, count: number): Promise<RoadPath[] | null> {
+  try {
+    return await Promise.race([
+      fetchRoadRoutes(req.points, count),
+      delay(12000).then(() => null),
+    ]);
+  } catch {
+    await delay(500);
+    return null;
+  }
+}
+
 export class MockRouteProvider implements RouteProvider {
   readonly name = "mock" as const;
 
   async calculateRoute(req: RouteRequest) {
-    await delay(700);
-    return computeMockRoute(req);
+    const roads = await roadsFor(req, 1);
+    return computeMockRoute(req, undefined, roads?.[0] ?? null);
   }
 
   async calculateRoutes(req: RouteRequest) {
-    await delay(700);
-    return computeMockRoutes(req);
+    return computeMockRoutes(req, undefined, await roadsFor(req, 3));
   }
 
   async searchLocation(text: string): Promise<LocationSuggestion[]> {

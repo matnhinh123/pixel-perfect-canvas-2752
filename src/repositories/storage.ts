@@ -1,7 +1,7 @@
 // Generic persistence primitive. Today: localStorage. Tomorrow: swap the internals for API calls —
 // repositories/services keep the same surface, so UI code does not change.
 
-const PREFIX = "movex.v5.";
+const PREFIX = "movex.v6.";
 const listeners = new Map<string, Set<() => void>>();
 
 const hasStorage = () => {

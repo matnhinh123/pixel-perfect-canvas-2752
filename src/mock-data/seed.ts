@@ -12,6 +12,8 @@ import type {
   RouteType,
 } from "@/types";
 import { computeMockRoute, computeMockRoutes } from "@/services/routing/MockRouteProvider";
+import { decodeRoad, type RoadPath } from "@/services/routing/roadRouting";
+import { SEED_ROADS } from "./seedRoads";
 import { LOCATIONS } from "./locations";
 import { findVehicle, routeVehicleFields } from "./vehicles";
 import { TEMPLATE_FIELDS } from "./templates";
@@ -23,6 +25,10 @@ const pt = (id: string): RoutePoint => {
   if (!l) throw new Error(`Unknown location ${id}`);
   return { name: l.name, address: l.province, lat: l.lat, lng: l.lng, locationId: l.id };
 };
+
+/** Pre-fetched road geometry (scripts/gen-seed-roads.ts) so seeded routes follow real roads offline. */
+const seedRoads = (key: string): RoadPath[] | null =>
+  SEED_ROADS[key]?.map(([distanceKm, enc]) => ({ distanceKm, geometry: decodeRoad(enc) })) ?? null;
 
 const SEED_TIME = "2026-09-15T08:00:00.000Z";
 const meta = (by: string, at = SEED_TIME) => ({
@@ -186,13 +192,17 @@ function buildRoute(s: RouteSeed): RouteRecord {
   });
   const calc = s.calc !== false;
   const alternatives = calc
-    ? computeMockRoutes(req([origin, ...waypoints, destination]), SEED_TIME)
+    ? computeMockRoutes(req([origin, ...waypoints, destination]), SEED_TIME, seedRoads(s.id))
     : [];
   const outbound = alternatives[s.selected ?? 0] ?? null;
   const back = s.returnMode === "custom" ? returnWaypoints : [...waypoints].reverse();
   const returnLeg =
     calc && s.type === "Round Trip"
-      ? computeMockRoute(req([destination, ...back, origin]), SEED_TIME)
+      ? computeMockRoute(
+          req([destination, ...back, origin]),
+          SEED_TIME,
+          seedRoads(`${s.id}:return`)?.[0],
+        )
       : null;
   return {
     id: s.id,
