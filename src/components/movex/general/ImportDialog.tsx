@@ -46,18 +46,18 @@ import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
-  "Download Template",
-  "Upload File",
-  "Validate",
-  "Preview Result",
-  "Confirm Import",
+  "Tải template",
+  "Upload file",
+  "Kiểm tra",
+  "Xem kết quả",
+  "Xác nhận import",
 ] as const;
 const CHECKS = [
-  "File structure",
-  "Required fields",
-  "Reference / master data",
-  "Duplicate",
-  "Row-level rules",
+  "Cấu trúc file",
+  "Trường bắt buộc",
+  "Tham chiếu / master data",
+  "Trùng lặp",
+  "Quy tắc từng dòng",
 ];
 
 /** GEN-05 generic import wizard. Every entity reuses it with its own ImportEntityConfig. */
@@ -125,22 +125,22 @@ export function ImportDialog({
     setStep(4);
     if (b.successRows)
       toast.success(
-        `Imported ${b.successRows} ${entityLabel.toLowerCase()} record(s)${b.failedRows ? `, ${b.failedRows} rejected` : ""}`,
+        `Đã import ${b.successRows} bản ghi ${entityLabel}${b.failedRows ? `, ${b.failedRows} dòng bị loại` : ""}`,
       );
-    else toast.error("No rows were imported.");
+    else toast.error("Không có dòng nào được import.");
   };
 
   const rollback = async (id: string, name: string) => {
     const r = await confirm({
-      title: "Rollback import?",
-      description: `All records created by "${name}" will be removed (soft delete). This is recorded in the audit log.`,
+      title: "Rollback lần import này?",
+      description: `Toàn bộ bản ghi tạo bởi "${name}" sẽ bị gỡ (soft delete). Thao tác được ghi vào audit log.`,
       confirmLabel: "Rollback",
       tone: "danger",
     });
     if (r !== "confirm") return;
     try {
       rollbackImport(config, id);
-      toast.success("Import batch rolled back");
+      toast.success("Đã rollback lần import");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rollback failed");
     }
@@ -154,14 +154,13 @@ export function ImportDialog({
         <DialogHeader>
           <DialogTitle>Import {entityLabel}</DialogTitle>
           <DialogDescription>
-            Excel-compatible CSV import with 5-step validation. Invalid rows are never imported
-            silently.
+            Import file Excel (CSV) với 5 bước kiểm tra. Dòng lỗi không bao giờ bị import âm thầm.
           </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue={initialTab}>
           <TabsList>
             <TabsTrigger value="import">Import</TabsTrigger>
-            <TabsTrigger value="history">Import History ({batches.length})</TabsTrigger>
+            <TabsTrigger value="history">Lịch sử import ({batches.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="import" className="mt-4">
@@ -187,9 +186,9 @@ export function ImportDialog({
             {step <= 1 && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-lg border p-4">
-                  <div className="mb-1 text-sm font-semibold">1. Download Template</div>
+                  <div className="mb-1 text-sm font-semibold">1. Tải template</div>
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Columns:{" "}
+                    Các cột:{" "}
                     {config.columns.map((c) => `${c.header}${c.required ? "*" : ""}`).join(", ")}
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -213,14 +212,14 @@ export function ImportDialog({
                       }}
                     >
                       <FileSpreadsheet className="h-4 w-4" />
-                      Sample file (20 rows)
+                      File mẫu (20 dòng)
                     </Button>
                   </div>
                 </div>
                 <div className="rounded-lg border border-dashed p-4">
-                  <div className="mb-1 text-sm font-semibold">2. Upload Excel file</div>
+                  <div className="mb-1 text-sm font-semibold">2. Upload file Excel</div>
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Save your Excel sheet as <b>CSV UTF-8</b> and upload it here.
+                    Lưu sheet Excel dạng <b>CSV UTF-8</b> rồi upload tại đây.
                   </p>
                   <input
                     ref={fileRef}
@@ -235,7 +234,7 @@ export function ImportDialog({
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" onClick={() => fileRef.current?.click()}>
                       <Upload className="h-4 w-4" />
-                      Choose file…
+                      Chọn file…
                     </Button>
                     <Button
                       variant="secondary"
@@ -244,7 +243,7 @@ export function ImportDialog({
                         runValidation(`${config.screen}_sample_20rows.csv`, config.sampleFile())
                       }
                     >
-                      Use demo file (20 rows)
+                      Dùng file demo (20 dòng)
                     </Button>
                   </div>
                 </div>
@@ -255,7 +254,7 @@ export function ImportDialog({
               <div className="rounded-lg border p-5">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  Validating…
+                  Đang kiểm tra…
                 </div>
                 <ol className="space-y-1 text-sm text-muted-foreground">
                   {CHECKS.map((c, i) => (
@@ -274,7 +273,7 @@ export function ImportDialog({
                     <AlertCircle className="mt-0.5 h-4 w-4 text-destructive" />
                     <div>
                       <div className="font-semibold text-destructive">
-                        File structure invalid — {result.fileName}
+                        Cấu trúc file không hợp lệ — {result.fileName}
                       </div>
                       <div>{result.structureError}</div>
                     </div>
@@ -283,15 +282,15 @@ export function ImportDialog({
                   <>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="rounded-lg border p-3">
-                        <div className="text-xs text-muted-foreground">Total rows</div>
+                        <div className="text-xs text-muted-foreground">Tổng số dòng</div>
                         <div className="text-xl font-bold">{result.totalRows}</div>
                       </div>
                       <div className="rounded-lg border p-3">
-                        <div className="text-xs text-muted-foreground">Valid</div>
+                        <div className="text-xs text-muted-foreground">Hợp lệ</div>
                         <div className="text-xl font-bold text-success">{validCount}</div>
                       </div>
                       <div className="rounded-lg border p-3">
-                        <div className="text-xs text-muted-foreground">Invalid</div>
+                        <div className="text-xs text-muted-foreground">Lỗi</div>
                         <div className="text-xl font-bold text-destructive">
                           {result.invalidRowCount}
                         </div>
@@ -301,7 +300,7 @@ export function ImportDialog({
                       <div>
                         <div className="mb-2 flex items-center justify-between">
                           <span className="text-sm font-semibold">
-                            Errors ({result.errors.length})
+                            Danh sách lỗi ({result.errors.length})
                           </span>
                           <Button
                             variant="outline"
@@ -314,14 +313,14 @@ export function ImportDialog({
                             }
                           >
                             <Download className="h-4 w-4" />
-                            Download Error File
+                            Tải file lỗi
                           </Button>
                         </div>
                         <div className="max-h-56 overflow-y-auto rounded-lg border">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                {["Row", "Field", "Value", "Error", "Step"].map((h) => (
+                                {["Dòng", "Trường", "Giá trị", "Lỗi", "Bước"].map((h) => (
                                   <TableHead key={h} className={thClass}>
                                     {h}
                                   </TableHead>
@@ -349,15 +348,15 @@ export function ImportDialog({
                     )}
                     {result.invalidRowCount > 0 && validCount > 0 && (
                       <p className="rounded-lg bg-warning-soft px-3 py-2 text-sm text-warning">
-                        Partial Success: only the {validCount} valid rows will be imported. Fix the
-                        error file and import the rest later.
+                        Partial Success: chỉ {validCount} dòng hợp lệ được import. Sửa file lỗi và
+                        import phần còn lại sau.
                       </p>
                     )}
                   </>
                 )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={reset}>
-                    Upload another file
+                    Upload file khác
                   </Button>
                   <Button disabled={!!result.structureError || validCount === 0} onClick={doImport}>
                     Confirm Import {validCount > 0 ? `(${validCount} rows)` : ""}
@@ -371,14 +370,14 @@ export function ImportDialog({
                 <CheckCircle2 className="h-10 w-10 text-success" />
                 <div className="text-lg font-semibold">{done.status}</div>
                 <p className="text-sm text-muted-foreground">
-                  {done.success} imported · {done.failed} rejected. The list has been updated and
-                  the import is recorded in Audit Log and Import History.
+                  {done.success} dòng đã import · {done.failed} dòng bị loại. Danh sách đã được cập
+                  nhật; lần import được ghi vào Audit Log và Lịch sử import.
                 </p>
                 <div className="mt-2 flex gap-2">
                   <Button variant="outline" onClick={reset}>
-                    Import another file
+                    Import file khác
                   </Button>
-                  <Button onClick={() => close(false)}>Done</Button>
+                  <Button onClick={() => close(false)}>Xong</Button>
                 </div>
               </div>
             )}
@@ -390,14 +389,14 @@ export function ImportDialog({
                 <TableHeader>
                   <TableRow>
                     {[
-                      "File Name",
-                      "Entity",
-                      "Imported By",
-                      "Imported At",
-                      "Total",
-                      "Success",
-                      "Failed",
-                      "Status",
+                      "Tên file",
+                      "Đối tượng",
+                      "Người import",
+                      "Thời gian",
+                      "Tổng",
+                      "Thành công",
+                      "Lỗi",
+                      "Trạng thái",
                       "",
                     ].map((h) => (
                       <TableHead key={h} className={thClass}>
@@ -445,7 +444,7 @@ export function ImportDialog({
                   {batches.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                        No imports yet.
+                        Chưa có lần import nào.
                       </TableCell>
                     </TableRow>
                   )}

@@ -38,20 +38,20 @@ export function ColumnSettings({
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm">
           <Columns3 className="h-4 w-4" />
-          Columns
+          Cột hiển thị
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
-            <div className="text-sm font-semibold">Column Settings</div>
+            <div className="text-sm font-semibold">Cài đặt cột</div>
             <div className="text-xs text-muted-foreground">
-              {visibleCount}/{pref.order.length} visible · saved for you
+              {visibleCount}/{pref.order.length} cột hiển thị · lưu theo người dùng
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={onReset}>
             <RotateCcw className="h-3.5 w-3.5" />
-            Reset
+            Mặc định
           </Button>
         </div>
         <ul className="max-h-80 overflow-y-auto py-1">
@@ -81,7 +81,7 @@ export function ColumnSettings({
                   className="rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-30"
                   disabled={i === 0}
                   onClick={() => move(i, -1)}
-                  aria-label="Move up"
+                  aria-label="Lên"
                 >
                   <ArrowUp className="h-3.5 w-3.5" />
                 </button>
@@ -90,7 +90,7 @@ export function ColumnSettings({
                   className="rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-30"
                   disabled={i === pref.order.length - 1}
                   onClick={() => move(i, 1)}
-                  aria-label="Move down"
+                  aria-label="Xuống"
                 >
                   <ArrowDown className="h-3.5 w-3.5" />
                 </button>
@@ -99,7 +99,7 @@ export function ColumnSettings({
           })}
         </ul>
         <div className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-          Tip: drag the edge of a column header to resize it.
+          Mẹo: kéo mép tiêu đề cột để đổi độ rộng.
         </div>
       </PopoverContent>
     </Popover>

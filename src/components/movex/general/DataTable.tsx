@@ -158,7 +158,9 @@ export function DataTable<T extends { id: string }>({
                   </TableHead>
                 );
               })}
-              {actions && <TableHead className={cn(thClass, "w-16 text-right")}>Actions</TableHead>}
+              {actions && (
+                <TableHead className={cn(thClass, "w-16 text-right")}>Thao tác</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -187,7 +189,10 @@ export function DataTable<T extends { id: string }>({
                       </TableCell>
                     )}
                     {columns.map((c) => (
-                      <TableCell key={c.key} className={c.className}>
+                      <TableCell
+                        key={c.key}
+                        className={cn(c.className, c.pinned && "whitespace-nowrap")}
+                      >
                         {c.render ? c.render(r) : String(c.value(r) ?? "—")}
                       </TableCell>
                     ))}
@@ -208,10 +213,12 @@ export function DataTable<T extends { id: string }>({
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <span>
-          {totalRows === 0 ? "No records" : `Showing ${first}–${last} of ${totalRows} records`}
+          {totalRows === 0
+            ? "Không có bản ghi"
+            : `Hiển thị ${first}–${last} / ${totalRows} bản ghi`}
         </span>
         <div className="flex items-center gap-2">
-          <span>Rows per page</span>
+          <span>Số dòng / trang</span>
           <NativeSelect
             className="h-8 w-20"
             value={String(pageSize)}
@@ -239,7 +246,7 @@ export function DataTable<T extends { id: string }>({
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="min-w-20 text-center">
-            Page {page} / {pages}
+            Trang {page} / {pages}
           </span>
           <Button
             variant="outline"

@@ -1,8 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { useBlocker } from "@tanstack/react-router";
-import { AlertCircle, ArrowLeft, Loader2, Save } from "lucide-react";
+import { AlertCircle, Loader2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/movex/common";
+import { PageHeader, type Crumb } from "@/components/movex/common";
 import { useConfirm } from "./ConfirmDialog";
 
 /**
@@ -20,9 +20,9 @@ export function useUnsavedChangesGuard(dirty: boolean) {
       if (skip.current || !dirtyRef.current) return false;
       const r = await confirm({
         title: "You have unsaved changes.",
-        description: "If you leave this page now, your changes will be lost.",
-        confirmLabel: "Discard changes",
-        cancelLabel: "Stay on page",
+        description: "Bạn có thay đổi chưa lưu. Nếu rời trang bây giờ, các thay đổi sẽ bị mất.",
+        confirmLabel: "Bỏ thay đổi",
+        cancelLabel: "Ở lại trang",
         tone: "danger",
       });
       return r !== "confirm";
@@ -41,11 +41,12 @@ export function useUnsavedChangesGuard(dirty: boolean) {
   };
 }
 
-/** Standard Create/Edit header: [Back] Title ………… [extra] [Cancel] [Save Draft] [Save]. */
+/** Standard Create/Edit header: [←] Title [badge] ………… [extra] [✕ Cancel] [Save Draft] [💾 Save]. */
 export function FormPageHeader({
   crumbs,
   title,
   subtitle,
+  badge,
   onBack,
   onCancel,
   onSave,
@@ -56,9 +57,10 @@ export function FormPageHeader({
   extra,
   saveLabel = "Save",
 }: {
-  crumbs: { label: string; to?: string }[];
+  crumbs: Crumb[];
   title: ReactNode;
   subtitle?: ReactNode;
+  badge?: ReactNode;
   onBack: () => void;
   onCancel?: () => void;
   onSave?: () => void;
@@ -72,41 +74,35 @@ export function FormPageHeader({
   return (
     <PageHeader
       crumbs={crumbs}
-      title={
-        <span className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onBack}
-            aria-label="Back"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          {title}
+      onBack={onBack}
+      title={title}
+      badge={
+        <>
+          {badge}
           {dirty && !readOnly && (
-            <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">
-              Unsaved changes
+            <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning">
+              Chưa lưu
             </span>
           )}
-        </span>
+        </>
       }
       subtitle={subtitle}
       actions={
         <>
           {extra}
           {!readOnly && onCancel && (
-            <Button variant="outline" onClick={onCancel} disabled={saving}>
+            <Button variant="outline" size="lg" onClick={onCancel} disabled={saving}>
+              <X className="h-4 w-4" />
               Cancel
             </Button>
           )}
           {!readOnly && onSaveDraft && (
-            <Button variant="secondary" onClick={onSaveDraft} disabled={saving}>
+            <Button variant="secondary" size="lg" onClick={onSaveDraft} disabled={saving}>
               Save Draft
             </Button>
           )}
           {!readOnly && onSave && (
-            <Button onClick={onSave} disabled={saving}>
+            <Button size="lg" onClick={onSave} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saveLabel}
             </Button>

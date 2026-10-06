@@ -16,6 +16,14 @@ import {
 } from "./RouteProvider";
 
 const ROAD_FACTOR = 1.18;
+
+/** Plausible road-class split: long hauls are mostly national road + expressway, short ones mostly urban. */
+function mockRoadTypes(distance: number, vehicle: RouteRequest["vehicle"]) {
+  const [n, e] = distance > 300 ? [0.64, 0.31] : distance > 60 ? [0.5, 0.4] : [0.35, 0.15];
+  const expressway = vehicle === "Motorcycle" ? 0 : Math.round(distance * e);
+  const national = Math.round(distance * (vehicle === "Motorcycle" ? n + e : n));
+  return { national, expressway, other: Math.max(0, Math.round(distance - national - expressway)) };
+}
 const SPEED_KMH: Record<RouteRequest["vehicle"], number> = {
   Car: 48,
   Motorcycle: 35,
@@ -61,7 +69,9 @@ export function computeMockRoute(
   for (let i = 1; i < req.points.length; i++) {
     const a = req.points[i - 1]!;
     const b = req.points[i]!;
-    const seg = curvedSegment([a.lat, a.lng], [b.lat, b.lng]);
+    // ~1 vertex per 2 km so toll-gate proximity checks work on long legs too.
+    const steps = Math.max(24, Math.ceil(haversineKm(a, b) / 2));
+    const seg = curvedSegment([a.lat, a.lng], [b.lat, b.lng], steps);
     geometry.push(...(i === 1 ? seg : seg.slice(1)));
   }
 
@@ -86,6 +96,7 @@ export function computeMockRoute(
       const v = geometry[near.index]!;
       tollStations.push({
         id: g.id,
+        code: g.code,
         name: g.name,
         address: g.address,
         feeType: g.feeType,
@@ -120,6 +131,7 @@ export function computeMockRoute(
     tollCost: tollStations.reduce((s, t) => s + t.price * t.passCount, 0),
     tollStations,
     warnings,
+    roadTypes: mockRoadTypes(distance, req.vehicle),
     provider: "mock",
     calculatedAt,
   };
@@ -138,7 +150,15 @@ export class MockRouteProvider implements RouteProvider {
   async searchLocation(text: string): Promise<LocationSuggestion[]> {
     await delay(150);
     const q = normalizeText(text.trim());
-    if (q.length < 1) return [];
+    if (q.length < 1)
+      return LOCATIONS.slice(0, 12).map((l) => ({
+        id: l.id,
+        name: l.name,
+        address: l.address,
+        lat: l.lat,
+        lng: l.lng,
+        source: "master" as const,
+      }));
     return LOCATIONS.filter((l) => normalizeText(`${l.name} ${l.address}`).includes(q))
       .slice(0, 8)
       .map((l) => ({

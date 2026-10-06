@@ -26,6 +26,7 @@ export const emptyPoint = (): RoutePoint => ({ name: "", lat: NaN, lng: NaN });
 export const newRouteDraft = (): RouteRecord => ({
   id: "",
   code: "",
+  description: "",
   name: "",
   type: "Single Trip",
   origin: emptyPoint(),
@@ -83,6 +84,7 @@ function diffRoute(prev: RouteRecord, next: RouteRecord): AuditInput[] {
     a !== b && out.push({ ...base, action, field, oldValue: a, newValue: b });
   upd("UPDATE", "Route Code", prev.code, next.code);
   upd("UPDATE", "Route Name", prev.name, next.name);
+  upd("UPDATE", "Description", prev.description ?? "", next.description ?? "");
   upd("CHANGE_ROUTE_TYPE", "Route Type", prev.type, next.type);
   upd("UPDATE", "Origin", prev.origin.name, next.origin.name);
   upd("UPDATE", "Destination", prev.destination.name, next.destination.name);
@@ -281,6 +283,7 @@ export const routeImportConfig: ImportEntityConfig = {
         id: uid("R-"),
         code: r["code"]!.toUpperCase(),
         name: r["name"]!,
+        description: "",
         type: r["type"] as RouteRecord["type"],
         origin: { name: o.name, address: o.address, lat: o.lat, lng: o.lng, locationId: o.id },
         destination: { name: d.name, address: d.address, lat: d.lat, lng: d.lng, locationId: d.id },

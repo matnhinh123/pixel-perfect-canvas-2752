@@ -36,7 +36,7 @@ export const Route = createFileRoute("/service/")({
 const quickFilters: QuickFilter[] = [
   {
     key: "template",
-    allLabel: "All Templates",
+    allLabel: "Tất cả template",
     options: TEMPLATES.map((t) => ({
       label: t,
       conditions: [{ field: "template", operator: "eq", value: t }],
@@ -44,21 +44,21 @@ const quickFilters: QuickFilter[] = [
   },
   {
     key: "level",
-    allLabel: "All Levels",
+    allLabel: "Tất cả cấp",
     options: [
       {
-        label: "Level 1 (Service Group)",
+        label: "Cấp 1 (Nhóm dịch vụ)",
         conditions: [{ field: "level", operator: "eq", value: "1" }],
       },
       {
-        label: "Child services",
+        label: "Dịch vụ con",
         conditions: [{ field: "level", operator: "between", value: "2", value2: "" }],
       },
     ],
   },
   {
     key: "status",
-    allLabel: "All Status",
+    allLabel: "Tất cả trạng thái",
     options: ["Active", "Draft", "Inactive"].map((v) => ({
       label: v,
       conditions: [{ field: "status", operator: "eq", value: v }],
@@ -82,7 +82,7 @@ function ServiceList() {
     return [
       {
         key: "code",
-        label: "Service Code",
+        label: "Mã dịch vụ",
         type: "text",
         pinned: true,
         value: (s) => s.code,
@@ -90,7 +90,7 @@ function ServiceList() {
       },
       {
         key: "name",
-        label: "Service Name",
+        label: "Tên dịch vụ",
         type: "text",
         value: (s) => s.name,
         render: (s) => (
@@ -100,10 +100,10 @@ function ServiceList() {
           </span>
         ),
       },
-      { key: "level", label: "Level", type: "number", value: (s) => levelOf(s, all) },
+      { key: "level", label: "Cấp", type: "number", value: (s) => levelOf(s, all) },
       {
         key: "parent",
-        label: "Parent",
+        label: "Dịch vụ cha",
         type: "text",
         value: (s) => (s.parentId ? (byId.get(s.parentId)?.code ?? "") : ""),
         render: (s) =>
@@ -124,20 +124,20 @@ function ServiceList() {
             <Tag tone="tpl">{templateOf(s, all)}</Tag>
             {s.parentId && (
               <span
-                title="Inherited from level-1 parent"
+                title="Kế thừa từ dịch vụ cấp 1"
                 className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
               >
                 <Lock className="h-3 w-3" />
-                inherited
+                kế thừa
               </span>
             )}
           </span>
         ),
       },
-      { key: "children", label: "Child Services", type: "number", value: (s) => childCount(s.id) },
+      { key: "children", label: "Số dịch vụ con", type: "number", value: (s) => childCount(s.id) },
       {
         key: "status",
-        label: "Status",
+        label: "Trạng thái",
         type: "enum",
         options: ["Active", "Draft", "Inactive"],
         value: (s) => s.status,
@@ -145,7 +145,7 @@ function ServiceList() {
       },
       {
         key: "updatedAt",
-        label: "Updated At",
+        label: "Cập nhật lúc",
         type: "date",
         value: (s) => s.updatedAt,
         defaultHidden: true,
@@ -169,7 +169,7 @@ function ServiceList() {
       searchValues={(s) => [s.code, s.name]}
       quickFilters={quickFilters}
       crud={serviceCrud}
-      addLabel="Add Service"
+      addLabel="Thêm mới Service"
       onAdd={() => void navigate({ to: "/service/$id", params: { id: "new" } })}
       onView={(s) =>
         void navigate({ to: "/service/$id", params: { id: s.id }, search: { mode: "view" } })

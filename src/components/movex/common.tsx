@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight } from "lucide-react";
+import { ArrowLeft, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tones: Record<string, string> = {
   Active: "bg-success-soft text-success",
-  Draft: "bg-warning-soft text-warning",
+  Draft: "bg-info-soft text-primary",
   Inactive: "bg-muted text-muted-foreground",
   Auto: "bg-info-soft text-info",
   Manual: "bg-warning-soft text-warning",
@@ -41,39 +41,77 @@ export function StatusBadge({ status }: { status: string }) {
   return <Tag>{status}</Tag>;
 }
 
+export interface Crumb {
+  label: string;
+  to?: string;
+}
+
+/**
+ * Page header from the MoveX design:
+ *   🏠 / Danh mục / Routing / Tạo mới
+ *   [←] Title  [badge]                      [actions]
+ */
 export function PageHeader({
   title,
   subtitle,
   crumbs,
   actions,
+  onBack,
+  badge,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
-  crumbs?: { label: string; to?: string }[];
+  crumbs?: Crumb[];
   actions?: ReactNode;
+  onBack?: (() => void) | undefined;
+  badge?: ReactNode;
 }) {
+  const trail: Crumb[] = [{ label: "Danh mục" }, ...(crumbs ?? [])];
   return (
-    <div className="mb-6">
-      {crumbs && (
-        <div className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
-          {crumbs.map((c, i) => (
-            <span key={i} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="h-3 w-3" />}
-              {c.to ? (
-                <Link to={c.to} className="hover:text-primary">
-                  {c.label}
-                </Link>
-              ) : (
-                <span className="text-foreground">{c.label}</span>
-              )}
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+    <div className="mb-5">
+      <nav
+        aria-label="Breadcrumb"
+        className="mb-3 flex items-center gap-1.5 text-[15px] text-muted-foreground"
+      >
+        <Link to="/" aria-label="Trang chủ" className="hover:text-primary">
+          <Home className="h-4 w-4" />
+        </Link>
+        {trail.map((c, i) => (
+          <span key={i} className="flex items-center gap-1.5">
+            <span className="text-muted-foreground/70">/</span>
+            {c.to ? (
+              <Link to={c.to} className="hover:text-primary">
+                {c.label}
+              </Link>
+            ) : (
+              <span
+                className={i === trail.length - 1 ? "font-semibold text-foreground" : undefined}
+              >
+                {c.label}
+              </span>
+            )}
+          </span>
+        ))}
+      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Quay lại"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-card text-foreground shadow-sm hover:border-primary hover:text-primary"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+          <div className="min-w-0">
+            <h1 className="flex flex-wrap items-center gap-3 text-[28px] font-bold leading-tight tracking-tight">
+              {title}
+              {badge}
+            </h1>
+            {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
+          </div>
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
@@ -81,26 +119,29 @@ export function PageHeader({
   );
 }
 
+/** Card with the tinted blue header bar used throughout the design. */
 export function Panel({
   title,
   actions,
   children,
   className,
+  bodyClassName,
 }: {
   title?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string | undefined;
+  bodyClassName?: string | undefined;
 }) {
   return (
-    <section className={cn("rounded-xl border bg-card p-5 shadow-sm", className)}>
+    <section className={cn("overflow-hidden rounded-xl border bg-card shadow-sm", className)}>
       {title && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold">{title}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-card-header px-4 py-2.5">
+          <h2 className="text-[17px] font-semibold text-card-title">{title}</h2>
           {actions}
         </div>
       )}
-      {children}
+      <div className={cn("p-4", bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -122,7 +163,7 @@ export function Field({
 }) {
   return (
     <label className={cn("flex flex-col gap-1.5", className)}>
-      <span className="text-xs font-semibold text-muted-foreground">
+      <span className="text-sm font-semibold text-foreground">
         {label}
         {required && <span className="ml-0.5 text-destructive">*</span>}
       </span>

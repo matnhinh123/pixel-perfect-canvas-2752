@@ -107,10 +107,10 @@ function CostDetailPage() {
       <Panel>
         <EmptyState
           icon={<XCircle className="h-8 w-8" />}
-          title="Cost record not found"
+          title="Không tìm thấy bản ghi Cost"
           action={
             <Button asChild size="sm">
-              <Link to="/cost">Back to Cost</Link>
+              <Link to="/cost">Về danh sách Cost</Link>
             </Button>
           }
         />
@@ -202,8 +202,8 @@ function CostEditor({ source }: { source: CostRecord | null }) {
     const e = validateCost(form, source ?? undefined);
     if (Object.keys(e).length) {
       setErrors(e);
-      setFormError("Cannot save — please fix the following:");
-      toast.error("Please fix the highlighted fields.");
+      setFormError("Chưa thể lưu — vui lòng kiểm tra:");
+      toast.error("Vui lòng kiểm tra các trường được đánh dấu.");
       return;
     }
     try {
@@ -223,7 +223,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
         setErrors(err.fieldErrors);
         setFormError(err.message);
       }
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      toast.error(err instanceof Error ? err.message : "Lưu thất bại");
     }
   };
 
@@ -233,17 +233,13 @@ function CostEditor({ source }: { source: CostRecord | null }) {
   return (
     <div>
       <FormPageHeader
-        crumbs={[{ label: "Cost", to: "/cost" }, { label: isNew ? "Add Cost" : source!.code }]}
-        title={isNew ? "Add Cost" : readOnly ? "Cost Detail" : "Edit Cost"}
-        subtitle={
-          source ? (
-            <span className="flex items-center gap-2">
-              {source.name} <StatusBadge status={source.status} />
-            </span>
-          ) : (
-            "Chi phí tuyến theo Route + Vehicle Group"
-          )
-        }
+        crumbs={[
+          { label: "Cost", to: "/cost" },
+          { label: isNew ? "Tạo mới" : readOnly ? source!.code : "Chỉnh sửa" },
+        ]}
+        title={isNew ? "Tạo mới Cost" : readOnly ? `Cost ${source!.code}` : "Chỉnh sửa Cost"}
+        badge={<StatusBadge status={source?.status ?? f.status} />}
+        subtitle={source ? source.name : "Chi phí tuyến theo Route + Vehicle Group"}
         dirty={dirty}
         readOnly={readOnly}
         onBack={() => void navigate({ to: "/cost" })}
@@ -265,7 +261,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
               <Button variant="outline" asChild>
                 <Link to="/routing/$id" params={{ id: route.id }} search={{ mode: "view" }}>
                   <RouteIcon className="h-4 w-4" />
-                  Open Route
+                  Mở Route
                 </Link>
               </Button>
             )}
@@ -305,7 +301,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                 }
               >
                 <Pencil className="h-4 w-4" />
-                Edit
+                Chỉnh sửa
               </Button>
             )}
           </>
@@ -317,9 +313,9 @@ function CostEditor({ source }: { source: CostRecord | null }) {
         {[
           ["Route", route ? route.code : "—"],
           ["Vehicle Group", f.vehicleGroup],
-          ["Effective From", f.effectiveFrom ? formatDate(f.effectiveFrom) : "—"],
+          ["Hiệu lực từ", f.effectiveFrom ? formatDate(f.effectiveFrom) : "—"],
           [
-            "Version",
+            "Phiên bản",
             source
               ? `v${latest!.version} ${latest!.status}${active && active.version !== latest!.version ? ` · Active v${active.version}` : ""}`
               : "v1 (new)",
@@ -336,9 +332,9 @@ function CostEditor({ source }: { source: CostRecord | null }) {
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-info/40 bg-info-soft px-4 py-3 text-sm text-info">
           <GitBranch className="mt-0.5 h-4 w-4" />
           <div>
-            You are changing released version <b>v{latest!.version}</b> (effective{" "}
-            {formatDate(latest!.effectiveFrom)}). It will <b>not</b> be overwritten — saving creates{" "}
-            <b>v{latest!.version + 1}</b>. Effective From must be after{" "}
+            Bạn đang sửa phiên bản đã phát hành <b>v{latest!.version}</b> (hiệu lực{" "}
+            {formatDate(latest!.effectiveFrom)}). Phiên bản này <b>không</b> bị ghi đè — khi lưu sẽ
+            tạo <b>v{latest!.version + 1}</b>. Ngày hiệu lực phải sau{" "}
             {formatDate(latest!.effectiveFrom)}.
           </div>
         </div>
@@ -347,10 +343,10 @@ function CostEditor({ source }: { source: CostRecord | null }) {
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-soft px-4 py-3 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4" />
           <div>
-            Route {route?.code} changed after v{latest!.version} was saved (toll{" "}
-            {formatVnd(latest!.routeSnapshot!.tollCost)} → {formatVnd(liveSnap!.tollCost)}). The
-            figures below are the saved snapshot; edit & save to create a version with the latest
-            route data.
+            Route {route?.code} đã thay đổi sau khi lưu v{latest!.version} (phí cầu đường{" "}
+            {formatVnd(latest!.routeSnapshot!.tollCost)} → {formatVnd(liveSnap!.tollCost)}). Số liệu
+            dưới đây là snapshot đã lưu; chỉnh sửa và lưu để tạo phiên bản với dữ liệu route mới
+            nhất.
           </div>
         </div>
       )}
@@ -359,19 +355,21 @@ function CostEditor({ source }: { source: CostRecord | null }) {
         <fieldset disabled={readOnly} className="flex min-w-0 flex-col gap-6 xl:col-span-2">
           <Panel title="Route & Vehicle Group">
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-              <Field label="Cost Code" required error={errors["code"]}>
+              <Field label="Mã chi phí" required error={errors["code"]}>
                 <Input
                   value={f.code}
                   onChange={(e) => set("code", e.target.value.toUpperCase())}
                   aria-invalid={!!errors["code"] || undefined}
                 />
               </Field>
-              <Field label="Name" className="lg:col-span-2">
+              <Field label="Tên" className="lg:col-span-2">
                 <Input
                   value={f.name}
                   onChange={(e) => set("name", e.target.value)}
                   placeholder={
-                    route ? `${route.code} · ${f.vehicleGroup}` : "Auto from route + vehicle group"
+                    route
+                      ? `${route.code} · ${f.vehicleGroup}`
+                      : "Tự động theo route + vehicle group"
                   }
                 />
               </Field>
@@ -380,7 +378,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                 required
                 error={errors["routeId"]}
                 className="lg:col-span-2"
-                hint="Only calculated routes from the Routing module can be used."
+                hint="Chỉ chọn được route đã tính lộ trình trong module Routing."
               >
                 <NativeSelect
                   value={f.routeId}
@@ -408,7 +406,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                   }}
                   options={["", ...routeOptions.map((r) => r.id)]}
                   labels={{
-                    "": "Select route…",
+                    "": "Chọn route…",
                     ...Object.fromEntries(
                       routeOptions.map((r) => [
                         r.id,
@@ -425,7 +423,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                   options={VEHICLE_GROUPS}
                 />
               </Field>
-              <Field label="Effective From" required error={errors["effectiveFrom"]}>
+              <Field label="Hiệu lực từ" required error={errors["effectiveFrom"]}>
                 <Input
                   type="date"
                   value={f.effectiveFrom}
@@ -433,14 +431,14 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                   aria-invalid={!!errors["effectiveFrom"] || undefined}
                 />
               </Field>
-              <Field label="Status">
+              <Field label="Trạng thái">
                 <NativeSelect
                   value={f.status}
                   onChange={(v) => set("status", v as Status)}
                   options={["Draft", "Active", "Inactive"]}
                 />
               </Field>
-              <Field label="Version note">
+              <Field label="Ghi chú phiên bản">
                 <Input
                   value={f.note}
                   onChange={(e) => set("note", e.target.value)}
@@ -450,10 +448,10 @@ function CostEditor({ source }: { source: CostRecord | null }) {
             </div>
             <div className="mt-4 grid grid-cols-3 gap-3">
               {[
-                ["Route Distance", snap ? `${snap.distanceKm} km` : "—"],
-                ["Estimated Time", snap ? formatDuration(snap.estimatedTimeMin) : "—"],
+                ["Khoảng cách tuyến", snap ? `${snap.distanceKm} km` : "—"],
+                ["Thời gian ước tính", snap ? formatDuration(snap.estimatedTimeMin) : "—"],
                 [
-                  "Toll Cost (from Routing)",
+                  "Toll Cost (từ Routing)",
                   snap ? formatVnd(snap.tollCost + snap.ferryCost + snap.otherRouteCost) : "—",
                 ],
               ].map(([k, v]) => (
@@ -468,14 +466,14 @@ function CostEditor({ source }: { source: CostRecord | null }) {
             </div>
             {route?.type === "Round Trip" && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Round Trip: distance, time and tolls include both Outbound and Return legs (each
-                leg's own tolls).
+                Round Trip: khoảng cách, thời gian và phí cầu đường gồm cả chiều đi và chiều về (mỗi
+                chiều tính trạm riêng).
               </p>
             )}
           </Panel>
 
           <Panel
-            title="Cost Lines"
+            title="Dòng chi phí"
             actions={
               !readOnly && (
                 <div className="flex gap-2">
@@ -490,7 +488,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                     }
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
-                    Reset to rate master
+                    Lấy lại đơn giá chuẩn
                   </Button>
                   <Button
                     variant="outline"
@@ -509,7 +507,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                     }
                   >
                     <Plus className="h-4 w-4" />
-                    Add line
+                    Thêm dòng
                   </Button>
                 </div>
               )
@@ -522,13 +520,19 @@ function CostEditor({ source }: { source: CostRecord | null }) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {["Category", "Description", "Basis", "Rate (₫)", "Quantity", "Amount", ""].map(
-                      (h) => (
-                        <TableHead key={h} className={thClass}>
-                          {h}
-                        </TableHead>
-                      ),
-                    )}
+                    {[
+                      "Nhóm",
+                      "Diễn giải",
+                      "Cách tính",
+                      "Đơn giá (₫)",
+                      "Số lượng",
+                      "Thành tiền",
+                      "",
+                    ].map((h) => (
+                      <TableHead key={h} className={thClass}>
+                        {h}
+                      </TableHead>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -596,9 +600,9 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                     </TableRow>
                   ))}
                   {[
-                    ["Toll", "Toll stations (Outbound + Return)", snap?.tollCost],
-                    ["Ferry", "Ferry stations + manual ferry costs", snap?.ferryCost],
-                    ["Other", "Manual route costs (surcharges)", snap?.otherRouteCost],
+                    ["Toll", "Trạm thu phí (chiều đi + chiều về)", snap?.tollCost],
+                    ["Ferry", "Phà + chi phí phà thủ công", snap?.ferryCost],
+                    ["Other", "Phụ phí thủ công của route", snap?.otherRouteCost],
                   ].map(([c, d, v]) => (
                     <TableRow key={String(c)} className="bg-muted/30">
                       <TableCell>
@@ -658,13 +662,13 @@ function CostEditor({ source }: { source: CostRecord | null }) {
                 <div className="text-xs opacity-80">
                   {snap
                     ? `${snap.distanceKm} km · ${route?.type ?? ""}`
-                    : "Select a calculated route"}
+                    : "Chọn một route đã tính lộ trình"}
                 </div>
               </div>
               {!snap && (
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Info className="h-3.5 w-3.5" />
-                  Pick a route to compute fuel, driver and toll costs.
+                  Chọn route để tính nhiên liệu, tài xế và phí cầu đường.
                 </p>
               )}
             </div>
@@ -672,13 +676,13 @@ function CostEditor({ source }: { source: CostRecord | null }) {
 
           <Panel title={`Version History (${versionsDesc.length})`}>
             {versionsDesc.length === 0 ? (
-              <p className="text-sm text-muted-foreground">v1 will be created on first save.</p>
+              <p className="text-sm text-muted-foreground">v1 sẽ được tạo khi lưu lần đầu.</p>
             ) : (
               <div className="overflow-hidden rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {["", "Version", "Effective", "Status", "Total"].map((h) => (
+                      {["", "Phiên bản", "Hiệu lực", "Trạng thái", "Tổng"].map((h) => (
                         <TableHead key={h} className={thClass}>
                           {h}
                         </TableHead>
@@ -745,7 +749,7 @@ function CostEditor({ source }: { source: CostRecord | null }) {
               </div>
             )}
             <p className="mt-2 text-xs text-muted-foreground">
-              Released versions are immutable; changes create a new version.
+              Phiên bản đã phát hành không bị sửa; mọi thay đổi tạo phiên bản mới.
             </p>
           </Panel>
         </div>

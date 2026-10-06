@@ -65,7 +65,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <Button variant="outline" onClick={() => close("cancel")}>
-              {opts?.cancelLabel ?? "Cancel"}
+              {opts?.cancelLabel ?? "Huỷ"}
             </Button>
             {opts?.altLabel && (
               <Button variant="secondary" onClick={() => close("alt")}>
@@ -74,7 +74,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             )}
             {!opts?.hideConfirm && (
               <Button variant={danger ? "destructive" : "default"} onClick={() => close("confirm")}>
-                {opts?.confirmLabel ?? "Confirm"}
+                {opts?.confirmLabel ?? "Xác nhận"}
               </Button>
             )}
           </AlertDialogFooter>

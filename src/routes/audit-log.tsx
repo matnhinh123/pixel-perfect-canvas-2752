@@ -63,13 +63,13 @@ function AuditLogPage() {
             value={entity}
             onChange={setEntity}
             options={["", "Route", "Service", "Cost"]}
-            labels={{ "": "All Entities" }}
+            labels={{ "": "Tất cả đối tượng" }}
           />
           <NativeSelect
             value={action}
             onChange={setAction}
             options={["", ...Object.keys(AUDIT_ACTION_LABEL)]}
-            labels={{ "": "All Actions" }}
+            labels={{ "": "Tất cả hành động" }}
           />
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
@@ -77,11 +77,11 @@ function AuditLogPage() {
               checked={showViews}
               onChange={(e) => setShowViews(e.target.checked)}
             />
-            Show VIEW events
+            Hiện sự kiện VIEW
           </label>
           <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5" />
-            {rows.length} events · read-only
+            {rows.length} sự kiện · chỉ đọc
           </span>
         </div>
         <AuditTimeline entries={rows} showEntity />

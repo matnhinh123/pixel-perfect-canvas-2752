@@ -4,8 +4,8 @@ import type { LocationRecord } from "@/types";
 export const LOCATIONS: LocationRecord[] = [
   {
     id: "L-HCM",
-    name: "TP. Hồ Chí Minh",
-    address: "Quận 1, TP. Hồ Chí Minh",
+    name: "TP.HCM (HCM)",
+    address: "TP. Hồ Chí Minh",
     province: "TP. Hồ Chí Minh",
     lat: 10.7769,
     lng: 106.7009,
@@ -99,9 +99,25 @@ export const LOCATIONS: LocationRecord[] = [
     lng: 107.005,
   },
   {
+    id: "L-DNAI-DG",
+    name: "Dầu Giây",
+    address: "Thống Nhất, Đồng Nai",
+    province: "Đồng Nai",
+    lat: 10.946,
+    lng: 107.144,
+  },
+  {
+    id: "L-QN",
+    name: "Quy Nhơn",
+    address: "TP. Quy Nhơn, Bình Định",
+    province: "Bình Định",
+    lat: 13.7765,
+    lng: 109.2237,
+  },
+  {
     id: "L-DANANG",
-    name: "Đà Nẵng",
-    address: "Hải Châu, Đà Nẵng",
+    name: "Đà Nẵng (DAD)",
+    address: "Đà Nẵng",
     province: "Đà Nẵng",
     lat: 16.0544,
     lng: 108.2022,

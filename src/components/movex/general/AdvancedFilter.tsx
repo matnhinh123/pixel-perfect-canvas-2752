@@ -66,17 +66,19 @@ export function AdvancedFilter({
       <PopoverTrigger asChild>
         <Button variant={value.length ? "secondary" : "outline"} size="sm">
           <Filter className="h-4 w-4" />
-          Advanced Filter{value.length ? ` (${value.length})` : ""}
+          Bộ lọc nâng cao{value.length ? ` (${value.length})` : ""}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[620px] p-0">
         <div className="border-b px-4 py-3">
-          <div className="text-sm font-semibold">Advanced Filter</div>
-          <div className="text-xs text-muted-foreground">All conditions are combined with AND.</div>
+          <div className="text-sm font-semibold">Bộ lọc nâng cao</div>
+          <div className="text-xs text-muted-foreground">Các điều kiện được kết hợp bằng AND.</div>
         </div>
         <div className="flex flex-col gap-2 px-4 py-3">
           {draft.length === 0 && (
-            <p className="text-sm text-muted-foreground">No conditions. Add one below.</p>
+            <p className="text-sm text-muted-foreground">
+              Chưa có điều kiện. Thêm điều kiện bên dưới.
+            </p>
           )}
           {draft.map((c, i) => {
             const f = fieldOf(c.field);
@@ -84,7 +86,7 @@ export function AdvancedFilter({
             return (
               <div key={c.id} className="flex items-center gap-2">
                 <span className="w-10 text-right text-xs font-semibold text-muted-foreground">
-                  {i === 0 ? "WHERE" : "AND"}
+                  {i === 0 ? "NẾU" : "VÀ"}
                 </span>
                 <NativeSelect
                   className="w-44"
@@ -114,14 +116,14 @@ export function AdvancedFilter({
                     value={c.value}
                     onChange={(v) => set(c.id, { value: v })}
                     options={["", ...(f.options ?? [])]}
-                    labels={{ "": "Select…" }}
+                    labels={{ "": "Chọn…" }}
                   />
                 ) : c.operator === "between" ? (
                   <div className="flex flex-1 items-center gap-1">
                     <Input
                       className="h-9"
                       type={inputType}
-                      placeholder="From"
+                      placeholder="Từ"
                       value={c.value}
                       onChange={(e) => set(c.id, { value: e.target.value })}
                     />
@@ -129,7 +131,7 @@ export function AdvancedFilter({
                     <Input
                       className="h-9"
                       type={inputType}
-                      placeholder="To"
+                      placeholder="Đến"
                       value={c.value2 ?? ""}
                       onChange={(e) => set(c.id, { value2: e.target.value })}
                     />
@@ -138,7 +140,7 @@ export function AdvancedFilter({
                   <Input
                     className="h-9 flex-1"
                     type={inputType}
-                    placeholder="Value"
+                    placeholder="Giá trị"
                     value={c.value}
                     onChange={(e) => set(c.id, { value: e.target.value })}
                   />
@@ -147,7 +149,7 @@ export function AdvancedFilter({
                   variant="ghost"
                   size="icon"
                   onClick={() => setDraft((d) => d.filter((x) => x.id !== c.id))}
-                  aria-label="Remove condition"
+                  aria-label="Xoá điều kiện"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -161,14 +163,14 @@ export function AdvancedFilter({
             onClick={() => fields[0] && setDraft((d) => [...d, blank(fields[0]!)])}
           >
             <Plus className="h-4 w-4" />
-            Add condition
+            Thêm điều kiện
           </Button>
         </div>
         {recent.length > 0 && (
           <div className="border-t px-4 py-3">
             <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-muted-foreground">
               <History className="h-3.5 w-3.5" />
-              Recent Filters
+              Bộ lọc gần đây
             </div>
             <div className="flex flex-col gap-1">
               {recent.map((r) => (
@@ -194,10 +196,10 @@ export function AdvancedFilter({
               setOpen(false);
             }}
           >
-            Clear Filter
+            Xoá lọc
           </Button>
           <Button size="sm" onClick={() => apply(draft)}>
-            Apply Filter
+            Áp dụng
           </Button>
         </div>
       </PopoverContent>

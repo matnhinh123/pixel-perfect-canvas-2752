@@ -53,6 +53,23 @@ export function toLatLngGeometry(
     });
 }
 
+/** Split distance by road class from instruction street names (QL = national, CT/Cao tốc = expressway). */
+export function classifyRoads(ins: { distance?: number; street_name?: string; text?: string }[]) {
+  const out = { national: 0, expressway: 0, other: 0 };
+  for (const i of ins) {
+    const name = `${i.street_name ?? ""} ${i.text ?? ""}`.toLowerCase();
+    const km = (i.distance ?? 0) / 1000;
+    if (/cao tốc|\bct\b|expressway/.test(name)) out.expressway += km;
+    else if (/quốc lộ|\bql\s?\d|national/.test(name)) out.national += km;
+    else out.other += km;
+  }
+  return {
+    national: Math.round(out.national),
+    expressway: Math.round(out.expressway),
+    other: Math.round(out.other),
+  };
+}
+
 export function normalizeVietmapRoute(
   res: VietmapRouteResponse,
   req: RouteRequest,
@@ -105,6 +122,7 @@ export function normalizeVietmapRoute(
     tollCost: typeof path.toll_cost === "number" ? path.toll_cost : summed,
     tollStations,
     warnings,
+    roadTypes: classifyRoads(path.instructions ?? []),
     provider: "vietmap",
     calculatedAt: new Date().toISOString(),
   };

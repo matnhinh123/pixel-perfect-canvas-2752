@@ -26,7 +26,7 @@ export const Route = createFileRoute("/routing/")({
 const columns: ListColumn<RouteRecord>[] = [
   {
     key: "code",
-    label: "Route Code",
+    label: "Mã route",
     type: "text",
     pinned: true,
     value: (r) => r.code,
@@ -34,28 +34,28 @@ const columns: ListColumn<RouteRecord>[] = [
   },
   {
     key: "name",
-    label: "Route Name",
+    label: "Tên route",
     type: "text",
     value: (r) => r.name,
     className: "font-medium",
   },
   {
     key: "origin",
-    label: "Origin",
+    label: "Điểm đi",
     type: "text",
     value: (r) => r.origin.name,
     className: "max-w-40 truncate text-muted-foreground",
   },
   {
     key: "destination",
-    label: "Destination",
+    label: "Điểm đến",
     type: "text",
     value: (r) => r.destination.name,
     className: "max-w-40 truncate text-muted-foreground",
   },
   {
     key: "type",
-    label: "Route Type",
+    label: "Loại route",
     type: "enum",
     options: ["Single Trip", "Round Trip"],
     value: (r) => r.type,
@@ -63,7 +63,7 @@ const columns: ListColumn<RouteRecord>[] = [
   },
   {
     key: "vehicleProfile",
-    label: "Vehicle",
+    label: "Phương tiện",
     type: "enum",
     options: VEHICLE_PROFILES,
     value: (r) => r.vehicleProfile,
@@ -78,33 +78,33 @@ const columns: ListColumn<RouteRecord>[] = [
   },
   {
     key: "distance",
-    label: "Distance (km)",
+    label: "Khoảng cách (km)",
     type: "number",
     value: (r) => (r.outbound ? routeTotals(r).distanceKm : null),
     render: (r) =>
       r.outbound ? (
         `${routeTotals(r).distanceKm} km`
       ) : (
-        <span className="text-muted-foreground">Not calculated</span>
+        <span className="text-muted-foreground">Chưa tính</span>
       ),
   },
   {
     key: "time",
-    label: "Estimated Time (min)",
+    label: "Thời gian ước tính",
     type: "number",
     value: (r) => (r.outbound ? routeTotals(r).estimatedTimeMin : null),
     render: (r) => (r.outbound ? formatDuration(routeTotals(r).estimatedTimeMin) : "—"),
   },
   {
     key: "toll",
-    label: "Toll Cost (₫)",
+    label: "Phí cầu đường (₫)",
     type: "number",
     value: (r) => routeTotals(r).totalRouteCost,
     render: (r) => <span className="font-medium">{formatVnd(routeTotals(r).totalRouteCost)}</span>,
   },
   {
     key: "status",
-    label: "Status",
+    label: "Trạng thái",
     type: "enum",
     options: ["Active", "Draft", "Inactive"],
     value: (r) => r.status,
@@ -112,7 +112,7 @@ const columns: ListColumn<RouteRecord>[] = [
   },
   {
     key: "updatedAt",
-    label: "Updated At",
+    label: "Cập nhật lúc",
     type: "date",
     value: (r) => r.updatedAt,
     render: (r) => (
@@ -127,7 +127,7 @@ const columns: ListColumn<RouteRecord>[] = [
 const quickFilters: QuickFilter[] = [
   {
     key: "type",
-    allLabel: "All Route Types",
+    allLabel: "Tất cả loại route",
     options: ["Single Trip", "Round Trip"].map((v) => ({
       label: v,
       conditions: [{ field: "type", operator: "eq", value: v }],
@@ -135,7 +135,7 @@ const quickFilters: QuickFilter[] = [
   },
   {
     key: "vehicle",
-    allLabel: "All Vehicles",
+    allLabel: "Tất cả phương tiện",
     options: VEHICLE_PROFILES.map((v) => ({
       label: v,
       conditions: [{ field: "vehicleProfile", operator: "eq", value: v }],
@@ -143,7 +143,7 @@ const quickFilters: QuickFilter[] = [
   },
   {
     key: "status",
-    allLabel: "All Status",
+    allLabel: "Tất cả trạng thái",
     options: ["Active", "Draft", "Inactive"].map((v) => ({
       label: v,
       conditions: [{ field: "status", operator: "eq", value: v }],
@@ -151,7 +151,7 @@ const quickFilters: QuickFilter[] = [
   },
   {
     key: "distance",
-    allLabel: "All Distances",
+    allLabel: "Mọi khoảng cách",
     options: [
       {
         label: "< 50 km",
@@ -186,7 +186,7 @@ function RoutingList() {
       searchValues={(r) => [r.code, r.name, r.origin.name, r.destination.name]}
       quickFilters={quickFilters}
       crud={routeCrud}
-      addLabel="Add New Route"
+      addLabel="Thêm mới Route"
       onAdd={() => void navigate({ to: "/routing/$id", params: { id: "new" } })}
       onView={(r) =>
         void navigate({ to: "/routing/$id", params: { id: r.id }, search: { mode: "view" } })
@@ -197,7 +197,7 @@ function RoutingList() {
       importConfig={routeImportConfig}
       extraRowActions={[
         {
-          label: "Route Costs",
+          label: "Chi phí của route",
           icon: <Receipt className="h-4 w-4" />,
           onClick: (r) => void navigate({ to: "/cost", search: { route: r.code } }),
         },

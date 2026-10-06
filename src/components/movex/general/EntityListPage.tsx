@@ -169,7 +169,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
 
   const doExport = (rows: T[], scope: string) => {
     if (rows.length === 0) {
-      toast.error("Nothing to export — the current view is empty.");
+      toast.error("Không có dữ liệu để export — danh sách hiện tại đang trống.");
       return;
     }
     const cols = visibleCols;
@@ -180,14 +180,14 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
       headers: cols.map((c) => c.label),
       rows: rows.map((r) => cols.map((c) => (c.exportValue ?? c.value)(r) ?? "")),
     });
-    toast.success(`Exported ${rows.length} rows → ${file}`);
+    toast.success(`Đã export ${rows.length} dòng → ${file}`);
   };
 
   const refresh = () => {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      toast.success("List refreshed");
+      toast.success("Đã làm mới danh sách");
     }, 450);
   };
 
@@ -196,7 +196,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     setQuick({});
     setAdvanced([]);
   };
-  const ro = p.readOnlyReason ?? "Not available for this list";
+  const ro = p.readOnlyReason ?? "Không khả dụng cho danh sách này";
 
   const importBtn = p.importConfig ? (
     <div className="flex">
@@ -217,11 +217,11 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => setImportOpen("import")}>
             <Upload className="h-4 w-4" />
-            Import from Excel…
+            Import từ Excel…
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setImportOpen("history")}>
             <History className="h-4 w-4" />
-            Import History
+            Lịch sử import
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -246,7 +246,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          Excel (CSV) · {visibleCols.length} visible columns
+          Excel (CSV) · {visibleCols.length} cột đang hiển thị
         </DropdownMenuLabel>
         <DropdownMenuItem
           onClick={() =>
@@ -257,14 +257,14 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
           }
         >
           <Download className="h-4 w-4" />
-          Export current view ({filtered.length})
+          Export theo view hiện tại ({filtered.length})
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={selectedRows.length === 0}
           onClick={() => doExport(applySort(selectedRows, sort, get), "selected rows")}
         >
           <CheckCircle2 className="h-4 w-4" />
-          Export selected ({selectedRows.length})
+          Export dòng đã chọn ({selectedRows.length})
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -273,13 +273,13 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const addBtn = p.onAdd ? (
     <Button onClick={p.onAdd}>
       <Plus className="h-4 w-4" />
-      {p.addLabel ?? "Add New"}
+      {p.addLabel ?? "Thêm mới"}
     </Button>
   ) : (
     <DisabledWithReason reason={ro}>
       <Button disabled>
         <Plus className="h-4 w-4" />
-        {p.addLabel ?? "Add New"}
+        {p.addLabel ?? "Thêm mới"}
       </Button>
     </DisabledWithReason>
   );
@@ -347,6 +347,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     <div>
       {!p.embedded && (
         <PageHeader
+          crumbs={[{ label: typeof p.title === "string" ? p.title : p.entityLabel }]}
           title={p.title}
           subtitle={p.subtitle}
           actions={
@@ -381,7 +382,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 type="button"
                 onClick={() => setQ("")}
                 className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
+                aria-label="Xoá tìm kiếm"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -409,7 +410,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
               onChange={setPref}
               onReset={() => {
                 reset();
-                toast.success("Columns reset to default");
+                toast.success("Đã khôi phục cột mặc định");
               }}
             />
             <Button variant="outline" size="sm" onClick={refresh} aria-label="Refresh">
@@ -433,21 +434,21 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
               className="font-semibold text-primary hover:underline"
               onClick={clearAll}
             >
-              Clear all
+              Xoá tất cả lọc
             </button>
           </div>
         )}
 
         {selected.size > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-accent px-3 py-2 text-sm">
-            <span className="font-semibold text-accent-foreground">{selected.size} selected</span>
+            <span className="font-semibold text-accent-foreground">Đã chọn {selected.size}</span>
             <Button
               size="sm"
               variant="outline"
               onClick={() => doExport(applySort(selectedRows, sort, get), "selected rows")}
             >
               <Download className="h-4 w-4" />
-              Export Selected
+              Export đã chọn
             </Button>
             {crud && (
               <>
@@ -475,7 +476,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
               className="ml-auto"
               onClick={() => setSelected(new Set())}
             >
-              Clear selection
+              Bỏ chọn
             </Button>
           </div>
         )}
@@ -516,15 +517,15 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
           empty={
             p.rows.length === 0 ? (
               <EmptyState
-                title={`No ${p.entityLabel.toLowerCase()} records yet`}
+                title={`Chưa có dữ liệu ${p.entityLabel}`}
                 description={
-                  p.onAdd ? `Click "${p.addLabel ?? "Add New"}" or import from Excel.` : undefined
+                  p.onAdd ? `Bấm "${p.addLabel ?? "Thêm mới"}" hoặc import từ Excel.` : undefined
                 }
                 action={
                   p.onAdd ? (
                     <Button size="sm" onClick={p.onAdd}>
                       <Plus className="h-4 w-4" />
-                      {p.addLabel ?? "Add New"}
+                      {p.addLabel ?? "Thêm mới"}
                     </Button>
                   ) : undefined
                 }
@@ -532,11 +533,11 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             ) : (
               <EmptyState
                 icon={<SearchX className="h-8 w-8" />}
-                title="No matching records"
-                description="Try another keyword or clear the filters."
+                title="Không có bản ghi phù hợp"
+                description="Thử từ khoá khác hoặc xoá bộ lọc."
                 action={
                   <Button size="sm" variant="outline" onClick={clearAll}>
-                    Clear filters
+                    Xoá bộ lọc
                   </Button>
                 }
               />

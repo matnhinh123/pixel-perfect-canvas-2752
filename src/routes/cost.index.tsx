@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils";
 
 type Tab = "route-cost" | "toll" | "rates";
 const TABS: { key: Tab; label: string }[] = [
-  { key: "route-cost", label: "Route Cost" },
-  { key: "toll", label: "Toll Cost (from Routing)" },
-  { key: "rates", label: "Operating Rates" },
+  { key: "route-cost", label: "Chi phí tuyến" },
+  { key: "toll", label: "Phí cầu đường (từ Routing)" },
+  { key: "rates", label: "Đơn giá vận hành" },
 ];
 
 export const Route = createFileRoute("/cost/")({
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/cost/")({
 
 const statusFilter: QuickFilter = {
   key: "status",
-  allLabel: "All Status",
+  allLabel: "Tất cả trạng thái",
   options: ["Active", "Draft", "Inactive"].map((v) => ({
     label: v,
     conditions: [{ field: "status", operator: "eq", value: v }],
@@ -51,7 +51,7 @@ const statusFilter: QuickFilter = {
 };
 const groupFilter = (field: string): QuickFilter => ({
   key: "group",
-  allLabel: "All Vehicle Groups",
+  allLabel: "Tất cả nhóm xe",
   options: VEHICLE_GROUPS.map((g) => ({
     label: g,
     conditions: [{ field, operator: "eq", value: g }],
@@ -91,7 +91,7 @@ function CostList() {
     return [
       {
         key: "code",
-        label: "Cost Code",
+        label: "Mã chi phí",
         type: "text",
         pinned: true,
         value: (c) => c.code,
@@ -118,7 +118,7 @@ function CostList() {
       },
       {
         key: "version",
-        label: "Version",
+        label: "Phiên bản",
         type: "number",
         value: (c) => displayVersion(c).version,
         render: (c) => (
@@ -130,28 +130,28 @@ function CostList() {
       },
       {
         key: "effectiveFrom",
-        label: "Effective From",
+        label: "Hiệu lực từ",
         type: "date",
         value: (c) => displayVersion(c).effectiveFrom,
         render: (c) => formatDate(displayVersion(c).effectiveFrom),
       },
       {
         key: "distance",
-        label: "Distance (km)",
+        label: "Khoảng cách (km)",
         type: "number",
         value: (c) => displayVersion(c).routeSnapshot?.distanceKm ?? null,
         defaultHidden: true,
       },
       {
         key: "toll",
-        label: "Toll Cost (₫)",
+        label: "Phí cầu đường (₫)",
         type: "number",
         value: (c) => displayVersion(c).routeSnapshot?.tollCost ?? 0,
         render: (c) => formatVnd(displayVersion(c).routeSnapshot?.tollCost ?? 0),
       },
       {
         key: "total",
-        label: "Total Estimated (₫)",
+        label: "Tổng chi phí ước tính (₫)",
         type: "number",
         value: (c) => displayVersion(c).totalEstimated,
         render: (c) => (
@@ -160,7 +160,7 @@ function CostList() {
       },
       {
         key: "status",
-        label: "Status",
+        label: "Trạng thái",
         type: "enum",
         options: ["Active", "Draft", "Inactive"],
         value: (c) => c.status,
@@ -168,7 +168,7 @@ function CostList() {
       },
       {
         key: "updatedAt",
-        label: "Updated At",
+        label: "Cập nhật lúc",
         type: "date",
         value: (c) => c.updatedAt,
         defaultHidden: true,
@@ -183,13 +183,13 @@ function CostList() {
     () => [
       {
         key: "code",
-        label: "Route Code",
+        label: "Mã route",
         type: "text",
         pinned: true,
         value: (r) => r.code,
         render: (r) => <span className="font-semibold text-primary">{r.code}</span>,
       },
-      { key: "name", label: "Route Name", type: "text", value: (r) => r.name },
+      { key: "name", label: "Tên route", type: "text", value: (r) => r.name },
       {
         key: "vehicleGroup",
         label: "Vehicle Group",
@@ -199,7 +199,7 @@ function CostList() {
       },
       {
         key: "type",
-        label: "Route Type",
+        label: "Loại route",
         type: "enum",
         options: ["Single Trip", "Round Trip"],
         value: (r) => r.type,
@@ -207,34 +207,34 @@ function CostList() {
       },
       {
         key: "stations",
-        label: "Stations",
+        label: "Số trạm",
         type: "number",
         value: (r) => routeTotals(r).stationCount,
       },
       {
         key: "outbound",
-        label: "Outbound Toll (₫)",
+        label: "Phí chiều đi (₫)",
         type: "number",
         value: (r) => routeTotals(r).outboundToll,
         render: (r) => formatVnd(routeTotals(r).outboundToll),
       },
       {
         key: "return",
-        label: "Return Toll (₫)",
+        label: "Phí chiều về (₫)",
         type: "number",
         value: (r) => routeTotals(r).returnToll,
         render: (r) => (r.type === "Round Trip" ? formatVnd(routeTotals(r).returnToll) : "—"),
       },
       {
         key: "manual",
-        label: "Manual / Ferry (₫)",
+        label: "Thủ công / phà (₫)",
         type: "number",
         value: (r) => routeTotals(r).manualTotal,
         render: (r) => formatVnd(routeTotals(r).manualTotal),
       },
       {
         key: "total",
-        label: "Total Toll Cost (₫)",
+        label: "Tổng phí cầu đường (₫)",
         type: "number",
         value: (r) => routeTotals(r).totalRouteCost,
         render: (r) => (
@@ -243,7 +243,7 @@ function CostList() {
       },
       {
         key: "status",
-        label: "Status",
+        label: "Trạng thái",
         type: "enum",
         options: ["Active", "Draft", "Inactive"],
         value: (r) => r.status,
@@ -256,16 +256,16 @@ function CostList() {
   const rateColumns: ListColumn<OperatingRateRow>[] = [
     {
       key: "code",
-      label: "Code",
+      label: "Mã",
       type: "text",
       pinned: true,
       value: (r) => r.code,
       render: (r) => <span className="font-semibold text-primary">{r.code}</span>,
     },
-    { key: "name", label: "Name", type: "text", value: (r) => r.name },
+    { key: "name", label: "Tên", type: "text", value: (r) => r.name },
     {
       key: "category",
-      label: "Category",
+      label: "Nhóm chi phí",
       type: "enum",
       options: ["Fixed", "Fuel", "Driver", "Other"],
       value: (r) => r.category,
@@ -278,10 +278,10 @@ function CostList() {
       options: VEHICLE_GROUPS,
       value: (r) => r.vehicleGroup,
     },
-    { key: "unit", label: "Unit", type: "text", value: (r) => r.unit },
+    { key: "unit", label: "Đơn vị", type: "text", value: (r) => r.unit },
     {
       key: "amount",
-      label: "Amount (₫)",
+      label: "Đơn giá (₫)",
       type: "number",
       value: (r) => r.amount,
       render: (r) => <span className="font-semibold">{formatVnd(r.amount)}</span>,
@@ -308,20 +308,20 @@ function CostList() {
         entityType="Route"
         entityLabel="Toll cost"
         title="Cost"
-        subtitle="Toll cost per route — read directly from Routing (single source of truth)"
+        subtitle="Phí cầu đường theo route — đọc trực tiếp từ Routing (một nguồn dữ liệu duy nhất)"
         above={tabs}
         rows={routes}
         columns={tollColumns}
         searchPlaceholder="Tìm route code, tên..."
         searchValues={(r) => [r.code, r.name, r.vehicleGroup]}
         quickFilters={[groupFilter("vehicleGroup"), statusFilter]}
-        readOnlyReason="Toll data is maintained in Routing — open the route to change it."
+        readOnlyReason="Dữ liệu phí cầu đường được quản lý ở Routing — mở route để chỉnh sửa."
         onView={(r) =>
           void navigate({ to: "/routing/$id", params: { id: r.id }, search: { mode: "view" } })
         }
         extraRowActions={[
           {
-            label: "Open Route (edit tolls)",
+            label: "Mở Route (sửa phí)",
             icon: <RouteIcon className="h-4 w-4" />,
             onClick: (r) =>
               void navigate({ to: "/routing/$id", params: { id: r.id }, search: { mode: "edit" } }),
@@ -338,14 +338,14 @@ function CostList() {
         entityType="Cost"
         entityLabel="Operating rate"
         title="Cost"
-        subtitle="Operating cost rate master per Vehicle Group (used to prefill new cost lines)"
+        subtitle="Đơn giá vận hành theo Vehicle Group (dùng để điền sẵn dòng chi phí mới)"
         above={tabs}
         rows={rates}
         columns={rateColumns as ListColumn<(typeof rates)[number]>[]}
         searchPlaceholder="Tìm code, tên..."
         searchValues={(r) => [r.code, r.name, r.vehicleGroup]}
         quickFilters={[groupFilter("vehicleGroup")]}
-        readOnlyReason="Rate master maintenance is outside this demo scope (read-only reference)."
+        readOnlyReason="Bảo trì đơn giá nằm ngoài phạm vi demo (chỉ đọc)."
       />
     );
 
@@ -364,7 +364,7 @@ function CostList() {
       searchValues={(c) => [c.code, routeById.get(c.routeId)?.code, c.vehicleGroup]}
       quickFilters={[groupFilter("vehicleGroup"), statusFilter]}
       crud={costCrud}
-      addLabel="Add Cost"
+      addLabel="Thêm mới Cost"
       onAdd={() => void navigate({ to: "/cost/$id", params: { id: "new" } })}
       onView={(c) =>
         void navigate({ to: "/cost/$id", params: { id: c.id }, search: { mode: "view" } })
@@ -375,7 +375,7 @@ function CostList() {
       importConfig={costImportConfig}
       extraRowActions={[
         {
-          label: "Open Route",
+          label: "Mở Route",
           icon: <RouteIcon className="h-4 w-4" />,
           onClick: (c) =>
             void navigate({

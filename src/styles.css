@@ -58,11 +58,15 @@
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --color-danger-soft: var(--danger-soft);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-card-header: var(--card-header);
+  --color-card-title: var(--card-title);
   --color-map-bg: var(--map-bg);
   --color-map-road: var(--map-road);
   --color-map-water: var(--map-water);
   --color-map-park: var(--map-park);
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -75,13 +79,13 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.975 0.006 250);
+  --background: oklch(0.978 0.007 255);
   --foreground: oklch(0.22 0.03 260);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.22 0.03 260);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.22 0.03 260);
-  --primary: oklch(0.55 0.2 258);
+  --primary: oklch(0.546 0.215 262.9);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.955 0.015 255);
   --secondary-foreground: oklch(0.3 0.06 260);
@@ -100,13 +104,17 @@
   --danger-soft: oklch(0.95 0.04 25);
   --border: oklch(0.92 0.01 255);
   --input: oklch(0.9 0.012 255);
-  --ring: oklch(0.55 0.2 258);
+  --ring: oklch(0.546 0.215 262.9);
+  --brand: oklch(0.705 0.191 47.6);
+  --brand-foreground: oklch(1 0 0);
+  --card-header: oklch(0.968 0.016 262);
+  --card-title: oklch(0.488 0.217 264);
   --chart-1: oklch(0.55 0.2 258);
   --chart-2: oklch(0.6 0.14 155);
   --chart-3: oklch(0.65 0.15 65);
   --chart-4: oklch(0.6 0.22 25);
   --chart-5: oklch(0.7 0.12 220);
-  --sidebar: oklch(0.42 0.17 262);
+  --sidebar: oklch(0.52 0.2 263);
   --sidebar-foreground: oklch(0.93 0.03 255);
   --sidebar-primary: oklch(1 0 0);
   --sidebar-primary-foreground: oklch(0.42 0.17 262);
@@ -168,4 +176,9 @@
 
 @layer base {
   body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+}
+
+/* Sidebar gradient from the MoveX design */
+.bg-sidebar-gradient {
+  background: linear-gradient(180deg, oklch(0.58 0.2 262) 0%, oklch(0.5 0.21 264) 55%, oklch(0.44 0.19 265) 100%);
 }

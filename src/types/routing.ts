@@ -32,6 +32,8 @@ export interface RoutePoint extends GeoPoint {
   name: string;
   address?: string;
   locationId?: string;
+  /** Free text shown in the stop list ("Địa chỉ / Ghi chú"). */
+  note?: string;
 }
 
 export interface LocationRecord extends GeoPoint {
@@ -47,6 +49,8 @@ export type TollSource = "Vietmap" | "Mock" | "Manual";
 /** Normalized toll station (MoveX model), produced by any RouteProvider. */
 export interface TollStation {
   id: string;
+  /** Toll station master code, e.g. QL1A-PT. */
+  code?: string;
   name: string;
   address?: string;
   feeType: FeeType;
@@ -78,8 +82,16 @@ export interface RouteCalculation {
   tollCost: number;
   tollStations: TollStation[];
   warnings: string[];
+  /** Distance split by road class (km) — "Địa hình tuyến đường". */
+  roadTypes: RoadTypeSplit;
   provider: "vietmap" | "mock";
   calculatedAt: string;
+}
+
+export interface RoadTypeSplit {
+  national: number;
+  expressway: number;
+  other: number;
 }
 
 export interface RouteRequest {
@@ -113,6 +125,7 @@ export interface CustomReturnOverride {
 export interface RouteRecord extends BaseRecord {
   code: string;
   name: string;
+  description: string;
   type: RouteType;
   origin: RoutePoint;
   waypoints: RoutePoint[];

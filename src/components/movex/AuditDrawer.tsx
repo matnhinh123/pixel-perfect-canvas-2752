@@ -29,7 +29,9 @@ export function AuditTimeline({
   showEntity?: boolean;
 }) {
   if (entries.length === 0)
-    return <p className="py-8 text-center text-sm text-muted-foreground">No audit events yet.</p>;
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">Chưa có lịch sử thay đổi.</p>
+    );
   return (
     <ol className="relative ml-2 border-l-2 border-border">
       {entries.map((e) => (
@@ -99,8 +101,8 @@ export function AuditHistoryDrawer({
           </SheetDescription>
         </SheetHeader>
         <div className="mx-4 mb-4 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-          <Lock className="h-3.5 w-3.5" /> Append-only log · {entries.length} events · entries
-          cannot be edited or deleted
+          <Lock className="h-3.5 w-3.5" /> Nhật ký chỉ ghi thêm · {entries.length} sự kiện · không
+          thể sửa hoặc xoá
         </div>
         <div className="px-4">
           <AuditTimeline entries={entries} />

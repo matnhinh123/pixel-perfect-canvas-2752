@@ -21,7 +21,7 @@ import { snapshotOf, summarize } from "@/services/cost/costMath";
 const pt = (id: string): RoutePoint => {
   const l = LOCATIONS.find((x) => x.id === id);
   if (!l) throw new Error(`Unknown location ${id}`);
-  return { name: l.name, address: l.address, lat: l.lat, lng: l.lng, locationId: l.id };
+  return { name: l.name, address: l.province, lat: l.lat, lng: l.lng, locationId: l.id };
 };
 
 const SEED_TIME = "2026-09-15T08:00:00.000Z";
@@ -48,9 +48,24 @@ interface RouteSeed {
   returnWps?: string[];
   calc?: boolean;
   manual?: RouteRecord["manualCosts"];
+  description?: string;
 }
 
 const routeSeeds: RouteSeed[] = [
+  {
+    id: "R000",
+    code: "RT-HCM-DN",
+    name: "HCM - Đà Nẵng",
+    description: "Tuyến vận chuyển hàng từ TP.HCM đi Đà Nẵng",
+    type: "Single Trip",
+    o: "L-HCM",
+    wps: ["L-DNAI-LT", "L-DNAI-DG", "L-QN"],
+    d: "L-DANANG",
+    profile: "Truck",
+    group: "Heavy Truck",
+    kg: 15000,
+    status: "Active",
+  },
   {
     id: "R001",
     code: "RT-HCM-CL",
@@ -89,7 +104,7 @@ const routeSeeds: RouteSeed[] = [
   },
   {
     id: "R003",
-    code: "RT-HCM-DN",
+    code: "RT-HCM-DNAI",
     name: "HCM → KCN Biên Hòa 2, Đồng Nai",
     type: "Single Trip",
     o: "L-HCM-TD",
@@ -166,6 +181,7 @@ function buildRoute(s: RouteSeed): RouteRecord {
     id: s.id,
     code: s.code,
     name: s.name,
+    description: s.description ?? `Tuyến ${s.name}`,
     type: s.type,
     origin,
     waypoints,
@@ -327,15 +343,15 @@ export const seedCosts = (routes: RouteRecord[]): CostRecord[] => {
     make("C002", "CST-HCM-BD-MED", "R002", "Medium Truck", [
       { v: 1, eff: "2026-09-01", status: "Active" },
     ]),
-    make("C003", "CST-HCM-DN-LGT", "R003", "Light Truck", [
+    make("C003", "CST-HCM-DNAI-LGT", "R003", "Light Truck", [
       { v: 1, eff: "2026-09-01", status: "Active" },
     ]),
-    make("C004", "CST-HCM-DN-MED", "R003", "Medium Truck", [
+    make("C004", "CST-HCM-DNAI-MED", "R003", "Medium Truck", [
       { v: 1, eff: "2026-09-01", status: "Active" },
     ]),
     make(
       "C005",
-      "CST-HCM-DN-HVY",
+      "CST-HCM-DNAI-HVY",
       "R003",
       "Heavy Truck",
       [{ v: 1, eff: "2026-09-15", status: "Draft" }],
@@ -371,6 +387,20 @@ export const seedAudit = (): AuditEvent[] => {
   });
   return [
     e("2026-09-15T03:00:00.000Z", "Thuy Vu", "CREATE", "Route", "R001", "RT-HCM-CL"),
+    e("2026-10-06T03:10:00.000Z", "Thuy Vu", "CREATE", "Route", "R000", "RT-HCM-DN", {
+      note: "Single Trip · TP.HCM (HCM) → Long Thành → Dầu Giây → Quy Nhơn → Đà Nẵng (DAD)",
+    }),
+    e("2026-10-06T03:20:00.000Z", "Thuy Vu", "CHANGE_VEHICLE", "Route", "R000", "RT-HCM-DN", {
+      field: "Vehicle Group",
+      oldValue: "Medium Truck",
+      newValue: "Heavy Truck",
+    }),
+    e("2026-10-06T03:24:00.000Z", "Thuy Vu", "CALCULATE_ROUTE", "Route", "R000", "RT-HCM-DN", {
+      field: "Distance",
+      oldValue: "938 km",
+      newValue: "Recalculated",
+      note: "Mock provider",
+    }),
     e("2026-10-05T03:20:00.000Z", "Thuy Vu", "CHANGE_VEHICLE", "Route", "R001", "RT-HCM-CL", {
       field: "Vehicle Group",
       oldValue: "Heavy Truck",
@@ -387,7 +417,7 @@ export const seedAudit = (): AuditEvent[] => {
       newValue: "Ferry surcharge +50,000 VND",
     }),
     e("2026-09-15T03:05:00.000Z", "Thuy Vu", "CREATE", "Route", "R002", "RT-HCM-BD"),
-    e("2026-09-15T03:10:00.000Z", "Thuy Vu", "CREATE", "Route", "R003", "RT-HCM-DN"),
+    e("2026-09-15T03:10:00.000Z", "Thuy Vu", "CREATE", "Route", "R003", "RT-HCM-DNAI"),
     e("2026-09-20T07:00:00.000Z", "Lê Thu Hà", "CHANGE_ROUTE_TYPE", "Route", "R004", "RT-HN-HP", {
       field: "Route Type",
       oldValue: "Single Trip",
