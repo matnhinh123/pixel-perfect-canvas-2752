@@ -504,7 +504,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
 
       <FormErrorBanner message={formError} errors={errors} />
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_1.05fr]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[6fr_4fr]">
         {/* ---------- LEFT ---------- */}
         <div className="flex min-w-0 flex-col gap-5">
           <Panel title="Thông tin route" bodyClassName="p-0">
