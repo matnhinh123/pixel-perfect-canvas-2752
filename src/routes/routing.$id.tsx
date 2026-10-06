@@ -47,7 +47,7 @@ import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import { routeLegs, routeTotals } from "@/services/cost/costMath";
 import { LOCATIONS } from "@/mock-data/locations";
-import { routeVehicleFields, VEHICLES } from "@/mock-data/vehicles";
+import { findVehicle, routeVehicleFields, VEHICLES } from "@/mock-data/vehicles";
 import type { MockTollGate } from "@/mock-data/tollCatalog";
 import { formatVnd } from "@/lib/format";
 import type { RouteCalculation, RoutePoint, RouteRecord, RouteType, Status } from "@/types";
@@ -97,6 +97,8 @@ const normalize = (r: RouteRecord): RouteRecord => ({
   ...r,
   alternatives: r.alternatives ?? (r.outbound ? [r.outbound] : []),
   selectedRouteId: r.selectedRouteId ?? r.outbound?.id ?? null,
+  // Routes saved with a specific truck id resolve to its vehicle type.
+  ...(findVehicle(r.vehicleId) ? { vehicleId: findVehicle(r.vehicleId)!.id } : {}),
 });
 
 /** Signature of inputs that affect the routing result — used to flag a stale calculation. */
@@ -444,7 +446,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
           </Panel>
 
           <Panel title="2. Phương tiện">
-            <Field label="Xe" required error={errors["vehicleId"]}>
+            <Field label="Loại xe" required error={errors["vehicleId"]}>
               <VehicleSelector
                 vehicles={VEHICLES}
                 value={r.vehicleId}

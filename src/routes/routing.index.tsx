@@ -64,7 +64,7 @@ const columns: ListColumn<RouteRecord>[] = [
   },
   {
     key: "vehicle",
-    label: "Xe",
+    label: "Loại xe",
     type: "text",
     value: (r) => {
       const v = findVehicle(r.vehicleId);

@@ -36,10 +36,9 @@ export interface RoutePoint extends GeoPoint {
   note?: string;
 }
 
-/** Vehicle master record. Group / weight / routing profile / toll class all derive from it. */
+/** Vehicle type (master data). Group / weight / routing profile / toll class all derive from it. */
 export interface VehicleRecord {
   id: string;
-  plate: string;
   name: string;
   group: VehicleGroup;
   weightKg: number;

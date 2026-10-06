@@ -76,7 +76,7 @@ export function validateRoute(r: RouteRecord): Record<string, string> {
     e["destination"] = "Pick a Destination from the search list.";
   if (r.waypoints.some((w) => !w.name || !Number.isFinite(w.lat)))
     e["waypoints"] = "Every waypoint needs a location (or remove empty ones).";
-  if (!findVehicle(r.vehicleId)) e["vehicleId"] = "Vehicle is required.";
+  if (!findVehicle(r.vehicleId)) e["vehicleId"] = "Vehicle type is required.";
   if (r.status === "Active" && !r.outbound)
     e["status"] = "Calculate the route before activating it.";
   return e;
@@ -269,7 +269,7 @@ export const routeImportConfig: ImportEntityConfig = {
       const o = findLocationByName(r["origin"]!)!,
         d = findLocationByName(r["destination"]!)!;
       const kg = Number(r["capacityKg"] || 0);
-      // Imported rows name a vehicle group; link the first matching vehicle from Vehicle Master.
+      // Imported rows name a vehicle group; link the matching vehicle type.
       const vehicle = VEHICLES.find((v) => v.group === r["vehicleGroup"]);
       return {
         ...newRouteDraft(),

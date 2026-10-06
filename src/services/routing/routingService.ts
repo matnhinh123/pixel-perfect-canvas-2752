@@ -49,7 +49,7 @@ type CalcInput = Pick<
 export function validateRouteInput(r: CalcInput): string | null {
   if (!hasCoords(r.origin)) return "Chọn Điểm đi từ danh sách gợi ý.";
   if (!hasCoords(r.destination)) return "Chọn Điểm đến từ danh sách gợi ý.";
-  if (!findVehicle(r.vehicleId)) return "Chọn xe trước khi tính lộ trình.";
+  if (!findVehicle(r.vehicleId)) return "Chọn loại xe trước khi tính lộ trình.";
   const bad = r.waypoints.findIndex((w) => !hasCoords(w));
   if (bad >= 0) return `Điểm dừng ${bad + 1} chưa có địa điểm — chọn địa điểm hoặc xoá dòng.`;
   return null;
