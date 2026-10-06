@@ -1,4 +1,4 @@
-// The only routing entry point for UI code. Picks Vietmap when the server has a key, otherwise Mock.
+// The only routing entry point for UI code. Picks Vietmap when the server has a key, otherwise OSRM.
 import type {
   LocationSuggestion,
   RouteCalculation,
@@ -11,6 +11,7 @@ import { profileNeedsCapacity } from "@/types";
 import { findVehicle } from "@/mock-data/vehicles";
 import { MOCK_TOLL_GATES } from "@/mock-data/tollCatalog";
 import { MockRouteProvider } from "./MockRouteProvider";
+import { OsrmRouteProvider } from "./OsrmRouteProvider";
 import type { RouteProvider } from "./RouteProvider";
 import { RouteProviderError } from "./RouteProvider";
 import { isVietmapConfigured, VietmapRouteProvider } from "./VietmapRouteProvider";
@@ -20,7 +21,9 @@ const mock = new MockRouteProvider();
 let providerPromise: Promise<RouteProvider> | null = null;
 
 export function getRouteProvider(): Promise<RouteProvider> {
-  providerPromise ??= isVietmapConfigured().then((ok) => (ok ? new VietmapRouteProvider() : mock));
+  providerPromise ??= isVietmapConfigured().then((ok) =>
+    ok ? new VietmapRouteProvider() : new OsrmRouteProvider(),
+  );
   return providerPromise;
 }
 

@@ -9,7 +9,7 @@ import type {
 } from "@/types";
 import { bboxOf, haversineKm, nearestVertex, pointAlong, polylineLengthKm } from "./geo";
 import { searchLocations } from "./locationSearch";
-import { fetchRoadRoutes, type RoadPath } from "./roadRouting";
+import type { RoadPath } from "./roadRouting";
 import {
   RouteProviderError,
   tollClassIndex,
@@ -108,7 +108,9 @@ export function computeMockRoutes(
   const cls = tollClassIndex(req.vehicle, capacity);
   if (cls === null)
     baseWarnings.push("Motorcycles are not allowed on expressways — toll gates are not applied.");
-  const peak = isPeakHour(req.departureTime);
+  // Real router output (distance + duration) is reported as-is, without mock adjustments.
+  const routed = !!roads?.length && roads.every((r) => r.durationMin != null);
+  const peak = !routed && isPeakHour(req.departureTime);
   if (peak) baseWarnings.push("Khởi hành giờ cao điểm — thời gian ước tính đã cộng thêm 10%.");
 
   const curved = VARIANTS.map((v) => {
@@ -153,7 +155,7 @@ export function computeMockRoutes(
             lat: g.lat,
             lng: g.lng,
           }));
-  if (ferrySkipped) baseWarnings.push("Đã tránh phà — tuyến đi vòng qua cầu.");
+  if (ferrySkipped && !routed) baseWarnings.push("Đã tránh phà — tuyến đi vòng qua cầu.");
 
   const providerOnly = (idx: number, geometry: [number, number][], t: number): TollStation => {
     const gate = PROVIDER_ONLY_GATES[idx]!;
@@ -184,14 +186,19 @@ export function computeMockRoutes(
 
   return geometries.map((geometry, v) => {
     const warnings = [...baseWarnings];
-    const detourKm = ferrySkipped ? 4 : 0;
+    const detourKm = ferrySkipped && !routed ? 4 : 0;
     const roadKm = roads?.[v]?.distanceKm ?? polylineLengthKm(geometry) * ROAD_FACTOR;
     const distance = Math.round((roadKm + detourKm) * 10) / 10;
     const speed = SPEED_KMH[req.vehicle] + (distance > 80 ? 14 : 0);
-    const estimatedTime = Math.round(
-      ((distance / speed) * 60 * (VARIANTS[v]?.timeFactor ?? 1) + (req.points.length - 2) * 5) *
-        (peak ? 1.1 : 1),
-    );
+    const routedMin = roads?.[v]?.durationMin;
+    const estimatedTime =
+      routed && routedMin != null
+        ? Math.round(routedMin)
+        : Math.round(
+            ((distance / speed) * 60 * (VARIANTS[v]?.timeFactor ?? 1) +
+              (req.points.length - 2) * 5) *
+              (peak ? 1.1 : 1),
+          );
     // Snap toll markers onto this variant's polyline.
     const line = dense[v]!;
     const tollStations = stationsFor(v, line).map((t) => {
@@ -244,29 +251,18 @@ export const computeMockRoute = (
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Real road geometry when the OSRM demo server is reachable; null → curved fallback. */
-async function roadsFor(req: RouteRequest, count: number): Promise<RoadPath[] | null> {
-  try {
-    return await Promise.race([
-      fetchRoadRoutes(req.points, count),
-      delay(12000).then(() => null),
-    ]);
-  } catch {
-    await delay(500);
-    return null;
-  }
-}
-
+/** Offline provider (tests, no network). Road routing lives in OsrmRouteProvider / VietmapRouteProvider. */
 export class MockRouteProvider implements RouteProvider {
   readonly name = "mock" as const;
 
   async calculateRoute(req: RouteRequest) {
-    const roads = await roadsFor(req, 1);
-    return computeMockRoute(req, undefined, roads?.[0] ?? null);
+    await delay(300);
+    return computeMockRoute(req);
   }
 
   async calculateRoutes(req: RouteRequest) {
-    return computeMockRoutes(req, undefined, await roadsFor(req, 3));
+    await delay(300);
+    return computeMockRoutes(req);
   }
 
   async searchLocation(text: string): Promise<LocationSuggestion[]> {

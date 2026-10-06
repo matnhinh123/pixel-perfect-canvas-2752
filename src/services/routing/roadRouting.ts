@@ -4,6 +4,8 @@
 export interface RoadPath {
   geometry: [number, number][]; // [lat, lng]
   distanceKm: number;
+  /** Router travel time; when set it is used as-is instead of the mock speed model. */
+  durationMin?: number;
 }
 
 type LatLng = { lat: number; lng: number };
@@ -61,7 +63,7 @@ export function encodePolyline(coords: [number, number][]): string {
 
 export const decodeRoad = decode;
 
-function simplify(pts: [number, number][], tol = SIMPLIFY_DEG): [number, number][] {
+export function simplify(pts: [number, number][], tol = SIMPLIFY_DEG): [number, number][] {
   if (pts.length < 3) return pts;
   const keep = new Uint8Array(pts.length);
   keep[0] = keep[pts.length - 1] = 1;

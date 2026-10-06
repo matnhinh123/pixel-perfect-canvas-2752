@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sheet,
   SheetContent,
@@ -112,6 +111,17 @@ const calcSig = (r: RouteRecord) =>
     r.returnWaypoints.map((p) => [p.lat, p.lng]),
   ]);
 
+const PROVIDER_NAME: Record<RouteCalculation["provider"], string> = {
+  vietmap: "Vietmap",
+  osrm: "OSRM",
+  mock: "Mock provider",
+};
+const PROVIDER_LABEL: Record<RouteCalculation["provider"], string> = {
+  vietmap: "Vietmap Route v4",
+  osrm: "OSRM · © OpenStreetMap",
+  mock: "Mock route data",
+};
+
 const altId = (a: RouteCalculation, i: number) => a.id ?? `ALT-${i + 1}`;
 const altName = (alts: RouteCalculation[], id: string | null) => {
   const i = alts.findIndex((a, j) => altId(a, j) === id);
@@ -188,7 +198,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       const best = res.alternatives.find((a) => a.recommended) ?? res.alternatives[0]!;
       const bestId = altId(best, res.alternatives.indexOf(best));
       setR((p) => {
-        const { customReturn: _drop, ...rest } = p;
+        const { customReturn: _drop, distanceOverrideKm: _km, ...rest } = p;
         return {
           ...rest,
           alternatives: res.alternatives,
@@ -205,7 +215,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
           action: "CALCULATE_ROUTE",
           field: "Alternatives",
           newValue: `${res.alternatives.length} tuyến`,
-          note: `${best.provider === "vietmap" ? "Vietmap" : "Mock provider"} · ${altName(res.alternatives, bestId)}: ${best.distance} km`,
+          note: `${PROVIDER_NAME[best.provider]} · ${altName(res.alternatives, bestId)}: ${best.distance} km`,
         },
       ]);
       const w = [...best.warnings, ...(res.returnLeg?.warnings ?? [])];
@@ -236,7 +246,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
         note: `${alt.distance} km · toll ${formatVnd(alt.tollCost)}`,
       },
     ]);
-    setR((p) => ({ ...p, selectedRouteId: id, outbound: alt }));
+    setR(({ distanceOverrideKm: _km, ...p }) => ({ ...p, selectedRouteId: id, outbound: alt }));
   };
 
   /** Link a provider toll gate to Toll Station master; kept on the alternative so re-selecting keeps it. */
@@ -451,40 +461,8 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
             </Field>
           </Panel>
 
-          <Panel title="3. Tùy chọn tính tuyến">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="w-40 text-sm">Thời gian khởi hành</span>
-              <Input
-                type="date"
-                className="h-10 w-44"
-                value={r.departureTime.slice(0, 10)}
-                onChange={(e) =>
-                  set(
-                    "departureTime",
-                    `${e.target.value}T${r.departureTime.slice(11, 16) || "08:00"}`,
-                  )
-                }
-              />
-              <Input
-                type="time"
-                className="h-10 w-32"
-                value={r.departureTime.slice(11, 16)}
-                onChange={(e) =>
-                  set("departureTime", `${r.departureTime.slice(0, 10)}T${e.target.value}`)
-                }
-              />
-            </div>
-            <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-sm">
-              <Checkbox
-                checked={r.avoidFerry}
-                onCheckedChange={(c) => set("avoidFerry", c === true)}
-              />
-              Tránh đi qua phà
-            </label>
-          </Panel>
-
           <Panel
-            title="4. Danh sách điểm dừng"
+            title="3. Danh sách điểm dừng"
             bodyClassName="p-0"
             actions={
               <Button
@@ -571,11 +549,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 tolls={mapTolls}
                 roundTrip={round}
                 providerLabel={
-                  r.outbound
-                    ? r.outbound.provider === "vietmap"
-                      ? "Vietmap Route v4"
-                      : "Mock route data"
-                    : "Chưa tính lộ trình"
+                  r.outbound ? PROVIDER_LABEL[r.outbound.provider] : "Chưa tính lộ trình"
                 }
                 height={340}
                 alternatives={r.alternatives.map((a, i) => ({
@@ -606,6 +580,12 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
             <RouteSummary
               calculated={totals.calculated}
               distanceKm={totals.distanceKm}
+              distanceEdited={r.distanceOverrideKm != null}
+              onDistanceChange={(km) =>
+                setR(({ distanceOverrideKm: _km, ...p }) =>
+                  km == null ? p : { ...p, distanceOverrideKm: km },
+                )
+              }
               estimatedTimeMin={totals.estimatedTimeMin}
               tollCost={totals.totalRouteCost}
               stationCount={totals.stationCount}

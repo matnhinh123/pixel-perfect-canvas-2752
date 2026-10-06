@@ -1,5 +1,5 @@
-// Interactive route map (Leaflet). Renders whatever geometry the RouteProvider returned — real
-// Vietmap geometry when a key is configured, mock geometry otherwise. Tiles: Esri.
+// Interactive route map (Leaflet). Renders the road geometry the RouteProvider returned — Vietmap
+// when a key is configured, OSRM (OpenStreetMap) otherwise. Tiles: Esri.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import "leaflet/dist/leaflet.css";
 import type * as Leaflet from "leaflet";
@@ -177,7 +177,6 @@ export function RouteMapPanel({
         .bindTooltip(`${a.label} — bấm để chọn`, { sticky: true })
         .on("click", () => selectRef.current?.(a.id))
         .addTo(layer);
-      all.push(...a.geometry);
     }
     if (roundTrip && returnGeometry?.length) {
       L.polyline(returnGeometry, { color: "#16a34a", weight: 4, dashArray: "8 6" })
@@ -191,14 +190,6 @@ export function RouteMapPanel({
         .bindTooltip("Chiều đi")
         .addTo(layer);
       all.push(...outboundGeometry);
-    } else {
-      const stops = [origin, ...waypoints, destination]
-        .filter(valid)
-        .map((p) => [p.lat, p.lng] as [number, number]);
-      if (stops.length >= 2)
-        L.polyline(stops, { color: "#94a3b8", weight: 3, dashArray: "4 8" })
-          .bindTooltip("Chưa tính lộ trình")
-          .addTo(layer);
     }
     for (const t of tolls) {
       if (t.lat == null || t.lng == null) continue;

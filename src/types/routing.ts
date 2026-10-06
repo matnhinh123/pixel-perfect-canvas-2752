@@ -97,7 +97,7 @@ export interface RouteCalculation {
   warnings: string[];
   /** Distance split by road class (km) — "Địa hình tuyến đường". */
   roadTypes: RoadTypeSplit;
-  provider: "vietmap" | "mock";
+  provider: "vietmap" | "osrm" | "mock";
   calculatedAt: string;
   /** Set when the result is one of several alternatives returned for the same request. */
   id?: string;
@@ -168,6 +168,8 @@ export interface RouteRecord extends BaseRecord {
   /** Used only when returnMode === "custom": manual figures that win over the calculated return leg. */
   customReturn?: CustomReturnOverride;
   manualCosts: ManualCost[];
+  /** User-entered total distance (km); wins over the calculated legs until the next calculation. */
+  distanceOverrideKm?: number;
 }
 
 export interface LocationSuggestion {
