@@ -1,8 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { PageHeader, Panel, Tag, thClass } from "@/components/movex/common";
-import { pricingInputs } from "@/lib/mock-data";
-import { formatVnd } from "@/lib/api";
+import { pricingInputs } from "@/mock-data/pricing";
+import { formatVnd } from "@/lib/format";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -19,15 +26,29 @@ export const Route = createFileRoute("/pricing")({
       <Panel>
         <div className="overflow-hidden rounded-lg border">
           <Table>
-            <TableHeader><TableRow>{["Code", "Route", "Service", "COGS", "Margin", "Sell Price", "Status"].map((h) => <TableHead key={h} className={thClass}>{h}</TableHead>)}</TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                {["Code", "Route", "Service", "COGS", "Margin", "Sell Price", "Status"].map((h) => (
+                  <TableHead key={h} className={thClass}>
+                    {h}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {pricingInputs.map((p) => (
                 <TableRow key={p.code}>
                   <TableCell className="font-semibold text-primary">{p.code}</TableCell>
-                  <TableCell>{p.route}</TableCell><TableCell>{p.service}</TableCell>
-                  <TableCell>{formatVnd(p.cogs)}</TableCell><TableCell>{p.margin}%</TableCell>
-                  <TableCell className="font-semibold">{formatVnd(p.cogs / (1 - p.margin / 100))}</TableCell>
-                  <TableCell><Tag>{p.status}</Tag></TableCell>
+                  <TableCell>{p.route}</TableCell>
+                  <TableCell>{p.service}</TableCell>
+                  <TableCell>{formatVnd(p.cogs)}</TableCell>
+                  <TableCell>{p.margin}%</TableCell>
+                  <TableCell className="font-semibold">
+                    {formatVnd(p.cogs / (1 - p.margin / 100))}
+                  </TableCell>
+                  <TableCell>
+                    <Tag>{p.status}</Tag>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

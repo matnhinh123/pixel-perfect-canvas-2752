@@ -18,6 +18,7 @@ import { Route as RoutingIndexRouteImport } from './routes/routing.index'
 import { Route as RoutingIdRouteImport } from './routes/routing.$id'
 import { Route as ServiceIndexRouteImport } from './routes/service.index'
 import { Route as ServiceIdRouteImport } from './routes/service.$id'
+import { Route as ApiVietmapSplatRouteImport } from './routes/api.vietmap.$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +65,11 @@ const ServiceIdRoute = ServiceIdRouteImport.update({
   path: '/service/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVietmapSplatRoute = ApiVietmapSplatRouteImport.update({
+  id: '/api/vietmap/$',
+  path: '/api/vietmap/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/cost/': typeof CostIndexRoute
   '/routing/': typeof RoutingIndexRoute
   '/service/': typeof ServiceIndexRoute
+  '/api/vietmap/$': typeof ApiVietmapSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/cost': typeof CostIndexRoute
   '/routing': typeof RoutingIndexRoute
   '/service': typeof ServiceIndexRoute
+  '/api/vietmap/$': typeof ApiVietmapSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +106,7 @@ export interface FileRoutesById {
   '/cost/': typeof CostIndexRoute
   '/routing/': typeof RoutingIndexRoute
   '/service/': typeof ServiceIndexRoute
+  '/api/vietmap/$': typeof ApiVietmapSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/cost/'
     | '/routing/'
     | '/service/'
+    | '/api/vietmap/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/cost'
     | '/routing'
     | '/service'
+    | '/api/vietmap/$'
   id:
     | '__root__'
     | '/'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/cost/'
     | '/routing/'
     | '/service/'
+    | '/api/vietmap/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -145,6 +157,7 @@ export interface RootRouteChildren {
   CostIndexRoute: typeof CostIndexRoute
   RoutingIndexRoute: typeof RoutingIndexRoute
   ServiceIndexRoute: typeof ServiceIndexRoute
+  ApiVietmapSplatRoute: typeof ApiVietmapSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -212,6 +225,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vietmap/$': {
+      id: '/api/vietmap/$'
+      path: '/api/vietmap/$'
+      fullPath: '/api/vietmap/$'
+      preLoaderRoute: typeof ApiVietmapSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -225,6 +245,7 @@ const rootRouteChildren: RootRouteChildren = {
   CostIndexRoute: CostIndexRoute,
   RoutingIndexRoute: RoutingIndexRoute,
   ServiceIndexRoute: ServiceIndexRoute,
+  ApiVietmapSplatRoute: ApiVietmapSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

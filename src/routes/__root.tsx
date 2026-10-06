@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  ClientOnly,
   Outlet,
   Link,
   createRootRouteWithContext,
@@ -14,6 +15,9 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/movex/AppShell";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ConfirmProvider } from "@/components/movex/general/ConfirmDialog";
 
 function NotFoundComponent() {
   return (
@@ -87,14 +91,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "MoveX routing, service and cost management demo." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-          ],
+    ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
+      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
@@ -118,15 +125,32 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function PageSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <Skeleton className="h-8 w-64" />
+      <Skeleton className="h-4 w-96" />
+      <Skeleton className="h-[420px] w-full rounded-xl" />
+    </div>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <AppShell>
-        <Outlet />
-      </AppShell>
+      <TooltipProvider delayDuration={200}>
+        <ConfirmProvider>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <AppShell>
+            {/* Demo data lives in localStorage, so page content renders on the client only. */}
+            <ClientOnly fallback={<PageSkeleton />}>
+              <Outlet />
+            </ClientOnly>
+          </AppShell>
+        </ConfirmProvider>
+      </TooltipProvider>
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );

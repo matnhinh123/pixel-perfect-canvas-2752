@@ -1,31 +1,110 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import type { AuditEntry } from "@/lib/mock-data";
+import { Lock } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import type { AuditEvent, EntityType } from "@/types";
+import { AUDIT_ACTION_LABEL } from "@/services/auditService";
+import { formatDateTime } from "@/lib/format";
+import { useEntityAudit } from "@/hooks/use-store";
+import { cn } from "@/lib/utils";
 
-export function AuditTimeline({ entries }: { entries: AuditEntry[] }) {
+const actionTone = (a: AuditEvent["action"]) =>
+  a === "DELETE" || a === "DEACTIVATE" || a === "REMOVE_MANUAL_COST" || a === "ROLLBACK"
+    ? "bg-destructive"
+    : a === "CREATE" || a === "ACTIVATE" || a === "CREATE_VERSION" || a === "IMPORT"
+      ? "bg-success"
+      : a === "VIEW" || a === "EXPORT"
+        ? "bg-muted-foreground"
+        : "bg-primary";
+
+export function AuditTimeline({
+  entries,
+  showEntity,
+}: {
+  entries: AuditEvent[];
+  showEntity?: boolean;
+}) {
+  if (entries.length === 0)
+    return <p className="py-8 text-center text-sm text-muted-foreground">No audit events yet.</p>;
   return (
     <ol className="relative ml-2 border-l-2 border-border">
-      {[...entries].reverse().map((e) => (
+      {entries.map((e) => (
         <li key={e.id} className="mb-5 ml-5">
-          <span className="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full border-2 border-card bg-primary" />
-          <div className="text-sm font-semibold">{e.action}</div>
-          {e.entity && <div className="text-xs font-medium text-primary">{e.entity}</div>}
-          {e.detail && <div className="text-sm text-muted-foreground">{e.detail}</div>}
-          <div className="mt-0.5 text-xs text-muted-foreground">{e.user} · {e.time}</div>
+          <span
+            className={cn(
+              "absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full border-2 border-card",
+              actionTone(e.action),
+            )}
+          />
+          <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">{formatDateTime(e.timestamp)}</span>
+            <span>{e.user}</span>
+          </div>
+          <div className="text-sm font-semibold">
+            {AUDIT_ACTION_LABEL[e.action] ?? e.action}
+            <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
+              {e.action}
+            </span>
+          </div>
+          {showEntity && (
+            <div className="text-xs font-medium text-primary">
+              {e.entityType} {e.entityLabel}
+            </div>
+          )}
+          {e.field && (
+            <div className="mt-1 text-sm">
+              <span className="text-muted-foreground">{e.field}: </span>
+              {e.oldValue !== undefined && (
+                <span className="line-through decoration-muted-foreground/60">{e.oldValue}</span>
+              )}
+              {e.oldValue !== undefined && e.newValue !== undefined && (
+                <span className="mx-1 text-muted-foreground">→</span>
+              )}
+              {e.newValue !== undefined && <span className="font-medium">{e.newValue}</span>}
+            </div>
+          )}
+          {e.note && <div className="text-xs text-muted-foreground">{e.note}</div>}
         </li>
       ))}
     </ol>
   );
 }
 
-export function AuditDrawer({ open, onOpenChange, title, entries }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; entries: AuditEntry[] }) {
+/** GEN-02 shared Audit History drawer for any entity. Read-only (audit log is append-only). */
+export function AuditHistoryDrawer({
+  open,
+  onOpenChange,
+  entityType,
+  entityId,
+  title,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  entityType: EntityType;
+  entityId: string | undefined;
+  title: string;
+}) {
+  const entries = useEntityAudit(entityType, entityId);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[420px] overflow-y-auto sm:max-w-[420px]">
+      <SheetContent className="w-[460px] overflow-y-auto sm:max-w-[460px]">
         <SheetHeader>
           <SheetTitle>Audit History</SheetTitle>
-          <SheetDescription>{title}</SheetDescription>
+          <SheetDescription>
+            {entityType} · {title}
+          </SheetDescription>
         </SheetHeader>
-        <div className="mt-4 px-4"><AuditTimeline entries={entries} /></div>
+        <div className="mx-4 mb-4 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5" /> Append-only log · {entries.length} events · entries
+          cannot be edited or deleted
+        </div>
+        <div className="px-4">
+          <AuditTimeline entries={entries} />
+        </div>
       </SheetContent>
     </Sheet>
   );

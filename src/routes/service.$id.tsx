@@ -1,113 +1,557 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowLeft, Save, Lock } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, History, Lock, Pencil, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { PageHeader, Panel, Field, NativeSelect } from "@/components/movex/common";
-import { serviceService } from "@/lib/api";
-import { templateFields, type TemplateType, type FieldConfig, type Status } from "@/lib/mock-data";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  EmptyState,
+  Field,
+  NativeSelect,
+  Panel,
+  StatusBadge,
+  Tag,
+} from "@/components/movex/common";
+import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
+import {
+  FormErrorBanner,
+  FormPageHeader,
+  useUnsavedChangesGuard,
+} from "@/components/movex/general/FormPage";
+import { useConfirm } from "@/components/movex/general/ConfirmDialog";
+import { useEntityActions } from "@/components/movex/general/useEntityActions";
+import { useCollection, useTemplateConfig } from "@/hooks/use-store";
+import { serviceRepository } from "@/repositories";
+import { TEMPLATE_FIELDS } from "@/mock-data/templates";
+import { auditService } from "@/services/auditService";
+import { BusinessRuleError } from "@/services/crudService";
+import {
+  newServiceDraft,
+  serviceCatalogService,
+  serviceCrud,
+  templateOf,
+  validateService,
+} from "@/services/serviceCatalogService";
+import {
+  TEMPLATES,
+  type ServiceRecord,
+  type Status,
+  type TemplateType,
+  type TenantFieldSetting,
+} from "@/types";
+import { cn } from "@/lib/utils";
+
+type Mode = "view" | "edit";
 
 export const Route = createFileRoute("/service/$id")({
+  validateSearch: (s: Record<string, unknown>): { mode?: Mode } =>
+    s["mode"] === "view" || s["mode"] === "edit" ? { mode: s["mode"] } : {},
   head: ({ params }) => ({
     meta: [
-      { title: params.id === "new" ? "Add Service — MoveX" : `Service ${params.id} — MoveX` },
+      { title: params.id === "new" ? "Add Service — MoveX" : "Service Detail — MoveX" },
       { name: "description", content: "Edit service and per-tenant field configuration." },
       { property: "og:title", content: "Service Detail — MoveX" },
       { property: "og:description", content: "Edit service and per-tenant field configuration." },
     ],
   }),
-  component: ServiceDetail,
+  component: ServiceDetailPage,
 });
 
-const templates: TemplateType[] = ["Trucking", "Customs", "Freight"];
-
-function ServiceDetail() {
+function ServiceDetailPage() {
   const { id } = Route.useParams();
-  const navigate = useNavigate();
-  const s = serviceService.get(id);
-  const [form, setForm] = useState({
-    code: s?.code ?? "", name: s?.name ?? "", group: s?.group ?? "Vận tải đường bộ",
-    template: (s?.template ?? "Trucking") as TemplateType, description: s?.description ?? "", status: (s?.status ?? "Draft") as Status,
-  });
-  const [fields, setFields] = useState<Record<TemplateType, FieldConfig[]>>(() => structuredClone(templateFields));
-  const [view, setView] = useState<TemplateType>(form.template);
+  const all = useCollection(serviceRepository);
+  const source = id === "new" ? null : (all.find((s) => s.id === id && !s.deleted) ?? null);
+  if (id !== "new" && !source)
+    return (
+      <Panel>
+        <EmptyState
+          icon={<XCircle className="h-8 w-8" />}
+          title="Service not found"
+          action={
+            <Button asChild size="sm">
+              <Link to="/service">Back to Service</Link>
+            </Button>
+          }
+        />
+      </Panel>
+    );
+  return <ServiceEditor key={source?.id ?? "new"} source={source} all={all} />;
+}
 
-  const toggle = (t: TemplateType, key: string, prop: "visible" | "required") =>
-    setFields((f) => ({
-      ...f,
-      [t]: f[t].map((x) => {
-        if (x.key !== key) return x;
-        const next = { ...x, [prop]: !x[prop] };
-        if (prop === "visible" && !next.visible) next.required = false;
-        if (prop === "required" && next.required) next.visible = true;
-        return next;
-      }),
-    }));
+function ServiceEditor({ source, all }: { source: ServiceRecord | null; all: ServiceRecord[] }) {
+  const navigate = useNavigate();
+  const search = Route.useSearch();
+  const confirm = useConfirm();
+  const isNew = !source;
+  const readOnly = !isNew && (search.mode ?? "view") === "view";
+  const [s, setS] = useState<ServiceRecord>(() => structuredClone(source ?? newServiceDraft()));
+  const savedCfg = useTemplateConfig();
+  const [cfg, setCfg] = useState(() => structuredClone(savedCfg));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const actions = useEntityActions(serviceCrud);
+
+  const alive = all.filter((x) => !x.deleted);
+  const parent = s.parentId ? alive.find((x) => x.id === s.parentId) : undefined;
+  const effectiveTemplate: TemplateType | null = s.parentId
+    ? parent
+      ? templateOf(parent, all)
+      : null
+    : s.template;
+  const descendants = source ? serviceCatalogService.descendantsOf(source.id) : [];
+  const parentOptions = alive.filter((x) => x.id !== s.id && !descendants.includes(x.id));
+  const children = source ? alive.filter((x) => x.parentId === source.id) : [];
+  const usingTemplate = effectiveTemplate
+    ? alive.filter((x) => templateOf(x, all) === effectiveTemplate).length
+    : 0;
+
+  const dirtyForm = JSON.stringify(s) !== JSON.stringify(source ?? newServiceDraft());
+  const dirtyCfg = effectiveTemplate
+    ? JSON.stringify(cfg[effectiveTemplate]) !== JSON.stringify(savedCfg[effectiveTemplate])
+    : false;
+  const dirty = dirtyForm || dirtyCfg;
+  const guard = useUnsavedChangesGuard(dirty && !readOnly);
+
+  useEffect(() => {
+    if (source) auditService.logView("Service", source.id, source.code);
+  }, [source?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (readOnly && source) {
+      setS(structuredClone(source));
+      setCfg(structuredClone(savedCfg));
+    }
+  }, [source, savedCfg, readOnly]);
+
+  const set = <K extends keyof ServiceRecord>(k: K, v: ServiceRecord[K]) => {
+    setS((p) => ({ ...p, [k]: v }));
+    if (errors[k as string])
+      setErrors((e) => {
+        const n = { ...e };
+        delete n[k as string];
+        return n;
+      });
+  };
+
+  const toggle = (key: string, prop: keyof TenantFieldSetting) => {
+    if (!effectiveTemplate) return;
+    setCfg((c) => {
+      const cur = c[effectiveTemplate][key] ?? { visible: true, required: false };
+      const next = { ...cur, [prop]: !cur[prop] };
+      if (prop === "visible" && !next.visible) next.required = false;
+      if (prop === "required" && next.required) next.visible = true;
+      return { ...c, [effectiveTemplate]: { ...c[effectiveTemplate], [key]: next } };
+    });
+  };
+
+  const save = async () => {
+    setFormError(null);
+    const e = validateService(s);
+    if (Object.keys(e).length) {
+      setErrors(e);
+      setFormError("Cannot save — please fix the following:");
+      toast.error("Please fix the highlighted fields.");
+      return;
+    }
+    if (source && !source.parentId && source.template !== s.template && children.length) {
+      const r = await confirm({
+        title: "Change template?",
+        description: `${descendants.length} child service(s) inherit the template of ${source.code} and will switch from ${source.template} to ${s.template}.`,
+        confirmLabel: "Change template",
+        tone: "danger",
+      });
+      if (r !== "confirm") return;
+    }
+    try {
+      const saved = serviceCatalogService.save(s);
+      const changes =
+        effectiveTemplate && dirtyCfg
+          ? serviceCatalogService.saveTemplateConfig(effectiveTemplate, cfg[effectiveTemplate], {
+              id: saved.id,
+              label: saved.code,
+            })
+          : 0;
+      guard.allowNext();
+      toast.success(
+        `Service ${saved.code} saved${changes ? ` · ${changes} field setting change(s)` : ""}`,
+      );
+      void navigate({ to: "/service/$id", params: { id: saved.id }, search: { mode: "view" } });
+    } catch (err) {
+      if (err instanceof BusinessRuleError) {
+        setErrors(err.fieldErrors);
+        setFormError(err.message);
+      }
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    }
+  };
+
+  const fields = effectiveTemplate ? TEMPLATE_FIELDS[effectiveTemplate] : [];
 
   return (
     <div>
-      <PageHeader
-        crumbs={[{ label: "Service", to: "/service" }, { label: s ? s.code : "Add Service" }]}
-        title={s ? "Service Detail" : "Add Service"} subtitle={s?.name}
-        actions={<>
-          <Button variant="outline" onClick={() => navigate({ to: "/service" })}><ArrowLeft className="h-4 w-4" />Back</Button>
-          <Button onClick={() => toast.success("Đã lưu service (demo)")}><Save className="h-4 w-4" />Save</Button>
-        </>}
+      <FormPageHeader
+        crumbs={[{ label: "Service", to: "/service" }, { label: isNew ? "Add Service" : s.code }]}
+        title={isNew ? "Add Service" : readOnly ? "Service Detail" : "Edit Service"}
+        subtitle={
+          source ? (
+            <span className="flex items-center gap-2">
+              {source.name} <StatusBadge status={source.status} />
+            </span>
+          ) : (
+            "Tạo dịch vụ mới"
+          )
+        }
+        dirty={dirty}
+        readOnly={readOnly}
+        onBack={() => void navigate({ to: "/service" })}
+        onCancel={() =>
+          isNew
+            ? void navigate({ to: "/service" })
+            : void navigate({
+                to: "/service/$id",
+                params: { id: source!.id },
+                search: { mode: "view" },
+              })
+        }
+        onSave={() => void save()}
+        extra={
+          <>
+            {source && (
+              <Button variant="outline" onClick={() => setAuditOpen(true)}>
+                <History className="h-4 w-4" />
+                Audit History
+              </Button>
+            )}
+            {readOnly &&
+              source &&
+              (source.status === "Inactive" ? (
+                <Button
+                  variant="outline"
+                  onClick={() => void actions.setStatus([source], "Active")}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Activate
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => void actions.setStatus([source], "Inactive")}
+                >
+                  <XCircle className="h-4 w-4" />
+                  Deactivate
+                </Button>
+              ))}
+            {readOnly && (
+              <Button
+                onClick={() =>
+                  void navigate({
+                    to: "/service/$id",
+                    params: { id: source!.id },
+                    search: { mode: "edit" },
+                  })
+                }
+              >
+                <Pencil className="h-4 w-4" />
+                Edit
+              </Button>
+            )}
+          </>
+        }
       />
-      <div className="grid grid-cols-5 gap-6">
-        <Panel title="General" className="col-span-2">
+      <FormErrorBanner message={formError} errors={errors} />
+
+      <fieldset disabled={readOnly} className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-5">
+        <Panel title="General" className="xl:col-span-2">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Service Code"><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></Field>
-            <Field label="Status"><NativeSelect value={form.status} onChange={(v) => setForm({ ...form, status: v as Status })} options={["Active", "Draft", "Inactive"]} /></Field>
-            <Field label="Service Name" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Parent Group" className="col-span-2"><NativeSelect value={form.group} onChange={(v) => setForm({ ...form, group: v })} options={["Vận tải đường bộ", "Thủ tục hải quan", "Cước quốc tế"]} /></Field>
-            <Field label="Template Type" className="col-span-2">
-              <div className="grid grid-cols-3 gap-2">
-                {templates.map((t) => (
-                  <button key={t} onClick={() => { setForm({ ...form, template: t }); setView(t); }} className={`rounded-lg border py-2 text-sm font-semibold ${form.template === t ? "border-primary bg-accent text-accent-foreground" : "hover:border-primary"}`}>{t}</button>
+            <Field label="Service Code" required error={errors["code"]}>
+              <Input
+                value={s.code}
+                onChange={(e) => set("code", e.target.value.toUpperCase())}
+                aria-invalid={!!errors["code"] || undefined}
+              />
+            </Field>
+            <Field label="Status">
+              <NativeSelect
+                value={s.status}
+                onChange={(v) => set("status", v as Status)}
+                options={["Draft", "Active", "Inactive"]}
+              />
+            </Field>
+            <Field label="Service Name" required error={errors["name"]} className="col-span-2">
+              <Input
+                value={s.name}
+                onChange={(e) => set("name", e.target.value)}
+                aria-invalid={!!errors["name"] || undefined}
+              />
+            </Field>
+            <Field label="Service Level" className="col-span-2">
+              <div className="flex rounded-md border p-0.5">
+                {[
+                  ["root", "Level 1 · Service Group"],
+                  ["child", "Child Service"],
+                ].map(([k, l]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      if (k === "root")
+                        setS((p) => ({
+                          ...p,
+                          parentId: null,
+                          template: p.template ?? (parent ? templateOf(parent, all) : null),
+                        }));
+                      else
+                        setS((p) => ({
+                          ...p,
+                          parentId: p.parentId ?? parentOptions[0]?.id ?? null,
+                        }));
+                    }}
+                    className={cn(
+                      "flex-1 rounded px-2 py-1.5 text-xs font-semibold",
+                      (k === "root") === !s.parentId
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {l}
+                  </button>
                 ))}
               </div>
             </Field>
-            <Field label="Description" className="col-span-2"><Textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+            {s.parentId ? (
+              <>
+                <Field
+                  label="Parent Service"
+                  required
+                  error={errors["parentId"]}
+                  className="col-span-2"
+                >
+                  <NativeSelect
+                    value={s.parentId}
+                    onChange={(v) => set("parentId", v)}
+                    options={parentOptions.map((x) => x.id)}
+                    labels={Object.fromEntries(
+                      parentOptions.map((x) => [x.id, `${x.code} · ${x.name}`]),
+                    )}
+                  />
+                </Field>
+                <Field label="Template" className="col-span-2">
+                  <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/50 px-3 py-2 text-sm">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                    <Tag tone="tpl">{effectiveTemplate ?? "—"}</Tag>
+                    <span className="text-xs text-muted-foreground">
+                      Inherited from parent {parent ? `${parent.code}` : ""} — cannot be changed on
+                      a child service
+                    </span>
+                  </div>
+                </Field>
+              </>
+            ) : (
+              <Field
+                label="Template Type"
+                required
+                error={errors["template"]}
+                className="col-span-2"
+                hint="Only the 3 system templates exist. Tenants cannot create a 4th template."
+              >
+                <div className="grid grid-cols-3 gap-2">
+                  {TEMPLATES.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => set("template", t)}
+                      className={cn(
+                        "rounded-lg border py-2 text-sm font-semibold",
+                        s.template === t
+                          ? "border-primary bg-accent text-accent-foreground"
+                          : "hover:border-primary",
+                        errors["template"] && "border-destructive",
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
+            <Field label="Description" className="col-span-2">
+              <Textarea
+                rows={3}
+                value={s.description}
+                onChange={(e) => set("description", e.target.value)}
+              />
+            </Field>
           </div>
+          {children.length > 0 && (
+            <div className="mt-5 border-t pt-4">
+              <div className="mb-2 text-xs font-semibold text-muted-foreground">
+                CHILD SERVICES ({children.length}) — inherit {effectiveTemplate}
+              </div>
+              <div className="flex flex-col gap-1">
+                {children.map((c) => (
+                  <Link
+                    key={c.id}
+                    to="/service/$id"
+                    params={{ id: c.id }}
+                    search={{ mode: "view" }}
+                    className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                  >
+                    <span>
+                      <span className="font-semibold text-primary">{c.code}</span> · {c.name}
+                    </span>
+                    <StatusBadge status={c.status} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </Panel>
 
-        <Panel title="Field Configuration by Tenant" className="col-span-3" actions={
-          <div className="flex rounded-md border p-0.5 text-xs">
-            {templates.map((t) => (
-              <button key={t} onClick={() => setView(t)} className={`rounded px-3 py-1 font-semibold ${view === t ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{t}</button>
-            ))}
-          </div>
-        }>
-          <p className="mb-3 text-xs text-muted-foreground">Bật/tắt hiển thị và bắt buộc cho các field không cố định. Tenant: MoveX Việt Nam.</p>
-          <div className="overflow-hidden rounded-lg border">
-            <div className="grid grid-cols-[1fr_100px_100px] bg-muted/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>{view} field</span><span className="text-center">Visible</span><span className="text-center">Required</span>
-            </div>
-            {fields[view].map((f) => (
-              <div key={f.key} className="grid grid-cols-[1fr_100px_100px] items-center border-t px-4 py-3 text-sm">
-                <span className="flex items-center gap-2 font-medium">
-                  {f.label}
-                  {f.mandatory && <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"><Lock className="h-3 w-3" />System</span>}
-                </span>
-                <div className="flex justify-center"><Switch checked={f.visible} disabled={f.mandatory} onCheckedChange={() => toggle(view, f.key, "visible")} /></div>
-                <div className="flex justify-center"><Switch checked={f.required} disabled={f.mandatory} onCheckedChange={() => toggle(view, f.key, "required")} /></div>
+        <Panel
+          title="Field Configuration by Tenant"
+          className="xl:col-span-3"
+          actions={effectiveTemplate && <Tag tone="tpl">{effectiveTemplate} template</Tag>}
+        >
+          {!effectiveTemplate ? (
+            <EmptyState
+              title="Select a template"
+              description="Choose Trucking, Customs or Freight to configure its fields."
+            />
+          ) : (
+            <>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Tenant <b>MoveX Việt Nam</b> · applies to all {usingTemplate} service(s) using the{" "}
+                {effectiveTemplate} template. Field structure is fixed by the system — only Visible
+                / Required can be changed.
+              </p>
+              <div className="overflow-hidden rounded-lg border">
+                <div className="grid grid-cols-[1fr_100px_100px] bg-muted/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span>{effectiveTemplate} field</span>
+                  <span className="text-center">Visible</span>
+                  <span className="text-center">Required</span>
+                </div>
+                {fields.map((f) => {
+                  const st = cfg[effectiveTemplate][f.key] ?? {
+                    visible: f.defaultVisible,
+                    required: f.defaultRequired,
+                  };
+                  const lockMsg =
+                    "Core mandatory field — always visible and required. It cannot be disabled or removed.";
+                  return (
+                    <div
+                      key={f.key}
+                      className="grid grid-cols-[1fr_100px_100px] items-center border-t px-4 py-3 text-sm"
+                    >
+                      <span className="flex items-center gap-2 font-medium">
+                        {f.label}
+                        {f.coreMandatory ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex cursor-help items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                <Lock className="h-3 w-3" />
+                                Core · Mandatory
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">{lockMsg}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex cursor-help items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                <ShieldCheck className="h-3 w-3" />
+                                Core
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              Core template field — cannot be deleted, but Visible / Required can be
+                              configured per tenant.
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </span>
+                      <div className="flex justify-center">
+                        {f.coreMandatory ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Switch checked disabled />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{lockMsg}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Switch
+                            checked={st.visible}
+                            onCheckedChange={() => toggle(f.key, "visible")}
+                            aria-label={`${f.label} visible`}
+                          />
+                        )}
+                      </div>
+                      <div className="flex justify-center">
+                        {f.coreMandatory ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Switch checked disabled />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{lockMsg}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Switch
+                            checked={st.required}
+                            onCheckedChange={() => toggle(f.key, "required")}
+                            aria-label={`${f.label} required`}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-          <div className="mt-5 rounded-lg border border-dashed p-4">
-            <div className="mb-3 text-xs font-semibold text-muted-foreground">PREVIEW — form đơn hàng</div>
-            <div className="grid grid-cols-2 gap-3">
-              {fields[view].filter((f) => f.visible).map((f) => (
-                <Field key={f.key} label={`${f.label}${f.required ? " *" : ""}`}><Input placeholder={f.label} /></Field>
-              ))}
-            </div>
-          </div>
+              {dirtyCfg && !readOnly && (
+                <p className="mt-2 text-xs font-medium text-warning">
+                  Field settings changed — click Save to apply.
+                </p>
+              )}
+              <div className="mt-5 rounded-lg border border-dashed p-4">
+                <div className="mb-3 text-xs font-semibold text-muted-foreground">
+                  PREVIEW — order form for “{s.name || "this service"}”
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {fields
+                    .filter(
+                      (f) =>
+                        (cfg[effectiveTemplate][f.key]?.visible ?? f.defaultVisible) ||
+                        f.coreMandatory,
+                    )
+                    .map((f) => (
+                      <Field
+                        key={f.key}
+                        label={f.label}
+                        required={f.coreMandatory || !!cfg[effectiveTemplate][f.key]?.required}
+                      >
+                        <Input placeholder={f.label} tabIndex={-1} readOnly />
+                      </Field>
+                    ))}
+                </div>
+              </div>
+            </>
+          )}
         </Panel>
-      </div>
+      </fieldset>
+      {source && (
+        <AuditHistoryDrawer
+          open={auditOpen}
+          onOpenChange={setAuditOpen}
+          entityType="Service"
+          entityId={source.id}
+          title={source.code}
+        />
+      )}
     </div>
   );
 }
