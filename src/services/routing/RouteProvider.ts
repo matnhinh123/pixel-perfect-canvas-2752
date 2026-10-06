@@ -11,7 +11,7 @@ import type {
  * they call `routingService`, which delegates to an implementation of this interface.
  */
 export interface RouteProvider {
-  readonly name: "vietmap" | "osrm" | "mock";
+  readonly name: "vietmap" | "valhalla" | "mock";
   calculateRoute(req: RouteRequest): Promise<RouteCalculation>;
   /** All alternatives for the request; the first one is the recommended route. */
   calculateRoutes(req: RouteRequest): Promise<RouteCalculation[]>;

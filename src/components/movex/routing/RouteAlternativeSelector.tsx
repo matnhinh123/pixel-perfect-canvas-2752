@@ -20,7 +20,7 @@ export function RouteAlternativeSelector({
   if (alternatives.length === 0)
     return (
       <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
-        Chưa có phương án tuyến — chọn Điểm đi, Điểm đến, Xe rồi bấm{" "}
+        Chưa có phương án tuyến — chọn Điểm đi, Điểm đến rồi bấm{" "}
         <span className="font-medium text-foreground">Tính lại lộ trình</span>.
       </p>
     );

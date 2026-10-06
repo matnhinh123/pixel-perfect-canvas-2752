@@ -12,8 +12,6 @@ import type {
   RouteType,
 } from "@/types";
 import { computeMockRoute, computeMockRoutes } from "@/services/routing/MockRouteProvider";
-import { decodeRoad, type RoadPath } from "@/services/routing/roadRouting";
-import { SEED_ROADS } from "./seedRoads";
 import { LOCATIONS } from "./locations";
 import { findVehicle, routeVehicleFields } from "./vehicles";
 import { TEMPLATE_FIELDS } from "./templates";
@@ -25,10 +23,6 @@ const pt = (id: string): RoutePoint => {
   if (!l) throw new Error(`Unknown location ${id}`);
   return { name: l.name, address: l.province, lat: l.lat, lng: l.lng, locationId: l.id };
 };
-
-/** Pre-fetched road geometry (scripts/gen-seed-roads.ts) so seeded routes follow real roads offline. */
-const seedRoads = (key: string): RoadPath[] | null =>
-  SEED_ROADS[key]?.map(([distanceKm, enc]) => ({ distanceKm, geometry: decodeRoad(enc) })) ?? null;
 
 const SEED_TIME = "2026-09-15T08:00:00.000Z";
 const meta = (by: string, at = SEED_TIME) => ({
@@ -70,7 +64,7 @@ const routeSeeds: RouteSeed[] = [
     o: "LOC-HCM",
     wps: ["LOC-LONGTHANH", "LOC-DAUGIAY", "LOC-QUYNHON"],
     d: "LOC-DANANG",
-    vehicle: "VT-HEAVY",
+    vehicle: "V-51D12345",
     departure: "2026-10-06T14:30",
     avoidFerry: true,
     status: "Active",
@@ -83,7 +77,7 @@ const routeSeeds: RouteSeed[] = [
     o: "LOC-HCM-TB",
     wps: ["LOC-TD-NT"],
     d: "LOC-CATLAI",
-    vehicle: "VT-CONTAINER",
+    vehicle: "V-51R88888",
     departure: "2026-10-06T07:00",
     status: "Active",
     returnMode: "auto",
@@ -105,7 +99,7 @@ const routeSeeds: RouteSeed[] = [
     o: "LOC-HCM-Q7",
     wps: ["LOC-SONGTHAN"],
     d: "LOC-BINHDUONG",
-    vehicle: "VT-MEDIUM",
+    vehicle: "V-51C67890",
     departure: "2026-10-07T09:30",
     status: "Active",
   },
@@ -117,7 +111,7 @@ const routeSeeds: RouteSeed[] = [
     o: "LOC-HCM-TD",
     wps: [],
     d: "LOC-BIENHOA2",
-    vehicle: "VT-MEDIUM",
+    vehicle: "V-29H13579",
     departure: "2026-10-07T13:00",
     status: "Active",
   },
@@ -129,7 +123,7 @@ const routeSeeds: RouteSeed[] = [
     o: "LOC-GIALAM",
     wps: ["LOC-HAIDUONG"],
     d: "LOC-DINHVU",
-    vehicle: "VT-CONTAINER",
+    vehicle: "V-51R88888",
     departure: "2026-10-08T05:30",
     selected: 1,
     status: "Active",
@@ -144,9 +138,9 @@ const routeSeeds: RouteSeed[] = [
     o: "LOC-TIENSA",
     wps: ["LOC-HOIAN"],
     d: "LOC-CHULAI",
-    vehicle: "VT-HEAVY",
+    vehicle: "V-51D12345",
     departure: "2026-10-09T08:00",
-    status: "Draft",
+    status: "Inactive",
     calc: false,
   },
   {
@@ -157,7 +151,7 @@ const routeSeeds: RouteSeed[] = [
     o: "LOC-HCM",
     wps: [],
     d: "LOC-LONGTHANH",
-    vehicle: "VT-LIGHT",
+    vehicle: "V-50H24680",
     departure: "2026-09-20T10:00",
     status: "Inactive",
   },
@@ -169,7 +163,7 @@ const routeSeeds: RouteSeed[] = [
     o: "LOC-DANANG",
     wps: ["LOC-TAMKY"],
     d: "LOC-QUYNHON",
-    vehicle: "VT-HEAVY",
+    vehicle: "V-51D12345",
     departure: "2026-10-10T20:00",
     selected: 2,
     status: "Active",
@@ -192,17 +186,13 @@ function buildRoute(s: RouteSeed): RouteRecord {
   });
   const calc = s.calc !== false;
   const alternatives = calc
-    ? computeMockRoutes(req([origin, ...waypoints, destination]), SEED_TIME, seedRoads(s.id))
+    ? computeMockRoutes(req([origin, ...waypoints, destination]), SEED_TIME)
     : [];
   const outbound = alternatives[s.selected ?? 0] ?? null;
   const back = s.returnMode === "custom" ? returnWaypoints : [...waypoints].reverse();
   const returnLeg =
     calc && s.type === "Round Trip"
-      ? computeMockRoute(
-          req([destination, ...back, origin]),
-          SEED_TIME,
-          seedRoads(`${s.id}:return`)?.[0],
-        )
+      ? computeMockRoute(req([destination, ...back, origin]), SEED_TIME)
       : null;
   return {
     id: s.id,

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Typeahead over Location master data — the one location input for Origin, Waypoints and Destination.
- * Type to filter (case/diacritic-insensitive, by name or province), ↑/↓ to move, Enter to pick,
+ * Type to filter (case/diacritic-insensitive, by code, name or province), ↑/↓ to move, Enter to pick,
  * Esc to close. Returns the picked Location (with lat/lng) or null when cleared.
  * - default: bordered input with a pin icon
  * - inline:  borderless until hover/focus (used inside the stop table)
@@ -21,6 +21,7 @@ export function LocationAutocomplete({
   invalid,
   disabled,
   inline,
+  field = "name",
 }: {
   locations: LocationRecord[];
   /** Selected location id. */
@@ -32,12 +33,15 @@ export function LocationAutocomplete({
   invalid?: boolean;
   disabled?: boolean;
   inline?: boolean;
+  /** Which value the input shows once a location is picked: its name or its code. */
+  field?: "name" | "code";
 }) {
   const selected = useMemo(
     () => (value ? (locations.find((l) => l.id === value) ?? null) : null),
     [locations, value],
   );
-  const label = selected?.name ?? fallbackLabel ?? "";
+  const shown = (l: LocationRecord) => (field === "code" ? (l.code ?? "") : l.name);
+  const label = selected ? shown(selected) : (fallbackLabel ?? "");
   const [text, setText] = useState(label);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -70,7 +74,7 @@ export function LocationAutocomplete({
   };
   const pick = (l: LocationRecord) => {
     setTyping(false);
-    setText(l.name);
+    setText(shown(l));
     setOpen(false);
     onChange(l);
   };
@@ -91,7 +95,7 @@ export function LocationAutocomplete({
       aria-expanded={open}
       aria-autocomplete="list"
       aria-invalid={invalid || undefined}
-      placeholder={placeholder ?? "Gõ để tìm địa điểm…"}
+      placeholder={placeholder ?? "Nhập mã hoặc tên địa điểm…"}
       className={cn(
         "h-full w-full bg-transparent text-sm outline-none disabled:cursor-not-allowed",
         inline ? "pl-2 pr-7" : "pl-9 pr-8",
@@ -204,7 +208,10 @@ export function LocationAutocomplete({
                   )}
                 />
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium">{l.name}</span>
+                  <span className="block text-sm font-medium">
+                    {l.code && <span className="mr-2 font-semibold text-primary">{l.code}</span>}
+                    {l.name}
+                  </span>
                   <span className="block truncate text-xs text-muted-foreground">{l.address}</span>
                 </span>
               </button>

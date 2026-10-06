@@ -1,5 +1,7 @@
 import type { BaseRecord } from "./common";
 
+/** Terrain of the route: highland (cao nguyên) is slower than plain (đồng bằng). */
+export type Terrain = "Plain" | "Highland";
 export type RouteType = "Single Trip" | "Round Trip";
 
 /**
@@ -12,7 +14,8 @@ export type VehicleProfile = "Car" | "Motorcycle" | "Truck" | "Container";
 export type VehicleGroup =
   "Van / Pickup" | "Light Truck" | "Medium Truck" | "Heavy Truck" | "Tractor / Container Truck";
 
-export const VEHICLE_PROFILES: VehicleProfile[] = ["Car", "Motorcycle", "Truck", "Container"];
+/** Profiles selectable in the UI: only trucks and containers are operated. */
+export const VEHICLE_PROFILES: VehicleProfile[] = ["Truck", "Container"];
 export const VEHICLE_GROUPS: VehicleGroup[] = [
   "Van / Pickup",
   "Light Truck",
@@ -36,9 +39,10 @@ export interface RoutePoint extends GeoPoint {
   note?: string;
 }
 
-/** Vehicle type (master data). Group / weight / routing profile / toll class all derive from it. */
+/** Vehicle master record. Group / weight / routing profile / toll class all derive from it. */
 export interface VehicleRecord {
   id: string;
+  plate: string;
   name: string;
   group: VehicleGroup;
   weightKg: number;
@@ -48,6 +52,8 @@ export interface VehicleRecord {
 
 export interface LocationRecord extends GeoPoint {
   id: string;
+  /** Short location code (e.g. VNCPH) — searchable in the stop pickers. */
+  code?: string;
   name: string;
   address: string;
   province: string;
@@ -96,7 +102,7 @@ export interface RouteCalculation {
   warnings: string[];
   /** Distance split by road class (km) — "Địa hình tuyến đường". */
   roadTypes: RoadTypeSplit;
-  provider: "vietmap" | "osrm" | "mock";
+  provider: "vietmap" | "valhalla" | "mock";
   calculatedAt: string;
   /** Set when the result is one of several alternatives returned for the same request. */
   id?: string;
@@ -167,8 +173,10 @@ export interface RouteRecord extends BaseRecord {
   /** Used only when returnMode === "custom": manual figures that win over the calculated return leg. */
   customReturn?: CustomReturnOverride;
   manualCosts: ManualCost[];
-  /** User-entered total distance (km); wins over the calculated legs until the next calculation. */
-  distanceOverrideKm?: number;
+  /** User-adjusted total distance (km) per route type; wins over the calculated one, cleared on recalculation. */
+  distanceOverrides?: Partial<Record<RouteType, number>>;
+  /** Default "Plain". */
+  terrain?: Terrain;
 }
 
 export interface LocationSuggestion {

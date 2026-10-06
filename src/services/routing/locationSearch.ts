@@ -5,8 +5,8 @@ export const normalizeText = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
 /**
- * Case/diacritic-insensitive search over name, address and province.
- * Ranking: name prefix → word prefix in name → name contains → address/province contains.
+ * Case/diacritic-insensitive search over code, name, address and province.
+ * Ranking: code prefix / name prefix → word prefix in name → name or code contains → address/province contains.
  */
 export function searchLocations(
   locations: LocationRecord[],
@@ -18,15 +18,17 @@ export function searchLocations(
   const scored: { l: LocationRecord; score: number }[] = [];
   for (const l of locations) {
     const name = normalizeText(l.name);
-    const score = name.startsWith(q)
-      ? 0
-      : name.split(/[\s.,()-]+/).some((w) => w.startsWith(q))
-        ? 1
-        : name.includes(q)
-          ? 2
-          : normalizeText(`${l.address} ${l.province}`).includes(q)
-            ? 3
-            : -1;
+    const code = normalizeText(l.code ?? "");
+    const score =
+      (code && code.startsWith(q)) || name.startsWith(q)
+        ? 0
+        : name.split(/[\s.,()-]+/).some((w) => w.startsWith(q))
+          ? 1
+          : name.includes(q) || (code && code.includes(q))
+            ? 2
+            : normalizeText(`${l.address} ${l.province}`).includes(q)
+              ? 3
+              : -1;
     if (score >= 0) scored.push({ l, score });
   }
   return scored

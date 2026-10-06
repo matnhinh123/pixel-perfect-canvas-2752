@@ -25,8 +25,8 @@ const columns: ListColumn<Row>[] = [
     label: "Mã địa điểm",
     type: "text",
     pinned: true,
-    value: (r) => r.id,
-    render: (r) => <span className="font-semibold text-primary">{r.id}</span>,
+    value: (r) => r.code ?? r.id,
+    render: (r) => <span className="font-semibold text-primary">{r.code ?? r.id}</span>,
   },
   {
     key: "name",
@@ -73,7 +73,7 @@ function LocationList() {
       rows={rows}
       columns={columns}
       searchPlaceholder="Tìm mã, tên, địa chỉ..."
-      searchValues={(r) => [r.id, r.name, r.address, r.province]}
+      searchValues={(r) => [r.id, r.code ?? "", r.name, r.address, r.province]}
       quickFilters={[
         {
           key: "province",

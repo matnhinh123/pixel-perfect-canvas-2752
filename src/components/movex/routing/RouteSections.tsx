@@ -131,17 +131,19 @@ export function StopList({
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          {["", "#", "Loại điểm", "Địa điểm", "Địa chỉ / Ghi chú", "Thao tác"].map((h, i) => (
-            <TableHead
-              key={i}
-              className={cn(
-                "h-10 text-sm font-semibold text-foreground",
-                (i === 1 || i === 5) && "text-center",
-              )}
-            >
-              {h}
-            </TableHead>
-          ))}
+          {["", "#", "Loại điểm", "Location Code", "Location", "Địa chỉ / Ghi chú", "Thao tác"].map(
+            (h, i) => (
+              <TableHead
+                key={i}
+                className={cn(
+                  "h-10 text-sm font-semibold text-foreground",
+                  (i === 1 || i === 6) && "text-center",
+                )}
+              >
+                {h}
+              </TableHead>
+            ),
+          )}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -194,6 +196,23 @@ export function StopList({
                     ? (labels?.destination ?? "Điểm đến")
                     : "Điểm dừng"}
               </TableCell>
+              <TableCell className="w-40 py-1.5">
+                {locked ? (
+                  <span className="block px-2 text-sm">
+                    {locations.find((l) => l.id === p.locationId)?.code ?? "—"}
+                  </span>
+                ) : (
+                  <LocationAutocomplete
+                    inline
+                    field="code"
+                    locations={locations}
+                    value={p.locationId ?? null}
+                    onChange={(l) => update(i, l ? toPoint(l, p.note) : emptyStop(p.note))}
+                    invalid={invalid}
+                    placeholder="Nhập mã…"
+                  />
+                )}
+              </TableCell>
               <TableCell className="min-w-56 py-1.5">
                 <span className="flex items-center gap-2">
                   {/* Locked endpoints = return leg, which runs B → A. */}
@@ -214,10 +233,10 @@ export function StopList({
                         invalid={invalid}
                         placeholder={
                           kind === "origin"
-                            ? "Gõ để tìm điểm đi…"
+                            ? "Nhập tên điểm đi…"
                             : kind === "destination"
-                              ? "Gõ để tìm điểm đến…"
-                              : "Gõ để tìm điểm dừng…"
+                              ? "Nhập tên điểm đến…"
+                              : "Nhập tên điểm dừng…"
                         }
                       />
                     )}

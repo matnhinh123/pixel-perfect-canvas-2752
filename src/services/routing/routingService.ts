@@ -1,4 +1,4 @@
-// The only routing entry point for UI code. Picks Vietmap when the server has a key, otherwise OSRM.
+// The only routing entry point for UI code. Picks Vietmap when the server has a key, otherwise Mock.
 import type {
   LocationSuggestion,
   RouteCalculation,
@@ -11,18 +11,18 @@ import { profileNeedsCapacity } from "@/types";
 import { findVehicle } from "@/mock-data/vehicles";
 import { MOCK_TOLL_GATES } from "@/mock-data/tollCatalog";
 import { MockRouteProvider } from "./MockRouteProvider";
-import { OsrmRouteProvider } from "./OsrmRouteProvider";
 import type { RouteProvider } from "./RouteProvider";
 import { RouteProviderError } from "./RouteProvider";
 import { isVietmapConfigured, VietmapRouteProvider } from "./VietmapRouteProvider";
 import { normalizeText } from "./locationSearch";
+import { ValhallaRouteProvider } from "./ValhallaRouteProvider";
 
 const mock = new MockRouteProvider();
 let providerPromise: Promise<RouteProvider> | null = null;
 
 export function getRouteProvider(): Promise<RouteProvider> {
   providerPromise ??= isVietmapConfigured().then((ok) =>
-    ok ? new VietmapRouteProvider() : new OsrmRouteProvider(),
+    ok ? new VietmapRouteProvider() : new ValhallaRouteProvider(),
   );
   return providerPromise;
 }
@@ -43,13 +43,13 @@ type CalcInput = Pick<
   | "capacityKg"
   | "departureTime"
   | "avoidFerry"
+  | "terrain"
 >;
 
 /** Why "Tính lại lộ trình" cannot run yet, or null when the input is complete. */
 export function validateRouteInput(r: CalcInput): string | null {
   if (!hasCoords(r.origin)) return "Chọn Điểm đi từ danh sách gợi ý.";
   if (!hasCoords(r.destination)) return "Chọn Điểm đến từ danh sách gợi ý.";
-  if (!findVehicle(r.vehicleId)) return "Chọn loại xe trước khi tính lộ trình.";
   const bad = r.waypoints.findIndex((w) => !hasCoords(w));
   if (bad >= 0) return `Điểm dừng ${bad + 1} chưa có địa điểm — chọn địa điểm hoặc xoá dòng.`;
   return null;
@@ -58,7 +58,8 @@ export function validateRouteInput(r: CalcInput): string | null {
 const toRequest = (points: RoutePoint[], r: CalcInput): RouteRequest => {
   // Vehicle Master is the source of truth for profile and weight.
   const v = findVehicle(r.vehicleId);
-  const vehicle = v?.profile ?? r.vehicleProfile;
+  // The route-level profile (travel-mode tabs on the map) wins over the vehicle's default one.
+  const vehicle = r.vehicleProfile ?? v?.profile;
   const kg = v?.weightKg ?? r.capacityKg;
   return {
     points: points.map((p) => ({ lat: p.lat, lng: p.lng, name: p.name })),
@@ -86,6 +87,17 @@ const reconcileCalc = (c: RouteCalculation): RouteCalculation => ({
   tollStations: reconcile(c.tollStations),
 });
 
+/** Highland (cao nguyên) roads are slower: add 25% to the estimated time. */
+const HIGHLAND_TIME_FACTOR = 1.25;
+const applyTerrain = (c: RouteCalculation, terrain?: RouteRecord["terrain"]): RouteCalculation =>
+  terrain === "Highland"
+    ? {
+        ...c,
+        estimatedTime: Math.round(c.estimatedTime * HIGHLAND_TIME_FACTOR),
+        warnings: [...c.warnings, "Địa hình cao nguyên — thời gian ước tính đã cộng thêm 25%."],
+      }
+    : c;
+
 export interface RouteCalcResult {
   alternatives: RouteCalculation[];
   returnLeg: RouteCalculation | null;
@@ -103,17 +115,21 @@ export const routingService = {
     const provider = await getRouteProvider();
     const alternatives = (
       await provider.calculateRoutes(toRequest([r.origin, ...r.waypoints, r.destination], r))
-    ).map(reconcileCalc);
+    ).map((c) => applyTerrain(reconcileCalc(c), r.terrain));
     if (alternatives.length === 0)
       throw new RouteProviderError("Không tìm thấy tuyến phù hợp.", "ZERO_RESULTS");
     let returnLeg: RouteCalculation | null = null;
-    if (r.type === "Round Trip") {
+    {
+      // Always computed so Single / Round totals can both be shown after one calculation.
       const back =
         r.returnMode === "custom"
           ? r.returnWaypoints.filter(hasCoords)
           : [...r.waypoints].reverse();
-      returnLeg = reconcileCalc(
-        await provider.calculateRoute(toRequest([r.destination, ...back, r.origin], r)),
+      returnLeg = applyTerrain(
+        reconcileCalc(
+          await provider.calculateRoute(toRequest([r.destination, ...back, r.origin], r)),
+        ),
+        r.terrain,
       );
     }
     return { alternatives, returnLeg };

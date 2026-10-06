@@ -55,7 +55,8 @@ export function routeTotals(r: RouteRecord): RouteTotals {
   const ferryCost = stationsTotal(ferryStations) + manualFerry;
   return {
     distanceKm:
-      r.distanceOverrideKm ?? Math.round(legs.reduce((s, l) => s + l.distance, 0) * 10) / 10,
+      r.distanceOverrides?.[r.type] ??
+      Math.round(legs.reduce((s, l) => s + l.distance, 0) * 10) / 10,
     estimatedTimeMin: legs.reduce((s, l) => s + l.estimatedTime, 0),
     outboundToll: outbound ? stationsTotal(outbound.tollStations) : 0,
     returnToll: ret ? stationsTotal(ret.tollStations) : 0,

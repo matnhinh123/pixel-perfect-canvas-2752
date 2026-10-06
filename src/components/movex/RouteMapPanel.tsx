@@ -1,5 +1,5 @@
-// Interactive route map (Leaflet). Renders the road geometry the RouteProvider returned — Vietmap
-// when a key is configured, OSRM (OpenStreetMap) otherwise. Tiles: Esri.
+// Interactive route map (Leaflet). Renders whatever geometry the RouteProvider returned — real
+// Vietmap geometry when a key is configured, mock geometry otherwise. Tiles: Esri.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import "leaflet/dist/leaflet.css";
 import type * as Leaflet from "leaflet";
@@ -61,6 +61,8 @@ export function RouteMapPanel({
   alternatives = [],
   selectedAlternativeId,
   onSelectAlternative,
+  onRouteDrag,
+  onWaypointDrag,
 }: {
   origin: RoutePoint;
   waypoints: RoutePoint[];
@@ -78,9 +80,20 @@ export function RouteMapPanel({
   alternatives?: { id: string; label: string; geometry: [number, number][] }[];
   selectedAlternativeId?: string | null;
   onSelectAlternative?: (id: string) => void;
+  /** Google-style: grab the selected outbound line and drop it elsewhere to add a via point. */
+  onRouteDrag?: ((p: { lat: number; lng: number }) => void) | undefined;
+  /** Drag an existing outbound waypoint (0-based index into `waypoints`) to a new position. */
+  onWaypointDrag?: ((index: number, p: { lat: number; lng: number }) => void) | undefined;
 }) {
   const selectRef = useRef(onSelectAlternative);
   selectRef.current = onSelectAlternative;
+  const routeDragRef = useRef(onRouteDrag);
+  routeDragRef.current = onRouteDrag;
+  const wpDragRef = useRef(onWaypointDrag);
+  wpDragRef.current = onWaypointDrag;
+  // After a drag the route is recalculated; keep the user's viewport instead of re-fitting.
+  const keepViewRef = useRef(false);
+  const prevGeomRef = useRef(outboundGeometry);
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const layerRef = useRef<Leaflet.LayerGroup | null>(null);
@@ -157,18 +170,21 @@ export function RouteMapPanel({
       size: [number, number],
       anchor: [number, number],
       z = 0,
+      onDragEnd?: (ll: Leaflet.LatLng) => void,
     ) => {
       if (!valid(p)) return;
       all.push([p.lat, p.lng]);
-      L.marker([p.lat, p.lng], {
+      const m = L.marker([p.lat, p.lng], {
         icon: L.divIcon({ className: "", html, iconSize: size, iconAnchor: anchor }),
         zIndexOffset: z,
+        draggable: !!onDragEnd,
       })
         .bindTooltip(`<b>${esc(p.name)}</b>${p.address ? `<br/>${esc(p.address)}` : ""}`, {
           direction: "top",
           offset: [0, -anchor[1] + 4],
         })
         .addTo(layer);
+      if (onDragEnd) m.on("dragend", () => onDragEnd(m.getLatLng()));
     };
 
     for (const a of alternatives) {
@@ -177,6 +193,7 @@ export function RouteMapPanel({
         .bindTooltip(`${a.label} — bấm để chọn`, { sticky: true })
         .on("click", () => selectRef.current?.(a.id))
         .addTo(layer);
+      all.push(...a.geometry);
     }
     if (roundTrip && returnGeometry?.length) {
       L.polyline(returnGeometry, { color: "#16a34a", weight: 4, dashArray: "8 6" })
@@ -189,7 +206,49 @@ export function RouteMapPanel({
       L.polyline(outboundGeometry, { color: "#2563eb", weight: 5 })
         .bindTooltip("Chiều đi")
         .addTo(layer);
+      // Wide transparent hit area: press and drag anywhere on the line to add a via point.
+      if (routeDragRef.current) {
+        const hit = L.polyline(outboundGeometry, { color: "#000", weight: 18, opacity: 0 }).addTo(
+          layer,
+        );
+        hit.on("mouseover", () => map.getContainer().style.setProperty("cursor", "grab"));
+        hit.on("mouseout", () => map.getContainer().style.removeProperty("cursor"));
+        hit.on("mousedown", (e: Leaflet.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          map.dragging.disable();
+          const handle = L.marker(e.latlng, {
+            interactive: false,
+            icon: L.divIcon({
+              className: "",
+              iconSize: [18, 18],
+              iconAnchor: [9, 9],
+              html: `<div style="width:18px;height:18px;border-radius:9999px;background:white;border:4px solid #2563eb;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
+            }),
+          }).addTo(map);
+          const move = (ev: Leaflet.LeafletMouseEvent) => handle.setLatLng(ev.latlng);
+          const up = (ev: Leaflet.LeafletMouseEvent) => {
+            map.off("mousemove", move);
+            map.off("mouseup", up);
+            handle.remove();
+            map.dragging.enable();
+            // A plain click (no real movement) is not a drag.
+            if (map.distance(e.latlng, ev.latlng) < 5) return;
+            keepViewRef.current = true;
+            routeDragRef.current?.({ lat: ev.latlng.lat, lng: ev.latlng.lng });
+          };
+          map.on("mousemove", move);
+          map.on("mouseup", up);
+        });
+      }
       all.push(...outboundGeometry);
+    } else {
+      const stops = [origin, ...waypoints, destination]
+        .filter(valid)
+        .map((p) => [p.lat, p.lng] as [number, number]);
+      if (stops.length >= 2)
+        L.polyline(stops, { color: "#94a3b8", weight: 3, dashArray: "4 8" })
+          .bindTooltip("Chưa tính lộ trình")
+          .addTo(layer);
     }
     for (const t of tolls) {
       if (t.lat == null || t.lng == null) continue;
@@ -208,7 +267,19 @@ export function RouteMapPanel({
         .addTo(layer);
     }
     waypoints.forEach((w, i) =>
-      marker(w, dotHtml(String(i + 1), "#2563eb"), [24, 24], [12, 12], 100),
+      marker(
+        w,
+        dotHtml(String(i + 1), "#2563eb"),
+        [24, 24],
+        [12, 12],
+        100,
+        wpDragRef.current
+          ? (ll) => {
+              keepViewRef.current = true;
+              wpDragRef.current?.(i, { lat: ll.lat, lng: ll.lng });
+            }
+          : undefined,
+      ),
     );
     if (roundTrip)
       returnWaypoints.forEach((w, i) =>
@@ -217,6 +288,12 @@ export function RouteMapPanel({
     marker(origin, pinHtml("A", "#16a34a"), [30, 40], [15, 40], 200);
     marker(destination, pinHtml("B", "#ef4444"), [30, 40], [15, 40], 200);
 
+    const geomChanged = prevGeomRef.current !== outboundGeometry;
+    prevGeomRef.current = outboundGeometry;
+    if (keepViewRef.current) {
+      if (geomChanged) keepViewRef.current = false;
+      return;
+    }
     if (all.length) {
       boundsRef.current = L.latLngBounds(all);
       map.fitBounds(boundsRef.current, { padding: [40, 40], maxZoom: 14 });

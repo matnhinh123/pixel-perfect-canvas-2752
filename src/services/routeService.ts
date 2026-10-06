@@ -1,4 +1,4 @@
-import type { RouteRecord, RoutePoint } from "@/types";
+import { VEHICLE_PROFILES, type RouteRecord, type RoutePoint, type VehicleProfile } from "@/types";
 import { costRepository, routeRepository, uid } from "@/repositories";
 import { findLocationByName, LOCATIONS } from "@/mock-data/locations";
 import { findVehicle, routeVehicleFields, vehicleLabel, VEHICLES } from "@/mock-data/vehicles";
@@ -26,6 +26,21 @@ export const routeCrud = makeCrud<RouteRecord>({
   },
 });
 
+/** Location code of a stop: the master code, else the master id without "LOC-", else "VIA" (dragged point). */
+const stopCode = (p: RoutePoint) => {
+  const l = LOCATIONS.find((x) => x.id === p.locationId);
+  return l ? (l.code ?? l.id.replace(/^LOC-/, "")) : p.name ? "VIA" : "";
+};
+
+/** Auto route code: origin - waypoints (in order) - destination; "" until origin and destination are picked. */
+export const routeCodeOf = (seq: RoutePoint[]) => {
+  const codes = seq.map(stopCode);
+  const first = codes[0];
+  const lastCode = codes[codes.length - 1];
+  if (!first || !lastCode) return "";
+  return codes.filter(Boolean).join("-");
+};
+
 export const emptyPoint = (): RoutePoint => ({ name: "", lat: NaN, lng: NaN });
 
 export const newRouteDraft = (): RouteRecord => ({
@@ -49,7 +64,7 @@ export const newRouteDraft = (): RouteRecord => ({
   returnWaypoints: [],
   returnLeg: null,
   manualCosts: [],
-  status: "Draft",
+  status: "Active",
   createdAt: "",
   createdBy: "",
   updatedAt: "",
@@ -76,7 +91,6 @@ export function validateRoute(r: RouteRecord): Record<string, string> {
     e["destination"] = "Pick a Destination from the search list.";
   if (r.waypoints.some((w) => !w.name || !Number.isFinite(w.lat)))
     e["waypoints"] = "Every waypoint needs a location (or remove empty ones).";
-  if (!findVehicle(r.vehicleId)) e["vehicleId"] = "Vehicle type is required.";
   if (r.status === "Active" && !r.outbound)
     e["status"] = "Calculate the route before activating it.";
   return e;
@@ -247,7 +261,7 @@ export const routeImportConfig: ImportEntityConfig = {
     const e: { field: string; error: string }[] = [];
     if (!["Single Trip", "Round Trip"].includes(r["type"] ?? ""))
       e.push({ field: "type", error: "Must be Single Trip or Round Trip" });
-    if (!["Car", "Motorcycle", "Truck", "Container"].includes(r["vehicleProfile"] ?? ""))
+    if (!VEHICLE_PROFILES.includes((r["vehicleProfile"] ?? "") as VehicleProfile))
       e.push({ field: "vehicleProfile", error: "Unknown vehicle profile" });
     if (
       ![
@@ -269,7 +283,7 @@ export const routeImportConfig: ImportEntityConfig = {
       const o = findLocationByName(r["origin"]!)!,
         d = findLocationByName(r["destination"]!)!;
       const kg = Number(r["capacityKg"] || 0);
-      // Imported rows name a vehicle group; link the matching vehicle type.
+      // Imported rows name a vehicle group; link the first matching vehicle from Vehicle Master.
       const vehicle = VEHICLES.find((v) => v.group === r["vehicleGroup"]);
       return {
         ...newRouteDraft(),
@@ -284,7 +298,7 @@ export const routeImportConfig: ImportEntityConfig = {
         vehicleGroup: r["vehicleGroup"] as RouteRecord["vehicleGroup"],
         ...(kg > 0 ? { capacityKg: kg } : {}),
         ...(vehicle ? { vehicleId: vehicle.id } : {}),
-        status: "Draft",
+        status: "Inactive",
         ...stampCreate(),
       };
     });

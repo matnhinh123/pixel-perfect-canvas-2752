@@ -6,7 +6,7 @@ import type { ListColumn } from "@/components/movex/general/types";
 import { asReadOnlyRecord } from "@/components/movex/OutOfScope";
 import { RATE_TABLE } from "@/mock-data/rates";
 import { formatVnd } from "@/lib/format";
-import { VEHICLE_GROUPS, type VehicleGroup, type VehicleProfile } from "@/types";
+import { VEHICLE_GROUPS, VEHICLE_PROFILES, type VehicleGroup, type VehicleProfile } from "@/types";
 
 export const Route = createFileRoute("/vehicle")({
   head: () => ({
@@ -62,7 +62,7 @@ const columns: ListColumn<Row>[] = [
     key: "profile",
     label: "Vehicle Profile (routing)",
     type: "enum",
-    options: ["Car", "Motorcycle", "Truck", "Container"],
+    options: VEHICLE_PROFILES,
     value: (r) => r.profile,
     render: (r) => <Tag tone="Auto">{r.profile}</Tag>,
   },

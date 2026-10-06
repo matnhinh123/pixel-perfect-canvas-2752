@@ -15,7 +15,7 @@ import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
- * Pick a vehicle type (not a specific truck). Group, weight, routing profile and toll class are derived from it
+ * Pick a vehicle from Vehicle Master. Group, weight, routing profile and toll class are derived from it
  * and shown as one read-only line — the user never re-enters them.
  */
 export function VehicleSelector({
@@ -54,7 +54,7 @@ export function VehicleSelector({
               {selected ? (
                 <span className="truncate font-medium">{vehicleLabel(selected)}</span>
               ) : (
-                <span className="text-muted-foreground">Chọn loại xe…</span>
+                <span className="text-muted-foreground">Chọn xe…</span>
               )}
             </button>
           </PopoverTrigger>
@@ -64,7 +64,7 @@ export function VehicleSelector({
           {selected && (
             <button
               type="button"
-              aria-label="Bỏ chọn loại xe"
+              aria-label="Bỏ chọn xe"
               onClick={() => onChange(null)}
               className="absolute right-9 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
             >
@@ -74,14 +74,14 @@ export function VehicleSelector({
         </div>
         <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
           <Command>
-            <CommandInput placeholder="Tìm loại xe…" />
+            <CommandInput placeholder="Tìm biển số, tên xe…" />
             <CommandList>
-              <CommandEmpty>Không tìm thấy loại xe.</CommandEmpty>
+              <CommandEmpty>Không tìm thấy xe.</CommandEmpty>
               <CommandGroup>
                 {vehicles.map((v) => (
                   <CommandItem
                     key={v.id}
-                    value={`${v.name} ${v.group}`}
+                    value={`${v.plate} ${v.name} ${v.group}`}
                     onSelect={() => {
                       onChange(v);
                       setOpen(false);
@@ -106,7 +106,7 @@ export function VehicleSelector({
       {selected && (
         <div
           className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm"
-          title={`Nhóm phí: ${vehicleTollClass(selected)} · lấy từ danh mục loại xe`}
+          title={`Nhóm phí: ${vehicleTollClass(selected)} · lấy từ Vehicle Master`}
         >
           <Info className="h-4 w-4 shrink-0 text-primary" />
           <span>{selected.group}</span>

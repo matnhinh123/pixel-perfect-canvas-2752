@@ -9,6 +9,15 @@ const loc = (
   lng: number,
 ): LocationRecord => ({ id, name, address, province, lat, lng });
 
+const coded = (
+  code: string,
+  name: string,
+  address: string,
+  province: string,
+  lat: number,
+  lng: number,
+): LocationRecord => ({ ...loc(`LOC-${code}`, name, address, province, lat, lng), code });
+
 /** Location master data (real-world coordinates, used by autocomplete, the mock provider and import checks). */
 export const LOCATIONS: LocationRecord[] = [
   // TP. Hồ Chí Minh
@@ -89,6 +98,96 @@ export const LOCATIONS: LocationRecord[] = [
   loc("LOC-HAIDUONG", "Hải Dương", "TP. Hải Dương, Hải Dương", "Hải Dương", 20.9373, 106.3146),
   loc("LOC-HAIPHONG", "Hải Phòng", "Quận Hồng Bàng, Hải Phòng", "Hải Phòng", 20.8449, 106.6881),
   loc("LOC-DINHVU", "Cảng Đình Vũ", "Quận Hải An, Hải Phòng", "Hải Phòng", 20.8379, 106.7737),
+  // Địa điểm có mã (port / KCX / nông trường) — toạ độ ước lượng theo vị trí thực tế
+  coded(
+    "DKCBF",
+    "Nông Trường Cư Bao",
+    "Phường Cư Bao, TX. Buôn Hồ, Đắk Lắk",
+    "Đắk Lắk",
+    12.939,
+    108.258,
+  ),
+  coded(
+    "DLVBW",
+    "Vụ Bồn, Đak Lăk",
+    "Xã Vụ Bổn, Huyện Krông Pắc, Đắk Lắk",
+    "Đắk Lắk",
+    12.63,
+    108.28,
+  ),
+  coded(
+    "VTXMW",
+    "Xuyên Mộc, Vũng Tàu",
+    "Huyện Xuyên Mộc, Bà Rịa - Vũng Tàu",
+    "Bà Rịa - Vũng Tàu",
+    10.5413,
+    107.3996,
+  ),
+  coded("VNTTI", "KCX Tân Thuận", "Quận 7, TP. Hồ Chí Minh", "TP. Hồ Chí Minh", 10.7457, 106.7295),
+  coded(
+    "VNCPH",
+    "Cảng Cẩm Phả (Cam Pha)",
+    "TP. Cẩm Phả, Quảng Ninh",
+    "Quảng Ninh",
+    21.015,
+    107.345,
+  ),
+  coded(
+    "VNVUT",
+    "Hoa Lư - Cái Mép",
+    "TX. Phú Mỹ, Bà Rịa - Vũng Tàu",
+    "Bà Rịa - Vũng Tàu",
+    10.529,
+    107.03,
+  ),
+  coded(
+    "VNCVE",
+    "Cảng Chùa Vẽ (Chua Ve Terminal)",
+    "Quận Ngô Quyền, Hải Phòng",
+    "Hải Phòng",
+    20.853,
+    106.713,
+  ),
+  coded(
+    "VNBNO",
+    "Cảng Ba Ngòi / Cam Ranh",
+    "TP. Cam Ranh, Khánh Hòa",
+    "Khánh Hòa",
+    11.993,
+    109.195,
+  ),
+  coded(
+    "VNCLI",
+    "Tan Cang Cat Lai Port",
+    "TP. Thủ Đức, TP. Hồ Chí Minh",
+    "TP. Hồ Chí Minh",
+    10.7704,
+    106.7858,
+  ),
+  coded(
+    "VNCLN",
+    "Cảng Quảng Ninh / Cái Lân",
+    "TP. Hạ Long, Quảng Ninh",
+    "Quảng Ninh",
+    20.961,
+    107.062,
+  ),
+  coded(
+    "VNSGN",
+    "Cảng TP. Hồ Chí Minh (Saigon Port)",
+    "Quận 4, TP. Hồ Chí Minh",
+    "TP. Hồ Chí Minh",
+    10.768,
+    106.708,
+  ),
+  coded(
+    "VNNGH",
+    "Cảng Nghi Sơn (Nghi Son)",
+    "Khu KT Nghi Sơn, Thanh Hóa",
+    "Thanh Hóa",
+    19.334,
+    105.774,
+  ),
 ];
 
 export const findLocation = (id: string | undefined) =>
@@ -97,6 +196,9 @@ export const findLocation = (id: string | undefined) =>
 export const findLocationByName = (name: string) => {
   const n = name.trim().toLowerCase();
   return LOCATIONS.find(
-    (l) => l.name.toLowerCase() === n || `${l.name}, ${l.address}`.toLowerCase() === n,
+    (l) =>
+      l.code?.toLowerCase() === n ||
+      l.name.toLowerCase() === n ||
+      `${l.name}, ${l.address}`.toLowerCase() === n,
   );
 };
