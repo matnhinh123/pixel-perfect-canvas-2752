@@ -118,14 +118,14 @@ const ServiceIdRoute = ServiceIdRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const TollStationIndexRoute = TollStationIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => TollStationRoute,
+  id: '/toll-station/',
+  path: '/toll-station/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const TollStationIdRoute = TollStationIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => TollStationRoute,
+  id: '/toll-station/$id',
+  path: '/toll-station/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const VehicleIndexRoute = VehicleIndexRouteImport.update({
   id: '/vehicle/',
@@ -304,12 +304,14 @@ export interface RootRouteChildren {
   LocationIdRoute: typeof LocationIdRoute
   RoutingIdRoute: typeof RoutingIdRoute
   ServiceIdRoute: typeof ServiceIdRoute
+  TollStationIdRoute: typeof TollStationIdRoute
   VehicleIdRoute: typeof VehicleIdRoute
   BusinessPartnerIndexRoute: typeof BusinessPartnerIndexRoute
   CostIndexRoute: typeof CostIndexRoute
   LocationIndexRoute: typeof LocationIndexRoute
   RoutingIndexRoute: typeof RoutingIndexRoute
   ServiceIndexRoute: typeof ServiceIndexRoute
+  TollStationIndexRoute: typeof TollStationIndexRoute
   VehicleIndexRoute: typeof VehicleIndexRoute
   ApiVietmapSplatRoute: typeof ApiVietmapSplatRoute
 }
@@ -437,17 +439,17 @@ declare module '@tanstack/react-router' {
     }
     '/toll-station/': {
       id: '/toll-station/'
-      path: '/'
+      path: '/toll-station'
       fullPath: '/toll-station/'
       preLoaderRoute: typeof TollStationIndexRouteImport
-      parentRoute: typeof TollStationRoute
+      parentRoute: typeof rootRouteImport
     }
     '/toll-station/$id': {
       id: '/toll-station/$id'
-      path: '/$id'
+      path: '/toll-station/$id'
       fullPath: '/toll-station/$id'
       preLoaderRoute: typeof TollStationIdRouteImport
-      parentRoute: typeof TollStationRoute
+      parentRoute: typeof rootRouteImport
     }
     '/vehicle/': {
       id: '/vehicle/'
@@ -486,12 +488,14 @@ const rootRouteChildren: RootRouteChildren = {
   LocationIdRoute: LocationIdRoute,
   RoutingIdRoute: RoutingIdRoute,
   ServiceIdRoute: ServiceIdRoute,
+  TollStationIdRoute: TollStationIdRoute,
   VehicleIdRoute: VehicleIdRoute,
   BusinessPartnerIndexRoute: BusinessPartnerIndexRoute,
   CostIndexRoute: CostIndexRoute,
   LocationIndexRoute: LocationIndexRoute,
   RoutingIndexRoute: RoutingIndexRoute,
   ServiceIndexRoute: ServiceIndexRoute,
+  TollStationIndexRoute: TollStationIndexRoute,
   VehicleIndexRoute: VehicleIndexRoute,
   ApiVietmapSplatRoute: ApiVietmapSplatRoute,
 }

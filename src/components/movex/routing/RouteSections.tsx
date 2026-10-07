@@ -52,11 +52,11 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
 // ---------- Stop list ----------
 /** Column widths of the stop list; the Route Detail bar above it uses the same grid. */
 export const STOP_COLUMNS = [
-  ["No.", "10%"],
-  ["Location", "18%"],
-  ["Loc-Code", "24%"],
-  ["Loc-Name", "38%"],
-  ["Actions", "10%"],
+  ["No.", "6%"],
+  ["Location", "16%"],
+  ["Loc-Code", "22%"],
+  ["Loc-Name", "48%"],
+  ["Actions", "8%"],
 ] as const;
 type StopKind = "origin" | "stop" | "destination";
 
