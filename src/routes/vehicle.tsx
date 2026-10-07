@@ -30,7 +30,7 @@ const metaFor = (
 > => ({
   "Van / Pickup": {
     code: "VG-VAN",
-    profile: "Car",
+    profile: "Truck",
     capacity: t("< 2 tấn", "< 2 t"),
     tollClass: t("Nhóm 1", "Class 1"),
   },

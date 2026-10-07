@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -18,17 +17,15 @@ export interface TollRow {
   station: TollStation;
 }
 
-/** Tolls of the selected route (+ return leg). The fee per pass can be edited. */
+/** Tolls of the selected route (+ return leg). Fees are in View Details. */
 export function TollStationTable({
   rows,
   showLeg,
   calculated,
-  onPriceChange,
 }: {
   rows: TollRow[];
   showLeg?: boolean;
   calculated: boolean;
-  onPriceChange: (row: TollRow, price: number) => void;
 }) {
   if (rows.length === 0)
     return (
@@ -42,19 +39,13 @@ export function TollStationTable({
       />
     );
 
-  const headers = ["#", "Toll Code", "Toll Name", "Location", "Fee (₫)"];
+  const headers = ["#", "Toll Code", "Toll Name", "Location"];
   return (
-    <Table>
+    <Table className="text-xs">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           {headers.map((h) => (
-            <TableHead
-              key={h}
-              className={cn(
-                "h-9 text-sm font-semibold text-foreground",
-                h === "Fee (₫)" && "text-right",
-              )}
-            >
+            <TableHead key={h} className={cn("h-8 text-xs font-semibold text-foreground")}>
               {h}
             </TableHead>
           ))}
@@ -65,8 +56,8 @@ export function TollStationTable({
           const t = r.station;
           return (
             <TableRow key={r.key}>
-              <TableCell className="w-10 py-2 text-center">{i + 1}</TableCell>
-              <TableCell className="py-2">
+              <TableCell className="w-10 py-1.5 text-center">{i + 1}</TableCell>
+              <TableCell className="py-1.5">
                 {t.code ? (
                   <Link
                     to="/toll-station"
@@ -79,7 +70,7 @@ export function TollStationTable({
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
-              <TableCell className="py-2">
+              <TableCell className="py-1.5">
                 {t.name}
                 {showLeg && (
                   <span className="ml-2 align-middle">
@@ -87,21 +78,7 @@ export function TollStationTable({
                   </span>
                 )}
               </TableCell>
-              <TableCell className="py-2 text-muted-foreground">{t.address || "—"}</TableCell>
-              <TableCell className="w-36 py-1.5">
-                <Input
-                  type="number"
-                  min={0}
-                  step={1000}
-                  aria-label={`Fee of ${t.name}`}
-                  value={Number.isFinite(t.price) ? t.price : ""}
-                  onChange={(e) => {
-                    const v = e.target.value === "" ? 0 : Number(e.target.value);
-                    if (Number.isFinite(v) && v >= 0) onPriceChange(r, v);
-                  }}
-                  className="h-8 text-right font-medium"
-                />
-              </TableCell>
+              <TableCell className="py-1.5 text-muted-foreground">{t.address || "—"}</TableCell>
             </TableRow>
           );
         })}

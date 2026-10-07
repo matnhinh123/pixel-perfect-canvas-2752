@@ -3,7 +3,7 @@
 // (Route v3 / Route Tolls / v1.1 are deprecated — not used).
 import type { LocationSuggestion, RouteCalculation, RouteRequest, TollStation } from "@/types";
 import { bboxOf, decodePolyline, pointAlong } from "./geo";
-import { inferFeeType, tollClassIndex, tollClassLabel } from "./RouteProvider";
+import { inferFeeType, requestTollClass, tollClassLabel } from "./RouteProvider";
 
 export interface VietmapToll {
   id?: number | string;
@@ -93,7 +93,7 @@ export function normalizeVietmapRoute(
   if (!path)
     throw new Error(res.messages || `Vietmap returned no route (${res.code ?? "ZERO_RESULTS"})`);
   const geometry = toLatLngGeometry(path.points, path.points_encoded);
-  const cls = tollClassIndex(req.vehicle, req.capacityKg);
+  const cls = requestTollClass(req);
   const tolls = path.tolls ?? [];
   const tollStations: TollStation[] = tolls.map((t, i) => {
     // Vietmap v4 does not return toll coordinates — spread markers along the path and flag them as approximate.

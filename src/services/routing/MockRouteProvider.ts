@@ -99,7 +99,7 @@ export function computeMockRoutes(
       ),
     );
   }
-  const cls = tollClassIndex(req.vehicle, capacity);
+  const cls = req.tollClass ?? tollClassIndex(req.vehicle, capacity);
   if (cls === null)
     baseWarnings.push(
       tr(

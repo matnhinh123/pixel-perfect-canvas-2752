@@ -1,10 +1,6 @@
 import { VEHICLE_PROFILES, type RouteRecord, type RoutePoint, type VehicleProfile } from "@/types";
 import { costRepository, routeRepository, uid } from "@/repositories";
-import {
-  activeLocations,
-  allLocations,
-  findLocationByName,
-} from "@/services/routing/locationStore";
+import { activeLocations, findLocationByName } from "@/services/routing/locationStore";
 import { findVehicle, routeVehicleFields, vehicleLabel, VEHICLES } from "@/mock-data/vehicles";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -29,21 +25,6 @@ export const routeCrud = makeCrud<RouteRecord>({
     return n ? `is currently referenced by ${n} Cost record${n > 1 ? "s" : ""}` : null;
   },
 });
-
-/** Location code of a stop: the master code, else the master id without "LOC-", else "VIA" (dragged point). */
-const stopCode = (p: RoutePoint) => {
-  const l = allLocations().find((x) => x.id === p.locationId);
-  return l ? (l.code ?? l.id.replace(/^LOC-/, "")) : p.name ? "VIA" : "";
-};
-
-/** Auto route code: origin - waypoints (in order) - destination; "" until origin and destination are picked. */
-export const routeCodeOf = (seq: RoutePoint[]) => {
-  const codes = seq.map(stopCode);
-  const first = codes[0];
-  const lastCode = codes[codes.length - 1];
-  if (!first || !lastCode) return "";
-  return codes.filter(Boolean).join("-");
-};
 
 export const emptyPoint = (): RoutePoint => ({ name: "", lat: NaN, lng: NaN });
 
@@ -230,13 +211,6 @@ export const routeService = {
     return next;
   },
 };
-
-/** Route Type was removed from the UI: older Round Trip records become Single Trip (run once on load). */
-export function migrateRoutesToSingleTrip() {
-  for (const r of routeRepository.all())
-    if (r.type === "Round Trip")
-      routeRepository.update(r.id, (p) => ({ ...p, type: "Single Trip" }));
-}
 
 // ---------- Import config ----------
 export const routeImportConfig: ImportEntityConfig = {

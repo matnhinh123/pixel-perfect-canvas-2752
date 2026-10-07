@@ -6,7 +6,6 @@ import "leaflet/dist/leaflet.css";
 import type * as Leaflet from "leaflet";
 import { Layers, Loader2 } from "lucide-react";
 import type { RoutePoint, TollStation } from "@/types";
-import { formatVnd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export interface MapToll extends TollStation {
@@ -336,11 +335,11 @@ export function RouteMapPanel({
           className: "",
           iconSize: [18, 18],
           iconAnchor: [9, 9],
-          html: `<div style="width:18px;height:18px;border-radius:5px;background:#f59e0b;border:2px solid white;box-shadow:0 1px 2px rgba(0,0,0,.3);color:white;font:700 10px Inter,sans-serif;display:flex;align-items:center;justify-content:center">₫</div>`,
+          html: `<div style="width:18px;height:18px;border-radius:5px;background:#f59e0b;border:2px solid white;box-shadow:0 1px 2px rgba(0,0,0,.3);color:white;font:700 10px Inter,sans-serif;display:flex;align-items:center;justify-content:center">T</div>`,
         }),
       })
         .bindTooltip(
-          `<b>${esc(t.code ? `${t.code} · ` : "")}${esc(t.name)}</b><br/>${t.leg === "Outbound" ? "Outbound" : "Return Trip"} · ${t.vehicleTollGroup} · ${formatVnd(t.price)}${t.positionApproximate ? "<br/><i>approximate position</i>" : ""}`,
+          `<b>${esc(t.code ? `${t.code} · ` : "")}${esc(t.name)}</b><br/>${t.leg === "Outbound" ? "Outbound" : "Return Trip"} · ${t.vehicleTollGroup}${t.positionApproximate ? "<br/><i>approximate position</i>" : ""}`,
           { direction: "top" },
         )
         .addTo(layer);

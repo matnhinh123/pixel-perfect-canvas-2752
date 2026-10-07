@@ -1,6 +1,5 @@
 import type { RouteCalculation } from "@/types";
-import { stationsTotal } from "@/services/cost/costMath";
-import { formatDuration, formatVnd } from "@/lib/format";
+import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Providers label alternatives in Vietnamese ("Tuyến n"); this screen shows them in English.
@@ -66,8 +65,7 @@ export function RouteAlternativeSelector({
                 )}
               </span>
               <span className="block truncate text-xs text-muted-foreground">
-                {a.distance} km · {formatDuration(a.estimatedTime)} ·{" "}
-                {formatVnd(stationsTotal(a.tollStations))}
+                {a.distance} km · {formatDuration(a.estimatedTime)}
               </span>
             </span>
           </button>

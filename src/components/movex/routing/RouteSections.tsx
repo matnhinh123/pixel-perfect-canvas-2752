@@ -50,6 +50,14 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
 };
 
 // ---------- Stop list ----------
+/** Column widths of the stop list; the Route Detail bar above it uses the same grid. */
+export const STOP_COLUMNS = [
+  ["No.", "10%"],
+  ["Location", "18%"],
+  ["Loc-Code", "24%"],
+  ["Loc-Name", "38%"],
+  ["Actions", "10%"],
+] as const;
 type StopKind = "origin" | "stop" | "destination";
 
 export function StopBadge({ kind, index }: { kind: StopKind; index: number }) {
@@ -104,6 +112,7 @@ export function StopList({
   locations,
   errors,
   lockEndpoints,
+  returnPoint,
 }: {
   seq: RoutePoint[];
   onChange: (seq: RoutePoint[]) => void;
@@ -114,6 +123,8 @@ export function StopList({
     waypoints?: string | undefined;
   };
   lockEndpoints?: boolean;
+  /** Round trip: a last, read-only "Return" row that always mirrors the Departure. */
+  returnPoint?: RoutePoint | undefined;
 }) {
   const [armed, setArmed] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -139,21 +150,15 @@ export function StopList({
     <Table className="table-fixed">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          {(
-            [
-              ["No.", "10%"],
-              ["Type", "18%"],
-              ["Location Code", "24%"],
-              ["Location", "38%"],
-              ["Actions", "10%"],
-            ] as const
-          ).map(([h, w], i) => (
+          {STOP_COLUMNS.map(([h, w], i) => (
             <TableHead
               key={i}
               style={{ width: w }}
               className={cn(
                 "h-10 text-sm font-semibold text-foreground",
                 (i === 0 || i === 4) && "text-center",
+                // Line up with the text inside the cells (select / input start 17px in).
+                (i === 1 || i === 2) && "pl-[17px]",
               )}
             >
               {h}
@@ -209,15 +214,15 @@ export function StopList({
               <TableCell className="py-1.5">
                 {/* First / last rows are always Departure / Destination. */}
                 {kind === "origin" ? (
-                  <span className="px-2 text-sm">Departure</span>
+                  <span className="px-[9px] text-sm">Departure</span>
                 ) : kind === "destination" ? (
-                  <span className="px-2 text-sm">Destination</span>
+                  <span className="px-[9px] text-sm">Destination</span>
                 ) : (
                   <NativeSelect
                     value={stopTypeOf(p)}
                     onChange={(v) => update(i, { ...p, stopType: v })}
                     options={STOP_TYPES}
-                    className="h-8 w-full"
+                    className="h-8 w-full px-2"
                   />
                 )}
               </TableCell>
@@ -318,6 +323,22 @@ export function StopList({
             </TableRow>
           );
         })}
+        {returnPoint && (
+          <TableRow className="bg-muted/30 hover:bg-muted/30">
+            <TableCell className="text-center text-muted-foreground">{seq.length + 1}</TableCell>
+            <TableCell className="pl-[17px] text-sm">Return</TableCell>
+            <TableCell className="pl-[17px] text-sm text-muted-foreground">
+              {locations.find((l) => l.id === returnPoint.locationId)?.code ?? "—"}
+            </TableCell>
+            <TableCell className="py-1.5">
+              <span className="flex items-center gap-2" title="Same as Departure">
+                <StopBadge kind="origin" index={0} />
+                <span className="truncate px-2 text-sm">{returnPoint.name || "—"}</span>
+              </span>
+            </TableCell>
+            <TableCell className="text-center text-muted-foreground">—</TableCell>
+          </TableRow>
+        )}
       </TableBody>
     </Table>
   );

@@ -21,7 +21,6 @@ import {
   tollStationService,
   validateTollStation,
 } from "@/services/tollStationService";
-import { formatVnd } from "@/lib/format";
 import type { TollStation } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -101,7 +100,7 @@ function AddTollBody({
   const [leg, setLeg] = useState<TollLeg>(legs[0] ?? "Outbound");
   const [q, setQ] = useState("");
   const [pick, setPick] = useState<string | null>(null);
-  const [d, setD] = useState({ code: "", name: "", location: "", fee: "" });
+  const [d, setD] = useState({ code: "", name: "", location: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const gates = useMemo(() => activeTollGates(), []);
@@ -116,16 +115,13 @@ function AddTollBody({
   };
 
   const addNew = () => {
-    const fee = Number(d.fee);
     const draft = {
       ...newTollStationDraft(),
       code: d.code,
       name: d.name,
       province: d.location.trim(),
-      prices: [fee, fee, fee, fee, fee] as TollGateRecord["prices"],
     };
     const e = validateTollStation(draft, undefined, { requireCoords: false });
-    if (d.fee.trim() === "" || !Number.isFinite(fee) || fee < 0) e["fee"] = "Enter a fee ≥ 0.";
     if (e["code"])
       e["code"] = d.code.trim()
         ? `Toll Code ${d.code.trim().toUpperCase()} already exists.`
@@ -145,9 +141,7 @@ function AddTollBody({
     <>
       <DialogHeader>
         <DialogTitle>Add Toll</DialogTitle>
-        <DialogDescription>
-          Pick a toll from Toll Station, or enter a new one. Fee for {tollClassLabel(tollClass)}.
-        </DialogDescription>
+        <DialogDescription>Pick a toll from Toll Station, or enter a new one.</DialogDescription>
       </DialogHeader>
       {legs.length > 1 && (
         <Field label="Add to">
@@ -200,7 +194,6 @@ function AddTollBody({
                       {[g.road, g.province].filter(Boolean).join(" · ") || "—"}
                     </span>
                   </span>
-                  <span className="font-medium">{formatVnd(g.prices[tollClass] ?? 0)}</span>
                   {added ? (
                     <span className="text-xs text-muted-foreground">Added</span>
                   ) : (
@@ -229,24 +222,15 @@ function AddTollBody({
                 onChange={(e) => setD({ ...d, code: e.target.value.toUpperCase() })}
               />
             </Field>
-            <Field label="Fee (₫)" required error={errors["fee"]}>
-              <Input
-                type="number"
-                min={0}
-                step={1000}
-                value={d.fee}
-                onChange={(e) => setD({ ...d, fee: e.target.value })}
-              />
-            </Field>
-            <Field label="Toll Name" required error={errors["name"]} className="col-span-2">
-              <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
-            </Field>
-            <Field label="Location" className="col-span-2">
+            <Field label="Location">
               <Input
                 value={d.location}
                 placeholder="e.g. Đồng Nai"
                 onChange={(e) => setD({ ...d, location: e.target.value })}
               />
+            </Field>
+            <Field label="Toll Name" required error={errors["name"]} className="col-span-2">
+              <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
             </Field>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">

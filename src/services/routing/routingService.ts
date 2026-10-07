@@ -12,7 +12,7 @@ import { findVehicle } from "@/mock-data/vehicles";
 import { activeTollGates } from "@/services/routing/tollGates";
 import { MockRouteProvider } from "./MockRouteProvider";
 import type { RouteProvider } from "./RouteProvider";
-import { RouteProviderError } from "./RouteProvider";
+import { RouteProviderError, VEHICLE_CLASSES } from "./RouteProvider";
 import { isVietmapConfigured, VietmapRouteProvider } from "./VietmapRouteProvider";
 import { normalizeText } from "./locationSearch";
 import { ValhallaRouteProvider } from "./ValhallaRouteProvider";
@@ -38,6 +38,7 @@ type CalcInput = Pick<
   | "waypoints"
   | "returnMode"
   | "returnWaypoints"
+  | "vehicleClass"
   | "returnStart"
   | "returnEnd"
   | "vehicleId"
@@ -62,11 +63,17 @@ const toRequest = (points: RoutePoint[], r: CalcInput): RouteRequest => {
   const v = findVehicle(r.vehicleId);
   // The route-level profile (travel-mode tabs on the map) wins over the vehicle's default one.
   const vehicle = r.vehicleProfile ?? v?.profile;
-  const kg = v?.weightKg ?? r.capacityKg;
+  // A vehicle class picked on the route map sets the weight Vietmap prices by, and the toll class.
+  const picked =
+    r.vehicleClass && (vehicle === "Truck" || vehicle === "Container")
+      ? VEHICLE_CLASSES[vehicle].find((c) => c.cls === r.vehicleClass)
+      : undefined;
+  const kg = picked?.kg ?? v?.weightKg ?? r.capacityKg;
   return {
     points: points.map((p) => ({ lat: p.lat, lng: p.lng, name: p.name })),
     vehicle,
     ...(profileNeedsCapacity(vehicle) && kg ? { capacityKg: kg } : {}),
+    ...(picked ? { tollClass: picked.cls - 1 } : {}),
     avoidFerry: r.avoidFerry,
     ...(r.departureTime ? { departureTime: r.departureTime } : {}),
   };

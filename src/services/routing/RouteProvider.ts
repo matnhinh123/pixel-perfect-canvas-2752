@@ -53,6 +53,44 @@ export function tollClassIndex(profile: VehicleProfile, capacityKg?: number): nu
 export const tollClassLabel = (idx: number | null) =>
   idx === null ? "—" : tr(`Nhóm ${idx + 1}`, `Class ${idx + 1}`);
 
+/**
+ * Vietnamese toll vehicle classes (Nhóm 1..5) — Vietmap prices tolls by vehicle + gross weight, so each
+ * class carries a representative weight inside its bracket. Truck: 1–5, Container: 3–5.
+ */
+export const VEHICLE_CLASSES: Record<
+  "Truck" | "Container",
+  { cls: number; kg: number; desc: string }[]
+> = {
+  Truck: [
+    { cls: 1, kg: 1500, desc: "Truck < 2 t" },
+    { cls: 2, kg: 3000, desc: "Truck < 4 t" },
+    { cls: 3, kg: 8000, desc: "Truck < 10 t" },
+    { cls: 4, kg: 15000, desc: "Truck < 18 t" },
+    { cls: 5, kg: 20000, desc: "Truck ≥ 18 t" },
+  ],
+  Container: [
+    { cls: 3, kg: 9000, desc: "Tractor, not towing a container" },
+    { cls: 4, kg: 20000, desc: "Container ≤ 20 ft" },
+    { cls: 5, kg: 30000, desc: "Container > 20 ft" },
+  ],
+};
+
+/** Class (1..5) to show for a profile: the chosen one if valid, else the one the weight implies. */
+export function vehicleClassFor(
+  profile: VehicleProfile,
+  chosen: number | undefined,
+  capacityKg?: number,
+): number {
+  const list = profile === "Container" ? VEHICLE_CLASSES.Container : VEHICLE_CLASSES.Truck;
+  if (chosen && list.some((c) => c.cls === chosen)) return chosen;
+  const derived = (tollClassIndex(profile, capacityKg) ?? 0) + 1;
+  return Math.min(Math.max(derived, list[0]!.cls), list[list.length - 1]!.cls);
+}
+
+/** Toll class index used to price a request: explicit class first, else derived from weight. */
+export const requestTollClass = (req: Pick<RouteRequest, "vehicle" | "capacityKg" | "tollClass">) =>
+  req.tollClass ?? tollClassIndex(req.vehicle, req.capacityKg);
+
 /** Map MoveX profile to the Vietmap Route v4 `vehicle` parameter. */
 export const vietmapVehicle = (p: VehicleProfile) =>
   p.toLowerCase() as "car" | "motorcycle" | "truck" | "container";

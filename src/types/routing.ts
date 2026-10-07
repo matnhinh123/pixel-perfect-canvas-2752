@@ -124,6 +124,8 @@ export interface RouteRequest {
   points: (GeoPoint & { name?: string })[];
   vehicle: VehicleProfile;
   capacityKg?: number | undefined;
+  /** Toll class index 0..4 (Nhóm 1..5) chosen by the user; wins over the class derived from weight. */
+  tollClass?: number;
   avoidFerry?: boolean;
   /** Local date-time "YYYY-MM-DDTHH:mm". */
   departureTime?: string;
@@ -173,6 +175,8 @@ export interface RouteRecord extends BaseRecord {
   outbound: RouteCalculation | null;
   returnMode: "auto" | "custom";
   returnWaypoints: RoutePoint[];
+  /** Vehicle class 1..5 picked on the route map (Truck 1–5, Container 3–5). */
+  vehicleClass?: number;
   /** Custom return route only: start / end when they differ from the outbound destination / origin. */
   returnStart?: RoutePoint;
   returnEnd?: RoutePoint;

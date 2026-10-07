@@ -10,7 +10,7 @@ import type {
 import { bboxOf, decodePolyline, nearestVertex } from "./geo";
 import {
   RouteProviderError,
-  tollClassIndex,
+  requestTollClass,
   tollClassLabel,
   type RouteProvider,
 } from "./RouteProvider";
@@ -122,7 +122,7 @@ export class ValhallaRouteProvider implements RouteProvider {
         });
     }
     const distance = Math.round(trip.summary.length * 10) / 10;
-    const cls = tollClassIndex(req.vehicle, req.capacityKg);
+    const cls = requestTollClass(req);
     const tollStations: TollStation[] =
       cls === null
         ? []

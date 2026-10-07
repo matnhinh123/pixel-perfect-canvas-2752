@@ -1,15 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  Container,
-  History,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Truck,
-  XCircle,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, History, List, Loader2, Plus, RefreshCw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,19 +13,20 @@ import {
   FormPageHeader,
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
-import { StopList } from "@/components/movex/routing/RouteSections";
+import { STOP_COLUMNS, StopList } from "@/components/movex/routing/RouteSections";
 import {
   altTitle,
   RouteAlternativeSelector,
 } from "@/components/movex/routing/RouteAlternativeSelector";
 import { TollStationTable, type TollRow } from "@/components/movex/routing/TollStationTable";
 import { AddTollDialog, type TollLeg } from "@/components/movex/routing/AddTollDialog";
-import { tollClassIndex } from "@/services/routing/RouteProvider";
+import { TollDetailsSheet } from "@/components/movex/routing/TollDetailsSheet";
+import { vehicleClassFor } from "@/services/routing/RouteProvider";
+import { VehicleClassPicker } from "@/components/movex/routing/VehicleClassPicker";
 import { useCollection } from "@/hooks/use-store";
 import {
   emptyPoint,
   newRouteDraft,
-  routeCodeOf,
   routeService,
   validateRoute,
   type RouteAuditAction,
@@ -49,9 +41,8 @@ import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import { routeLegs, routeTotals } from "@/services/cost/costMath";
 import { locationRepository, routeRepository } from "@/repositories";
-import { formatDuration, formatVnd } from "@/lib/format";
+import { formatDuration } from "@/lib/format";
 import {
-  VEHICLE_PROFILES,
   type RouteCalculation,
   type TollStation,
   type RoutePoint,
@@ -108,8 +99,6 @@ const normalize = (r: RouteRecord): RouteRecord => ({
   ...r,
   // Routes are only Active / Inactive; legacy "Draft" records count as Inactive.
   status: r.status === "Active" ? "Active" : "Inactive",
-  // Route Type was removed from the UI: every route is a single trip.
-  type: "Single Trip",
   alternatives: r.alternatives ?? (r.outbound ? [r.outbound] : []),
   selectedRouteId: r.selectedRouteId ?? r.outbound?.id ?? null,
   // Same route reversed = the outbound leg driven back (records saved before were re-routed B → A).
@@ -122,6 +111,7 @@ const calcSig = (r: RouteRecord) =>
     r.returnMode,
     r.vehicleId,
     r.vehicleProfile,
+    r.vehicleClass,
     r.terrain,
     r.departureTime,
     r.avoidFerry,
@@ -157,6 +147,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const [auditOpen, setAuditOpen] = useState(false);
   const locationsAll = useCollection(locationRepository);
   const [addTollOpen, setAddTollOpen] = useState(false);
+  const [tollDetailsOpen, setTollDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   /** Editor actions (recalculate, pick alternative) written to the audit trail on Save. */
   const [pending, setPending] = useState<RouteAuditAction[]>([]);
@@ -198,15 +189,6 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   };
   const addStop = () => setSequence([...seq.slice(0, -1), emptyPoint(), seq[seq.length - 1]!]);
 
-  // Route code = location codes joined by "-" (origin - stops… - destination), kept in sync with the stops.
-  const generatedCode = routeCodeOf(seq);
-  const lastCodeSig = useRef(generatedCode);
-  useEffect(() => {
-    if (generatedCode === lastCodeSig.current) return;
-    lastCodeSig.current = generatedCode;
-    setR((p) => ({ ...p, code: generatedCode }));
-  }, [generatedCode]);
-
   const totals = routeTotals(r);
   // Distance: calculated from the route, or typed by the user (kept until the next recalculation).
   const { distanceOverrides: _ov, ...noOverride } = r;
@@ -244,6 +226,21 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   };
   const { outbound, ret } = routeLegs(r);
   const round = r.type === "Round Trip";
+  /** Round trip = outbound + the same route driven back to the Departure (no recalculation needed). */
+  const changeRouteType = (type: RouteType) => {
+    if (type === r.type) return;
+    setPending((q) => [
+      ...q,
+      { action: "CHANGE_ROUTE_TYPE", field: "Route Type", oldValue: r.type, newValue: type },
+    ]);
+    setR((p) => ({
+      ...p,
+      type,
+      ...(type === "Round Trip"
+        ? { returnMode: "auto" as const, returnLeg: p.outbound ? reverseLeg(p.outbound) : null }
+        : {}),
+    }));
+  };
   const stale = !!r.outbound && lastSig !== calcSig(r);
   const inputError = validateRouteInput(r);
   const loading = calcState === "loading";
@@ -296,17 +293,19 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   };
 
   /** Google-Maps-style travel mode: switch the routing profile and re-route when the inputs are complete. */
-  const changeProfile = (profile: VehicleProfile) => {
-    if (profile === r.vehicleProfile) return;
-    const next = { ...r, vehicleProfile: profile };
+  /** Truck (class 1–5) / Container (class 3–5): sets the toll class Vietmap prices by, then re-routes. */
+  const vehicleClass = vehicleClassFor(r.vehicleProfile, r.vehicleClass, r.capacityKg);
+  const changeVehicle = (profile: VehicleProfile, cls: number) => {
+    if (profile === r.vehicleProfile && cls === vehicleClass) return;
+    const next = { ...r, vehicleProfile: profile, vehicleClass: cls };
     setR(next);
     setPending((q) => [
       ...q,
       {
         action: "CHANGE_VEHICLE",
-        field: "Vehicle Profile",
-        oldValue: PROFILE_LABEL[r.vehicleProfile],
-        newValue: PROFILE_LABEL[profile],
+        field: "Vehicle Group",
+        oldValue: `${PROFILE_LABEL[r.vehicleProfile]} · Group ${vehicleClass}`,
+        newValue: `${PROFILE_LABEL[profile]} · Group ${cls}`,
       },
     ]);
     if (r.outbound && !validateRouteInput(next)) void calculate(next);
@@ -374,7 +373,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
         field: "Selected Route",
         oldValue: altName(r.alternatives, r.selectedRouteId),
         newValue: altName(r.alternatives, id),
-        note: `${alt.distance} km · toll ${formatVnd(alt.tollCost)}`,
+        note: `${alt.distance} km`,
       },
     ]);
     setR((p) => ({
@@ -413,43 +412,11 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       {
         action: "UPDATE",
         field: "Tolls",
-        newValue: `+ ${toll.code ?? ""} ${toll.name} (${formatVnd(toll.price)})`.trim(),
+        newValue: `+ ${toll.code ?? ""} ${toll.name}`.trim(),
         note: leg === "Return" ? "Return Trip" : "Outbound",
       },
     ]);
     toast.success(`Added toll ${toll.name}`);
-  };
-
-  /** Edit a toll fee. Same route reversed: one toll, one price — both legs follow the outbound. */
-  const changeTollPrice = (row: TollRow, price: number) => {
-    const reprice = (c: RouteCalculation): RouteCalculation => {
-      const tollStations = c.tollStations.map((t) =>
-        t.id === row.station.id ? { ...t, price } : t,
-      );
-      return {
-        ...c,
-        tollStations,
-        tollCost: tollStations.reduce((n, t) => n + t.price * t.passCount, 0),
-      };
-    };
-    setR((p) => {
-      if (row.leg === "Return" && p.returnMode === "custom")
-        return { ...p, returnLeg: p.returnLeg && reprice(p.returnLeg) };
-      const outbound = p.outbound && reprice(p.outbound);
-      return {
-        ...p,
-        outbound,
-        alternatives: p.alternatives.map((a, j) =>
-          altId(a, j) === p.selectedRouteId ? reprice(a) : a,
-        ),
-        ...(p.returnMode !== "custom" && outbound ? { returnLeg: reverseLeg(outbound) } : {}),
-      };
-    });
-    const field = `Toll fee ${row.station.code ?? row.station.name}`;
-    setPending((q) => [
-      ...q.filter((x) => x.field !== field),
-      { action: "CHANGE_AMOUNT", field, newValue: formatVnd(price) },
-    ]);
   };
 
   const save = () => {
@@ -566,10 +533,8 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                   <Input
                     className="h-10"
                     value={r.code}
-                    readOnly
-                    title="Generated from Location Codes: origin - stops - destination"
                     onChange={(e) => set("code", e.target.value.toUpperCase())}
-                    placeholder="Generated from Location Codes"
+                    placeholder="e.g. RT-HCM-DN"
                     aria-invalid={!!errors["code"] || undefined}
                   />
                 </Field>
@@ -581,6 +546,27 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                     placeholder="e.g. HCM → Da Nang"
                     aria-invalid={!!errors["name"] || undefined}
                   />
+                </Field>
+                <Field label="Route Type">
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
+                    {(
+                      [
+                        ["Single Trip", "Single Trip"],
+                        ["Round Trip", "Round Trip"],
+                      ] as [RouteType, string][]
+                    ).map(([v, label]) => (
+                      <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
+                        <input
+                          type="radio"
+                          name="routeType"
+                          checked={r.type === v}
+                          onChange={() => changeRouteType(v)}
+                          className="h-4 w-4 accent-[var(--primary)]"
+                        />
+                        <span className={cn(r.type === v && "text-primary")}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </Field>
                 <Field label="Terrain">
                   <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
@@ -619,71 +605,75 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 </Field>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y bg-muted/40 px-4 py-2">
-              <span className="text-sm font-semibold">Route Detail</span>
-              <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <label htmlFor="route-distance" className="text-muted-foreground">
-                    Distance
-                  </label>
-                  <span className="relative">
-                    <Input
-                      id="route-distance"
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      className="h-8 w-32 bg-card pr-9 text-right font-semibold"
-                      value={
-                        kmText ??
-                        (totals.calculated || kmOverride !== undefined
-                          ? String(totals.distanceKm)
-                          : "")
-                      }
-                      placeholder="—"
-                      title={
-                        totals.calculated
-                          ? `Calculated: ${calculatedKm} km — type to adjust, clear to reset`
-                          : "Filled in by Recalculate Route; you can also type it."
-                      }
-                      onChange={(e) => setKmText(e.target.value)}
-                      onBlur={commitKm}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitKm();
-                        if (e.key === "Escape") setKmText(null);
-                      }}
-                    />
-                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                      km
-                    </span>
-                  </span>
-                  {kmOverride !== undefined && totals.calculated && (
-                    <button
-                      type="button"
-                      title={`Back to the calculated ${calculatedKm} km`}
-                      className="text-xs font-medium text-primary hover:underline"
-                      onClick={() => setDistance(null)}
-                    >
-                      Reset
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <label htmlFor="route-time" className="text-muted-foreground">
-                    Estimated Time
-                  </label>
+            {/* Same columns as the stop list: Distance over Location Code, time over Location. */}
+            <div
+              className="grid items-center border-y bg-muted/40 py-2 text-sm"
+              style={{ gridTemplateColumns: STOP_COLUMNS.map(([, w]) => w).join(" ") }}
+            >
+              <span className="col-span-2 px-4 font-semibold">Route Detail</span>
+              <div className="flex min-w-0 items-center gap-2 px-2">
+                <label htmlFor="route-distance" className="shrink-0 text-muted-foreground">
+                  Distance
+                </label>
+                <span className="relative w-28 shrink-0">
                   <Input
-                    id="route-time"
-                    readOnly
-                    className="h-8 w-28 bg-card text-right font-semibold"
-                    value={totals.calculated ? formatDuration(totals.estimatedTimeMin) : ""}
+                    id="route-distance"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className="h-8 w-full bg-card pr-9 text-right font-semibold"
+                    value={
+                      kmText ??
+                      (totals.calculated || kmOverride !== undefined
+                        ? String(totals.distanceKm)
+                        : "")
+                    }
                     placeholder="—"
-                    title="Estimated driving time of the selected route"
+                    title={
+                      totals.calculated
+                        ? `Calculated: ${calculatedKm} km — type to adjust, clear to reset`
+                        : "Filled in by Recalculate Route; you can also type it."
+                    }
+                    onChange={(e) => setKmText(e.target.value)}
+                    onBlur={commitKm}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitKm();
+                      if (e.key === "Escape") setKmText(null);
+                    }}
                   />
-                </div>
+                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    km
+                  </span>
+                </span>
+                {kmOverride !== undefined && totals.calculated && (
+                  <button
+                    type="button"
+                    title={`Back to the calculated ${calculatedKm} km`}
+                    className="shrink-0 text-xs font-medium text-primary hover:underline"
+                    onClick={() => setDistance(null)}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="flex min-w-0 items-center gap-2 px-2">
+                <label htmlFor="route-time" className="shrink-0 text-muted-foreground">
+                  Estimated Time
+                </label>
+                <Input
+                  id="route-time"
+                  readOnly
+                  className="h-8 w-28 shrink-0 bg-card font-semibold"
+                  value={totals.calculated ? formatDuration(totals.estimatedTimeMin) : ""}
+                  placeholder="—"
+                  title="Estimated driving time of the selected route"
+                />
+              </div>
+              <div className="flex justify-center px-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 border-primary/40 text-primary"
+                  className="h-8 border-primary/40 px-2.5 text-primary"
                   onClick={addStop}
                 >
                   <Plus className="h-4 w-4" />
@@ -695,6 +685,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
               seq={seq}
               onChange={setSequence}
               locations={locations}
+              returnPoint={round ? r.origin : undefined}
               errors={{
                 origin: errors["origin"],
                 destination: errors["destination"],
@@ -710,33 +701,12 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
             title="Route Map"
             bodyClassName="flex flex-col gap-3 p-4"
             actions={
-              <div
-                className="flex items-center gap-0.5 rounded-md bg-muted p-0.5"
-                aria-label="Vehicle"
-              >
-                {VEHICLE_PROFILES.map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    disabled={loading}
-                    aria-pressed={r.vehicleProfile === k}
-                    onClick={() => changeProfile(k)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors",
-                      r.vehicleProfile === k
-                        ? "bg-card text-primary shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {k === "Truck" ? (
-                      <Truck className="h-3.5 w-3.5" />
-                    ) : (
-                      <Container className="h-3.5 w-3.5" />
-                    )}
-                    {PROFILE_LABEL[k]}
-                  </button>
-                ))}
-              </div>
+              <VehicleClassPicker
+                profile={r.vehicleProfile}
+                vehicleClass={vehicleClass}
+                disabled={loading}
+                onChange={changeVehicle}
+              />
             }
           >
             <RouteAlternativeSelector
@@ -807,48 +777,53 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
             title={`Toll Stations${r.outbound ? ` (${selectedName.replace(" (Recommended)", "")})` : ""}`}
             bodyClassName="p-0"
             actions={
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 border-primary/40 text-primary"
-                disabled={!r.outbound || loading}
-                title={r.outbound ? "Add Toll" : "Calculate the route first"}
-                onClick={() => setAddTollOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Add Toll
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/40 text-primary"
+                  disabled={!r.outbound || loading}
+                  title={r.outbound ? "Add Toll" : "Calculate the route first"}
+                  onClick={() => setAddTollOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Toll
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/40 text-primary"
+                  onClick={() => setTollDetailsOpen(true)}
+                >
+                  <List className="h-4 w-4" />
+                  View Details
+                </Button>
+              </div>
             }
           >
             {totals.calculated && (
               <div className="flex flex-wrap gap-x-8 gap-y-1 border-b bg-muted/40 px-4 py-2 text-sm">
                 <span>
-                  Toll cost:{" "}
-                  <b className="text-base">
-                    {formatVnd(
-                      tollRows.reduce((n, x) => n + x.station.price * x.station.passCount, 0),
-                    )}
-                  </b>
-                </span>
-                <span>
                   Tolls: <b className="text-base">{tollRows.length}</b>
                 </span>
               </div>
             )}
-            <TollStationTable
-              rows={tollRows}
-              showLeg={round}
-              calculated={totals.calculated}
-              onPriceChange={changeTollPrice}
-            />
+            <TollStationTable rows={tollRows} showLeg={round} calculated={totals.calculated} />
           </Panel>
         </div>
       </div>
 
+      <TollDetailsSheet
+        open={tollDetailsOpen}
+        onOpenChange={setTollDetailsOpen}
+        rows={tollRows}
+        roundTrip={round}
+        routeLabel={r.code || r.name || "New route"}
+      />
       <AddTollDialog
         open={addTollOpen}
         onOpenChange={setAddTollOpen}
-        tollClass={tollClassIndex(r.vehicleProfile, r.capacityKg) ?? 0}
+        tollClass={vehicleClass - 1}
         existingIds={new Set(tollRows.map((x) => x.station.id))}
         legs={round && r.returnMode === "custom" ? ["Outbound", "Return"] : ["Outbound"]}
         onAdd={addToll}
