@@ -6,6 +6,7 @@ import type {
   ImportBatch,
   RouteRecord,
   RoutePoint,
+  ServiceAssignment,
   ServiceRecord,
   TenantTemplateConfig,
   VehicleGroup,
@@ -223,66 +224,67 @@ export const seedRoutes = (): RouteRecord[] => routeSeeds.map(buildRoute);
 // ---------- Services ----------
 export const seedServices = (): ServiceRecord[] => {
   const m = meta("Nguyễn Minh Anh", "2026-09-01T03:00:00.000Z");
-  const root = (
+  const svc = (
     id: string,
     code: string,
     name: string,
-    template: ServiceRecord["template"],
+    parentId: string | null,
     description: string,
-  ): ServiceRecord => ({
+    template: ServiceRecord["template"] = null,
+    status: ServiceRecord["status"] = "Active",
+  ): ServiceRecord => ({ id, code, name, parentId, template, description, status, ...m });
+  return [
+    svc("S-TRK", "TRK", "Trucking", null, "Nhóm dịch vụ vận tải đường bộ.", "Trucking"),
+    svc("S-TRK-IN", "TRK-IN", "Inland Trucking", "S-TRK", "Vận tải nội địa."),
+    svc("S-TRK-IN-CT", "TRK-IN-CT", "Container Trucking", "S-TRK-IN", "Kéo container cảng – kho."),
+    svc("S-TRK-IN-TD", "TRK-IN-TD", "Truck Delivery", "S-TRK-IN", "Giao hàng bằng xe tải."),
+    svc(
+      "S-TRK-CB",
+      "TRK-CB",
+      "Cross-border Trucking",
+      "S-TRK",
+      "Vận tải qua biên giới (Lào, Campuchia).",
+      null,
+      "Inactive",
+    ),
+    svc("S-CUS", "CUS", "Customs", null, "Nhóm dịch vụ thủ tục hải quan.", "Customs"),
+    svc("S-CUS-IM", "CUS-IM", "Import Customs", "S-CUS", "Khai báo hải quan hàng nhập."),
+    svc("S-CUS-EX", "CUS-EX", "Export Customs", "S-CUS", "Khai báo hải quan hàng xuất."),
+    svc("S-FRT", "FRT", "Freight", null, "Nhóm dịch vụ cước quốc tế.", "Freight"),
+    svc("S-FRT-SEA", "FRT-SEA", "Sea Freight", "S-FRT", "Cước đường biển FCL / LCL."),
+    svc("S-FRT-AIR", "FRT-AIR", "Air Freight", "S-FRT", "Cước hàng không."),
+  ];
+};
+
+export const seedServiceAssignments = (): ServiceAssignment[] => {
+  const m = meta("Nguyễn Minh Anh", "2026-09-02T03:00:00.000Z");
+  const a = (
+    id: string,
+    serviceId: string,
+    departmentId: string,
+    employeeId: string | null,
+    form: ServiceAssignment["form"],
+    note: string,
+  ): ServiceAssignment => ({
     id,
-    code,
-    name,
-    parentId: null,
-    template,
-    description,
+    serviceId,
+    departmentId,
+    employeeId,
+    form,
+    note,
     status: "Active",
     ...m,
   });
-  const child = (
-    id: string,
-    code: string,
-    name: string,
-    parentId: string,
-    description: string,
-    status: ServiceRecord["status"] = "Active",
-  ): ServiceRecord => ({ id, code, name, parentId, template: null, description, status, ...m });
   return [
-    root("S-TRK", "SG-TRK", "Trucking Services", "Trucking", "Nhóm dịch vụ vận tải đường bộ."),
-    root("S-CUS", "SG-CUS", "Customs Services", "Customs", "Nhóm dịch vụ thủ tục hải quan."),
-    root(
-      "S-FRT",
-      "SG-FRT",
-      "Freight Services",
-      "Freight",
-      "Nhóm dịch vụ cước quốc tế (biển / hàng không).",
-    ),
-    child(
-      "S001",
-      "SV-TRK-DOM",
-      "Domestic Trucking",
-      "S-TRK",
-      "Vận chuyển hàng nội địa bằng xe tải.",
-    ),
-    child("S002", "SV-TRK-CTN", "Container Trucking", "S-TRK", "Kéo container cảng – kho – KCN."),
-    child("S003", "SV-CUS-IMP", "Import Customs", "S-CUS", "Khai báo hải quan hàng nhập khẩu."),
-    child(
-      "S004",
-      "SV-CUS-EXP",
-      "Export Customs",
-      "S-CUS",
-      "Khai báo hải quan hàng xuất khẩu.",
-      "Draft",
-    ),
-    child("S005", "SV-FRT-SEX", "Sea Freight Export", "S-FRT", "Cước biển xuất khẩu FCL/LCL."),
-    child(
-      "S006",
-      "SV-FRT-AIR",
-      "Air Freight Import",
-      "S-FRT",
-      "Cước hàng không nhập khẩu.",
-      "Inactive",
-    ),
+    a("PC-001", "S-TRK-IN-CT", "D-OPS", "E-001", "Trucking", "Xử lý chính"),
+    a("PC-002", "S-TRK-IN-CT", "D-OPS", null, null, "Theo dõi chung"),
+    a("PC-003", "S-TRK-IN-CT", "D-DOC", "E-003", "Trucking", "Kiểm tra hồ sơ"),
+    a("PC-004", "S-TRK-IN-TD", "D-OPS", "E-002", "Trucking", "Xử lý chính"),
+    a("PC-005", "S-CUS-IM", "D-CUS", "E-005", "Customs", "Khai báo tờ khai"),
+    a("PC-006", "S-CUS-IM", "D-DOC", null, null, "Kiểm tra chứng từ"),
+    a("PC-007", "S-CUS-EX", "D-CUS", "E-005", "Customs", "Xử lý chính"),
+    a("PC-008", "S-FRT-SEA", "D-OPS", "E-001", "Freight", "Đặt chỗ hãng tàu"),
+    a("PC-009", "S-FRT-AIR", "D-SAL", "E-006", "Freight", "Báo giá"),
   ];
 };
 
@@ -467,15 +469,15 @@ export const seedAudit = (): AuditEvent[] => {
       newValue: "Inactive",
     }),
     e("2026-10-01T04:00:00.000Z", "Thuy Vu", "CREATE", "Route", "R007", "RT-DN-QN"),
-    e("2026-09-01T03:00:00.000Z", "Nguyễn Minh Anh", "CREATE", "Service", "S-TRK", "SG-TRK"),
+    e("2026-09-01T03:00:00.000Z", "Nguyễn Minh Anh", "CREATE", "Service", "S-TRK", "TRK"),
     e(
       "2026-10-04T07:11:00.000Z",
       "Trần Quốc Bảo",
       "CHANGE_REQUIRED",
       "Service",
       "S-TRK",
-      "Trucking template",
-      { field: "Container Size", oldValue: "Required", newValue: "Optional" },
+      "Trucking Form",
+      { field: "Kích thước container", oldValue: "Required", newValue: "Optional" },
     ),
     e(
       "2026-10-04T07:12:00.000Z",
@@ -483,8 +485,8 @@ export const seedAudit = (): AuditEvent[] => {
       "CHANGE_VISIBLE",
       "Service",
       "S-TRK",
-      "Trucking template",
-      { field: "Container Type", oldValue: "Visible", newValue: "Hidden" },
+      "Trucking Form",
+      { field: "Loại container", oldValue: "Visible", newValue: "Hidden" },
     ),
     e("2026-09-01T02:00:00.000Z", "Thuy Vu", "CREATE", "Cost", "C001", "CST-HCM-CL-TRC", {
       note: "v1 effective 2026-09-01",

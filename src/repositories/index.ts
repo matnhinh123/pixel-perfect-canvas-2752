@@ -5,6 +5,7 @@ import type {
   CostRecord,
   ImportBatch,
   RouteRecord,
+  ServiceAssignment,
   ServiceRecord,
   TenantTemplateConfig,
 } from "@/types";
@@ -13,13 +14,19 @@ import {
   seedCosts,
   seedImportHistory,
   seedRoutes,
+  seedServiceAssignments,
   seedServices,
   seedTemplateConfig,
 } from "@/mock-data/seed";
 import { createCollection, readJson, subscribeKey, writeJson } from "./storage";
 
 export const routeRepository = createCollection<RouteRecord>("routes", seedRoutes);
-export const serviceRepository = createCollection<ServiceRecord>("services", seedServices);
+// ".v2": the service tree / form fields were reworked — load the new demo seed without touching routes.
+export const serviceRepository = createCollection<ServiceRecord>("services.v2", seedServices);
+export const serviceAssignmentRepository = createCollection<ServiceAssignment>(
+  "service-assignments",
+  seedServiceAssignments,
+);
 export const costRepository = createCollection<CostRecord>("costs", () => seedCosts(seedRoutes()));
 export const importHistoryRepository = createCollection<ImportBatch>(
   "import-history",
@@ -35,7 +42,7 @@ export const auditRepository = {
   subscribe: auditCollection.subscribe,
 };
 
-const TPL_KEY = "template-config";
+const TPL_KEY = "template-config.v2";
 let tplCache: TenantTemplateConfig | null = null;
 export const templateConfigRepository = {
   get(): TenantTemplateConfig {

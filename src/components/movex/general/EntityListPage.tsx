@@ -2,15 +2,18 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Download,
   Eye,
   History,
+  ListTree,
   MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
   Search,
   SearchX,
+  Table2,
   Trash2,
   Upload,
   X,
@@ -42,6 +45,8 @@ import {
   type CellValue,
 } from "@/services/filterService";
 import { useColumnPreference } from "@/hooks/use-store";
+import { readJson, writeJson } from "@/repositories/storage";
+import { cn } from "@/lib/utils";
 import { AdvancedFilter } from "./AdvancedFilter";
 import { ColumnSettings } from "./ColumnSettings";
 import { DataTable } from "./DataTable";
@@ -82,6 +87,13 @@ export interface EntityListPageProps<T extends BaseRecord> {
   auditable?: boolean;
   /** Prefill quick search, e.g. when navigating from a related record. */
   initialSearch?: string;
+  /**
+   * Hierarchical lists (Service): adds a Tree View / Table View toggle. Tree View indents `column`
+   * under its parent with expand/collapse; search/filter keep the ancestors of every match.
+   */
+  tree?: { parentOf: (row: T) => string | null; column: string };
+  /** Hide the Delete row action (master data that is deactivated rather than deleted). */
+  allowDelete?: boolean;
 }
 
 function DisabledWithReason({ reason, children }: { reason: string; children: ReactNode }) {
@@ -115,6 +127,15 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const [importOpen, setImportOpen] = useState<false | "import" | "history">(false);
   const [auditRow, setAuditRow] = useState<T | null>(null);
   const actions = useEntityActions(crud);
+  const viewKey = `list-view.${screen}`;
+  const [view, setViewState] = useState<"tree" | "table">(() =>
+    readJson<string>(viewKey, "tree") === "table" ? "table" : "tree",
+  );
+  const setView = (v: "tree" | "table") => {
+    setViewState(v);
+    writeJson(viewKey, v);
+  };
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const colByKey = useMemo(() => new Map(columns.map((c) => [c.key, c])), [columns]);
   const get = (row: T, key: string) => colByKey.get(key)?.value(row);
@@ -164,6 +185,107 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   }, [p.rows]);
 
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  // ---------- Tree View ----------
+  const tree = p.tree;
+  const treeOn = !!tree && view === "tree";
+  const treeKids = useMemo(() => {
+    if (!tree) return null;
+    const byId = new Map(p.rows.map((r) => [r.id, r]));
+    // Every match plus its ancestors, so a matching child is never shown without its parents.
+    const shown = new Set<string>();
+    for (const r of filtered) {
+      let cur: T | undefined = r;
+      while (cur && !shown.has(cur.id)) {
+        shown.add(cur.id);
+        const pid = tree.parentOf(cur);
+        cur = pid ? byId.get(pid) : undefined;
+      }
+    }
+    // Siblings keep the current sort; ancestors that did not match keep the base order.
+    const rank = new Map<string, number>();
+    filtered.forEach((r, i) => rank.set(r.id, i));
+    p.rows.forEach((r, i) => {
+      if (!rank.has(r.id)) rank.set(r.id, filtered.length + i);
+    });
+    const kids = new Map<string | null, T[]>();
+    for (const r of p.rows) {
+      if (!shown.has(r.id)) continue;
+      const pid = tree.parentOf(r);
+      const key = pid && pid !== r.id && shown.has(pid) ? pid : null;
+      if (!kids.has(key)) kids.set(key, []);
+      kids.get(key)!.push(r);
+    }
+    kids.forEach((l) => l.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!));
+    return kids;
+  }, [tree, p.rows, filtered]);
+  // While searching / filtering, every matching branch is shown open.
+  const forceOpen = q.trim() !== "" || quickConditions.length > 0 || advanced.length > 0;
+  const treeRows = useMemo(() => {
+    const out: { row: T; depth: number }[] = [];
+    if (!treeKids) return out;
+    const seen = new Set<string>();
+    const walk = (pid: string | null, depth: number) => {
+      for (const r of treeKids.get(pid) ?? []) {
+        if (seen.has(r.id)) continue;
+        seen.add(r.id);
+        out.push({ row: r, depth });
+        if (forceOpen || !collapsed.has(r.id)) walk(r.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  }, [treeKids, collapsed, forceOpen]);
+  const depthOf = new Map(treeRows.map((x) => [x.row.id, x.depth]));
+  const parentIds = treeKids
+    ? Array.from(treeKids.keys()).filter((k): k is string => k !== null)
+    : [];
+  const toggleNode = (id: string) =>
+    setCollapsed((c) => {
+      const n = new Set(c);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const tableCols = !treeOn
+    ? visibleCols
+    : visibleCols.map((c) =>
+        c.key !== tree!.column
+          ? c
+          : {
+              ...c,
+              render: (r: T) => {
+                const hasKids = !!treeKids?.get(r.id)?.length;
+                const open = forceOpen || !collapsed.has(r.id);
+                return (
+                  <span
+                    className="inline-flex items-center gap-1"
+                    style={{ paddingLeft: (depthOf.get(r.id) ?? 0) * 22 }}
+                  >
+                    {hasKids ? (
+                      <button
+                        type="button"
+                        aria-label={open ? "Thu gọn" : "Mở rộng"}
+                        disabled={forceOpen}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleNode(r.id);
+                        }}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                      >
+                        <ChevronRight
+                          className={cn("h-4 w-4 transition-transform", open && "rotate-90")}
+                        />
+                      </button>
+                    ) : (
+                      <span className="w-6 shrink-0" />
+                    )}
+                    {c.render ? c.render(r) : String(c.value(r) ?? "")}
+                  </span>
+                );
+              },
+            },
+      );
   const selectedRows = p.rows.filter((r) => selected.has(r.id));
   const filtersActive = q.trim() !== "" || quickConditions.length > 0 || advanced.length > 0;
 
@@ -307,7 +429,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
         {p.auditable !== false && crud && (
           <DropdownMenuItem onClick={() => setAuditRow(r)}>
             <History className="h-4 w-4" />
-            Audit History
+            Lịch sử thay đổi
           </DropdownMenuItem>
         )}
         {p.extraRowActions?.map((a) => (
@@ -330,13 +452,15 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 Deactivate
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => void actions.requestDelete(r)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
+            {p.allowDelete !== false && (
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => void actions.requestDelete(r)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            )}
           </>
         )}
       </DropdownMenuContent>
@@ -404,6 +528,41 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             onApply={setAdvanced}
           />
           <div className="ml-auto flex items-center gap-2">
+            {treeOn && !forceOpen && parentIds.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCollapsed(collapsed.size ? new Set() : new Set(parentIds))}
+              >
+                {collapsed.size ? "Mở rộng tất cả" : "Thu gọn tất cả"}
+              </Button>
+            )}
+            {tree && (
+              <div className="flex rounded-md border p-0.5" role="group" aria-label="Kiểu hiển thị">
+                {(
+                  [
+                    ["tree", "Tree View", ListTree],
+                    ["table", "Table View", Table2],
+                  ] as const
+                ).map(([k, label, Icon]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={view === k}
+                    onClick={() => setView(k)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold",
+                      view === k
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             <ColumnSettings
               columns={columns}
               pref={pref}
@@ -482,11 +641,12 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
         )}
 
         <DataTable
-          columns={visibleCols}
-          rows={pageRows}
-          totalRows={filtered.length}
-          page={Math.min(page, pages)}
-          pageSize={pageSize}
+          columns={tableCols}
+          rows={treeOn ? treeRows.map((x) => x.row) : pageRows}
+          totalRows={treeOn ? treeRows.length : filtered.length}
+          page={treeOn ? 1 : Math.min(page, pages)}
+          pageSize={treeOn ? Math.max(1, treeRows.length) : pageSize}
+          hidePager={treeOn}
           onPage={setPage}
           onPageSize={setPageSize}
           sort={sort}

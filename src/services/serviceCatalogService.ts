@@ -5,8 +5,13 @@ import type {
   TenantTemplateConfig,
 } from "@/types";
 import { TEMPLATES } from "@/types";
-import { serviceRepository, templateConfigRepository, uid } from "@/repositories";
-import { TEMPLATE_FIELDS } from "@/mock-data/templates";
+import {
+  serviceAssignmentRepository,
+  serviceRepository,
+  templateConfigRepository,
+  uid,
+} from "@/repositories";
+import { formName, TEMPLATE_FIELDS } from "@/mock-data/templates";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import type { ImportEntityConfig } from "./importExportService";
@@ -20,11 +25,13 @@ export const serviceCrud = makeCrud<ServiceRecord>({
   labelOf: (s) => s.code,
   references: (s) => {
     const n = childrenOf(s.id).length;
-    return n ? `has ${n} child service${n > 1 ? "s" : ""} that depend on it` : null;
+    return n ? `có ${n} dịch vụ con` : null;
   },
 });
 
-/** Level-1 ancestor; its template is the only source of truth for every descendant. */
+// ---------- Tree helpers (single source of truth for group / form inheritance) ----------
+
+/** Root ancestor = the service group; its form is inherited by every descendant. */
 export function rootOf(
   s: ServiceRecord,
   list: ServiceRecord[] = serviceRepository.all(),
@@ -42,6 +49,9 @@ export function rootOf(
 
 export const templateOf = (s: ServiceRecord, list?: ServiceRecord[]): TemplateType | null =>
   rootOf(s, list).template;
+/** "Nhóm dịch vụ" = name of the root service. */
+export const groupOf = (s: ServiceRecord, list?: ServiceRecord[]) => rootOf(s, list).name;
+
 export const levelOf = (s: ServiceRecord, list: ServiceRecord[] = serviceRepository.all()) => {
   let lvl = 1,
     cur = s;
@@ -57,6 +67,25 @@ export const levelOf = (s: ServiceRecord, list: ServiceRecord[] = serviceReposit
 const descendantsOf = (id: string): string[] =>
   childrenOf(id).flatMap((c) => [c.id, ...descendantsOf(c.id)]);
 
+/** Depth-first order (children right below their parent, siblings in creation order). */
+export function treeOrder(list: ServiceRecord[]): ServiceRecord[] {
+  const ids = new Set(list.map((s) => s.id));
+  const out: ServiceRecord[] = [];
+  const seen = new Set<string>();
+  const walk = (pid: string | null) => {
+    for (const s of list) {
+      const parent = s.parentId && ids.has(s.parentId) ? s.parentId : null;
+      if (parent !== pid || seen.has(s.id)) continue;
+      seen.add(s.id);
+      out.push(s);
+      walk(s.id);
+    }
+  };
+  walk(null);
+  // Anything left (a broken parent chain) still shows up at the end.
+  return [...out, ...list.filter((s) => !seen.has(s.id))];
+}
+
 export const newServiceDraft = (): ServiceRecord => ({
   id: "",
   code: "",
@@ -64,7 +93,7 @@ export const newServiceDraft = (): ServiceRecord => ({
   parentId: null,
   template: null,
   description: "",
-  status: "Draft",
+  status: "Active",
   createdAt: "",
   createdBy: "",
   updatedAt: "",
@@ -73,18 +102,19 @@ export const newServiceDraft = (): ServiceRecord => ({
 
 export function validateService(s: ServiceRecord): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!s.code.trim()) e["code"] = "Service Code is required.";
+  if (!s.code.trim()) e["code"] = "Nhập mã dịch vụ.";
   else if (all().some((x) => x.id !== s.id && x.code.toLowerCase() === s.code.trim().toLowerCase()))
-    e["code"] = `Service Code ${s.code} already exists.`;
-  if (!s.name.trim()) e["name"] = "Service Name is required.";
-  if (!s.parentId && !s.template)
-    e["template"] = "A level-1 service group must use one of the 3 templates.";
+    e["code"] = `Mã ${s.code.trim().toUpperCase()} đã tồn tại.`;
+  if (!s.name.trim()) e["name"] = "Nhập tên dịch vụ.";
+  if (!s.parentId && !s.template) e["template"] = "Chọn Form cho dịch vụ gốc.";
   if (s.parentId && s.id && (s.parentId === s.id || descendantsOf(s.id).includes(s.parentId)))
-    e["parentId"] = "A service cannot be its own ancestor.";
+    e["parentId"] = "Không thể chọn chính nó hoặc dịch vụ con của nó làm dịch vụ cha.";
   if (s.template && !TEMPLATES.includes(s.template))
-    e["template"] = "Only Trucking, Customs or Freight are allowed.";
+    e["template"] = "Chỉ chọn Trucking Form, Customs Form hoặc Freight Form.";
   return e;
 }
+
+const codeOf = (id: string | null) => (id && serviceRepository.get(id)?.code) || "— (dịch vụ gốc)";
 
 export const serviceCatalogService = {
   ...serviceCrud,
@@ -94,12 +124,13 @@ export const serviceCatalogService = {
   save(draft: ServiceRecord): ServiceRecord {
     const errors = validateService(draft);
     if (Object.keys(errors).length)
-      throw new BusinessRuleError("Please fix the highlighted fields.", errors);
-    // Children never store a template — they inherit it.
+      throw new BusinessRuleError("Vui lòng kiểm tra các trường được đánh dấu.", errors);
+    // Children never store a form — they inherit it from their root.
     const clean: ServiceRecord = {
       ...draft,
       code: draft.code.trim().toUpperCase(),
       name: draft.name.trim(),
+      description: draft.description.trim(),
       template: draft.parentId ? null : draft.template,
     };
     const existing = draft.id ? serviceRepository.get(draft.id) : undefined;
@@ -112,8 +143,8 @@ export const serviceCatalogService = {
         entityId: rec.id,
         entityLabel: rec.code,
         note: rec.parentId
-          ? `Child of ${serviceRepository.get(rec.parentId)?.code}`
-          : `Root · ${rec.template} template`,
+          ? `Dịch vụ cha: ${codeOf(rec.parentId)}`
+          : `Dịch vụ gốc · ${formName(rec.template)}`,
       });
       return rec;
     }
@@ -125,23 +156,26 @@ export const serviceCatalogService = {
       createdBy: existing.createdBy,
     });
     serviceRepository.update(existing.id, () => next);
+    // Assignments of this service and its children follow a changed form (they may only use it).
+    const form = templateOf(next);
+    if (form !== templateOf(existing)) {
+      const ids = [next.id, ...descendantsOf(next.id)];
+      for (const a of serviceAssignmentRepository.all())
+        if (!a.deleted && ids.includes(a.serviceId) && a.form && a.form !== form)
+          serviceAssignmentRepository.update(a.id, (p) => stampUpdate({ ...p, form }));
+    }
     const base = { entityType: "Service" as const, entityId: next.id, entityLabel: next.code };
     const out: AuditInput[] = [];
     const upd = (action: AuditInput["action"], field: string, a: string, b: string) =>
       a !== b && out.push({ ...base, action, field, oldValue: a, newValue: b });
-    upd("UPDATE", "Service Code", existing.code, next.code);
-    upd("UPDATE", "Service Name", existing.name, next.name);
-    upd("UPDATE", "Description", existing.description, next.description);
-    upd(
-      "UPDATE",
-      "Parent",
-      serviceRepository.get(existing.parentId ?? "")?.code ?? "(root)",
-      serviceRepository.get(next.parentId ?? "")?.code ?? "(root)",
-    );
-    upd("CHANGE_TEMPLATE", "Template", templateOf(existing) ?? "—", templateOf(next) ?? "—");
+    upd("UPDATE", "Mã dịch vụ", existing.code, next.code);
+    upd("UPDATE", "Tên dịch vụ", existing.name, next.name);
+    upd("UPDATE", "Ghi chú", existing.description, next.description);
+    upd("UPDATE", "Dịch vụ cha", codeOf(existing.parentId), codeOf(next.parentId));
+    upd("CHANGE_TEMPLATE", "Form", formName(templateOf(existing)), formName(templateOf(next)));
     upd(
       next.status === "Inactive" ? "DEACTIVATE" : next.status === "Active" ? "ACTIVATE" : "UPDATE",
-      "Status",
+      "Trạng thái",
       existing.status,
       next.status,
     );
@@ -149,78 +183,99 @@ export const serviceCatalogService = {
     return next;
   },
 
-  getTemplateConfig: () => templateConfigRepository.get(),
+  /** Current settings of a form, with defaults for fields that were never configured. */
+  fieldSettings(
+    template: TemplateType,
+    cfg: TenantTemplateConfig = templateConfigRepository.get(),
+  ) {
+    return Object.fromEntries(
+      TEMPLATE_FIELDS[template].map((def) => {
+        const s = cfg[template]?.[def.key] ?? {
+          visible: def.defaultVisible,
+          required: def.defaultRequired,
+        };
+        return [def.key, def.coreMandatory ? { visible: true, required: true } : s];
+      }),
+    ) as Record<string, TenantFieldSetting>;
+  },
 
-  /** Apply tenant field settings; core mandatory fields are enforced server-side, not only in the UI. */
+  /** Apply field settings; locked fields are enforced here, not only in the UI. */
   saveTemplateConfig(
     template: TemplateType,
     settings: Record<string, TenantFieldSetting>,
     auditTarget: { id: string; label: string },
   ) {
     const cfg = templateConfigRepository.get();
-    const prev = cfg[template];
+    const prev = this.fieldSettings(template, cfg);
     const out: AuditInput[] = [];
     const fixed: Record<string, TenantFieldSetting> = {};
     for (const def of TEMPLATE_FIELDS[template]) {
-      let s = settings[def.key] ??
-        prev[def.key] ?? { visible: def.defaultVisible, required: def.defaultRequired };
+      let s = settings[def.key] ?? prev[def.key]!;
       if (def.coreMandatory) s = { visible: true, required: true };
       if (!s.visible) s = { ...s, required: false };
       fixed[def.key] = s;
-      const p = prev[def.key];
+      const p = prev[def.key]!;
       const base = {
         entityType: "Service" as const,
         entityId: auditTarget.id,
-        entityLabel: `${auditTarget.label} · ${template} template`,
+        entityLabel: `${auditTarget.label} · ${formName(template)}`,
         field: def.label,
       };
-      if (p && p.visible !== s.visible)
+      if (p.visible !== s.visible)
         out.push({
           ...base,
           action: "CHANGE_VISIBLE",
-          oldValue: p.visible ? "Visible" : "Hidden",
-          newValue: s.visible ? "Visible" : "Hidden",
+          oldValue: p.visible ? "Hiển thị" : "Ẩn",
+          newValue: s.visible ? "Hiển thị" : "Ẩn",
         });
-      if (p && p.required !== s.required)
+      if (p.required !== s.required)
         out.push({
           ...base,
           action: "CHANGE_REQUIRED",
-          oldValue: p.required ? "Required" : "Optional",
-          newValue: s.required ? "Required" : "Optional",
+          oldValue: p.required ? "Bắt buộc" : "Không bắt buộc",
+          newValue: s.required ? "Bắt buộc" : "Không bắt buộc",
         });
     }
-    const next: TenantTemplateConfig = { ...cfg, [template]: fixed };
-    templateConfigRepository.save(next);
+    templateConfigRepository.save({ ...cfg, [template]: fixed });
     auditService.logMany(out);
     return out.length;
   },
 };
 
 // ---------- Import config ----------
+/** Accepts "Trucking" or "Trucking Form". */
+const parseForm = (v: string | undefined): TemplateType | null => {
+  const t = (v ?? "")
+    .trim()
+    .replace(/\s*form$/i, "")
+    .toLowerCase();
+  return TEMPLATES.find((x) => x.toLowerCase() === t) ?? null;
+};
+
 export const serviceImportConfig: ImportEntityConfig = {
   entityType: "Service",
   screen: "service",
   keyColumn: "code",
   columns: [
-    { key: "code", header: "Service Code", required: true, example: "SV-TRK-REF" },
-    { key: "name", header: "Service Name", required: true, example: "Reefer Trucking" },
-    { key: "parent", header: "Parent Code", example: "SG-TRK" },
-    { key: "template", header: "Template", example: "" },
-    { key: "description", header: "Description", example: "Xe lạnh" },
+    { key: "code", header: "Mã dịch vụ", required: true, example: "TRK-IN-RF" },
+    { key: "name", header: "Tên dịch vụ", required: true, example: "Reefer Trucking" },
+    { key: "parent", header: "Mã dịch vụ cha", example: "TRK-IN" },
+    { key: "template", header: "Form", example: "" },
+    { key: "description", header: "Ghi chú", example: "Xe lạnh" },
   ],
   existingKeys: () => new Set(all().map((s) => s.code.toLowerCase())),
   referenceCheck: (r) => {
     if (r["parent"] && !all().some((s) => s.code.toLowerCase() === r["parent"]!.toLowerCase()))
-      return [{ field: "parent", error: "Parent service not found" }];
+      return [{ field: "parent", error: "Không tìm thấy dịch vụ cha" }];
     return [];
   },
   rowCheck: (r) => {
-    if (!r["parent"] && !TEMPLATES.includes(r["template"] as TemplateType))
+    if (!r["parent"] && !parseForm(r["template"]))
       return [
-        { field: "template", error: "Root service needs template Trucking / Customs / Freight" },
+        { field: "template", error: "Dịch vụ gốc cần Form: Trucking / Customs / Freight Form" },
       ];
     if (r["parent"] && r["template"])
-      return [{ field: "template", error: "Child services inherit the template — leave empty" }];
+      return [{ field: "template", error: "Dịch vụ con kế thừa Form — để trống cột này" }];
     return [];
   },
   commit: (rows) => {
@@ -233,8 +288,8 @@ export const serviceImportConfig: ImportEntityConfig = {
       parentId: r["parent"]
         ? (all().find((s) => s.code.toLowerCase() === r["parent"]!.toLowerCase())?.id ?? null)
         : null,
-      template: r["parent"] ? null : (r["template"] as TemplateType),
-      status: "Draft",
+      template: r["parent"] ? null : parseForm(r["template"]),
+      status: "Active",
       ...stampCreate(),
     }));
     serviceRepository.insertMany(recs);
@@ -243,7 +298,7 @@ export const serviceImportConfig: ImportEntityConfig = {
   rollback: (ids) => serviceCrud.removeMany(ids),
   sampleFile: () => {
     const header = serviceImportConfig.columns.map((c) => c.header);
-    const parents = ["SG-TRK", "SG-CUS", "SG-FRT"];
+    const parents = ["TRK-IN", "CUS", "FRT"];
     const rows: string[][] = Array.from({ length: 20 }, (_, i) => [
       `SV-IMP-${String(i + 1).padStart(2, "0")}`,
       `Imported service ${i + 1}`,
@@ -252,7 +307,7 @@ export const serviceImportConfig: ImportEntityConfig = {
       "Demo import",
     ]);
     rows[1]![0] = "SV-IMP-01"; // duplicate
-    rows[6]![2] = "SG-XYZ"; // parent not found
+    rows[6]![2] = "XYZ"; // parent not found
     return [header, ...rows];
   },
 };

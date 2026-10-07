@@ -46,6 +46,7 @@ export function DataTable<T extends { id: string }>({
   actions,
   loading,
   empty,
+  hidePager,
 }: {
   columns: ListColumn<T>[];
   rows: T[];
@@ -65,6 +66,8 @@ export function DataTable<T extends { id: string }>({
   actions?: (row: T) => ReactNode;
   loading?: boolean;
   empty: ReactNode;
+  /** Tree view shows every row on one page: only the row count is rendered in the footer. */
+  hidePager?: boolean;
 }) {
   const pages = Math.max(1, Math.ceil(totalRows / pageSize));
   const ids = rows.map((r) => r.id);
@@ -215,60 +218,64 @@ export function DataTable<T extends { id: string }>({
         <span>
           {totalRows === 0
             ? "Không có bản ghi"
-            : `Hiển thị ${first}–${last} / ${totalRows} bản ghi`}
+            : hidePager
+              ? `${totalRows} bản ghi`
+              : `Hiển thị ${first}–${last} / ${totalRows} bản ghi`}
         </span>
-        <div className="flex items-center gap-2">
-          <span>Số dòng / trang</span>
-          <NativeSelect
-            className="h-8 w-20"
-            value={String(pageSize)}
-            onChange={(v) => onPageSize(Number(v))}
-            options={PAGE_SIZES}
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={page <= 1}
-            onClick={() => onPage(1)}
-            aria-label="First page"
-          >
-            <ChevronsLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={page <= 1}
-            onClick={() => onPage(page - 1)}
-            aria-label="Previous page"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-20 text-center">
-            Trang {page} / {pages}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={page >= pages}
-            onClick={() => onPage(page + 1)}
-            aria-label="Next page"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={page >= pages}
-            onClick={() => onPage(pages)}
-            aria-label="Last page"
-          >
-            <ChevronsRight className="h-4 w-4" />
-          </Button>
-        </div>
+        {!hidePager && (
+          <div className="flex items-center gap-2">
+            <span>Số dòng / trang</span>
+            <NativeSelect
+              className="h-8 w-20"
+              value={String(pageSize)}
+              onChange={(v) => onPageSize(Number(v))}
+              options={PAGE_SIZES}
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={page <= 1}
+              onClick={() => onPage(1)}
+              aria-label="First page"
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={page <= 1}
+              onClick={() => onPage(page - 1)}
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="min-w-20 text-center">
+              Trang {page} / {pages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={page >= pages}
+              onClick={() => onPage(page + 1)}
+              aria-label="Next page"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={page >= pages}
+              onClick={() => onPage(pages)}
+              aria-label="Last page"
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

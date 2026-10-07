@@ -1,17 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { Lock } from "lucide-react";
 import { StatusBadge, Tag } from "@/components/movex/common";
 import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn, QuickFilter } from "@/components/movex/general/types";
 import { useCollection } from "@/hooks/use-store";
 import { serviceRepository } from "@/repositories";
 import {
-  levelOf,
+  groupOf,
   serviceCrud,
   serviceImportConfig,
   templateOf,
+  treeOrder,
 } from "@/services/serviceCatalogService";
+import { formName } from "@/mock-data/templates";
 import { formatDateTime } from "@/lib/format";
 import { TEMPLATES, type ServiceRecord } from "@/types";
 
@@ -21,45 +22,33 @@ export const Route = createFileRoute("/service/")({
       { title: "Service — MoveX" },
       {
         name: "description",
-        content: "Service catalog with trucking, customs and freight templates.",
+        content: "Danh mục dịch vụ, cấu hình form và phân công người xử lý.",
       },
       { property: "og:title", content: "Service — MoveX" },
       {
         property: "og:description",
-        content: "Service catalog with trucking, customs and freight templates.",
+        content: "Danh mục dịch vụ, cấu hình form và phân công người xử lý.",
       },
     ],
   }),
   component: ServiceList,
 });
 
+const FORM_NAMES = TEMPLATES.map((t) => formName(t));
+
 const quickFilters: QuickFilter[] = [
   {
-    key: "template",
-    allLabel: "Tất cả template",
-    options: TEMPLATES.map((t) => ({
-      label: t,
-      conditions: [{ field: "template", operator: "eq", value: t }],
+    key: "form",
+    allLabel: "Tất cả form",
+    options: FORM_NAMES.map((f) => ({
+      label: f,
+      conditions: [{ field: "form", operator: "eq", value: f }],
     })),
-  },
-  {
-    key: "level",
-    allLabel: "Tất cả cấp",
-    options: [
-      {
-        label: "Cấp 1 (Nhóm dịch vụ)",
-        conditions: [{ field: "level", operator: "eq", value: "1" }],
-      },
-      {
-        label: "Dịch vụ con",
-        conditions: [{ field: "level", operator: "between", value: "2", value2: "" }],
-      },
-    ],
   },
   {
     key: "status",
     allLabel: "Tất cả trạng thái",
-    options: ["Active", "Draft", "Inactive"].map((v) => ({
+    options: ["Active", "Inactive"].map((v) => ({
       label: v,
       conditions: [{ field: "status", operator: "eq", value: v }],
     })),
@@ -69,16 +58,13 @@ const quickFilters: QuickFilter[] = [
 function ServiceList() {
   const navigate = useNavigate();
   const all = useCollection(serviceRepository);
-  const rows = useMemo(() => {
-    const byId = new Map(all.map((s) => [s.id, s]));
-    const path = (s: ServiceRecord): string =>
-      s.parentId && byId.get(s.parentId) ? `${path(byId.get(s.parentId)!)}/${s.code}` : s.code;
-    return all.filter((s) => !s.deleted).sort((a, b) => path(a).localeCompare(path(b)));
-  }, [all]);
+  const rows = useMemo(() => treeOrder(all.filter((s) => !s.deleted)), [all]);
+
+  const view = (s: ServiceRecord) =>
+    void navigate({ to: "/service/$id", params: { id: s.id }, search: { mode: "view" } });
 
   const columns = useMemo<ListColumn<ServiceRecord>[]>(() => {
-    const byId = new Map(all.map((s) => [s.id, s]));
-    const childCount = (id: string) => rows.filter((s) => s.parentId === id).length;
+    const byId = new Map(rows.map((s) => [s.id, s]));
     return [
       {
         key: "code",
@@ -94,52 +80,49 @@ function ServiceList() {
         type: "text",
         value: (s) => s.name,
         render: (s) => (
-          <span className="font-medium" style={{ paddingLeft: (levelOf(s, all) - 1) * 14 }}>
-            {levelOf(s, all) > 1 && <span className="mr-1 text-muted-foreground">└</span>}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              view(s);
+            }}
+            className={s.parentId ? "font-medium hover:underline" : "font-bold hover:underline"}
+          >
             {s.name}
-          </span>
+          </button>
         ),
       },
-      { key: "level", label: "Cấp", type: "number", value: (s) => levelOf(s, all) },
       {
         key: "parent",
         label: "Dịch vụ cha",
         type: "text",
-        value: (s) => (s.parentId ? (byId.get(s.parentId)?.code ?? "") : ""),
+        value: (s) => (s.parentId ? (byId.get(s.parentId)?.name ?? "") : ""),
         render: (s) =>
           s.parentId ? (
-            byId.get(s.parentId)?.code
+            byId.get(s.parentId)?.name
           ) : (
-            <span className="text-muted-foreground">— (root)</span>
+            <span className="text-muted-foreground">—</span>
           ),
       },
       {
-        key: "template",
-        label: "Template",
-        type: "enum",
-        options: TEMPLATES,
-        value: (s) => templateOf(s, all),
-        render: (s) => (
-          <span className="inline-flex items-center gap-1">
-            <Tag tone="tpl">{templateOf(s, all)}</Tag>
-            {s.parentId && (
-              <span
-                title="Kế thừa từ dịch vụ cấp 1"
-                className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
-              >
-                <Lock className="h-3 w-3" />
-                kế thừa
-              </span>
-            )}
-          </span>
-        ),
+        key: "group",
+        label: "Nhóm dịch vụ",
+        type: "text",
+        value: (s) => groupOf(s, rows),
       },
-      { key: "children", label: "Số dịch vụ con", type: "number", value: (s) => childCount(s.id) },
+      {
+        key: "form",
+        label: "Form",
+        type: "enum",
+        options: FORM_NAMES,
+        value: (s) => formName(templateOf(s, rows)),
+        render: (s) => <Tag tone="tpl">{formName(templateOf(s, rows))}</Tag>,
+      },
       {
         key: "status",
         label: "Trạng thái",
         type: "enum",
-        options: ["Active", "Draft", "Inactive"],
+        options: ["Active", "Inactive", "Draft"],
         value: (s) => s.status,
         render: (s) => <StatusBadge status={s.status} />,
       },
@@ -148,32 +131,31 @@ function ServiceList() {
         label: "Cập nhật lúc",
         type: "date",
         value: (s) => s.updatedAt,
-        defaultHidden: true,
         render: (s) => (
           <span className="text-xs text-muted-foreground">{formatDateTime(s.updatedAt)}</span>
         ),
       },
     ];
-  }, [all, rows]);
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <EntityListPage<ServiceRecord>
-      screen="service"
+      screen="service.v2"
       entityType="Service"
       entityLabel="Service"
       title="Service"
-      subtitle="Danh mục dịch vụ & cấu hình template (Trucking / Customs / Freight)"
+      subtitle="Danh mục dịch vụ, cấu hình form và phân công người xử lý"
       rows={rows}
       columns={columns}
-      searchPlaceholder="Tìm service code, tên..."
+      searchPlaceholder="Tìm mã, tên dịch vụ..."
       searchValues={(s) => [s.code, s.name]}
       quickFilters={quickFilters}
       crud={serviceCrud}
-      addLabel="Thêm mới Service"
+      allowDelete={false}
+      tree={{ parentOf: (s) => s.parentId, column: "name" }}
+      addLabel="Add Service"
       onAdd={() => void navigate({ to: "/service/$id", params: { id: "new" } })}
-      onView={(s) =>
-        void navigate({ to: "/service/$id", params: { id: s.id }, search: { mode: "view" } })
-      }
+      onView={view}
       onEdit={(s) =>
         void navigate({ to: "/service/$id", params: { id: s.id }, search: { mode: "edit" } })
       }
