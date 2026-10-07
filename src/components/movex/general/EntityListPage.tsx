@@ -54,6 +54,7 @@ import { ImportDialog } from "./ImportDialog";
 import { useEntityActions } from "./useEntityActions";
 import type { ListColumn, QuickFilter } from "./types";
 import { ListLangProvider, type ListLang } from "./listLang";
+import { useLang } from "@/lib/i18n";
 
 export interface ExtraRowAction<T> {
   label: string;
@@ -129,7 +130,8 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState<false | "import" | "history">(false);
   const [auditRow, setAuditRow] = useState<T | null>(null);
-  const lang = p.lang ?? "vi";
+  const appLang = useLang();
+  const lang = p.lang ?? appLang;
   const t = (vi: string, en: string) => (lang === "en" ? en : vi);
   const actions = useEntityActions(crud, lang);
   const viewKey = `list-view.${screen}`;

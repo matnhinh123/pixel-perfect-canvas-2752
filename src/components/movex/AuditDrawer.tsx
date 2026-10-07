@@ -11,6 +11,7 @@ import { AUDIT_ACTION_LABEL } from "@/services/auditService";
 import { formatDateTime } from "@/lib/format";
 import { useEntityAudit } from "@/hooks/use-store";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 const actionTone = (a: AuditEvent["action"]) =>
   a === "DELETE" || a === "DEACTIVATE" || a === "REMOVE_MANUAL_COST" || a === "ROLLBACK"
@@ -24,12 +25,14 @@ const actionTone = (a: AuditEvent["action"]) =>
 export function AuditTimeline({
   entries,
   showEntity,
-  english,
+  english: englishProp,
 }: {
   entries: AuditEvent[];
   showEntity?: boolean;
   english?: boolean;
 }) {
+  const { en } = useT();
+  const english = englishProp ?? en;
   if (entries.length === 0)
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -89,7 +92,7 @@ export function AuditHistoryDrawer({
   entityType,
   entityId,
   title,
-  english,
+  english: englishProp,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -100,6 +103,8 @@ export function AuditHistoryDrawer({
   english?: boolean;
 }) {
   const entries = useEntityAudit(entityType, entityId);
+  const { en } = useT();
+  const english = englishProp ?? en;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[460px] overflow-y-auto sm:max-w-[460px]">
@@ -116,7 +121,7 @@ export function AuditHistoryDrawer({
             : `Nhật ký chỉ ghi thêm · ${entries.length} sự kiện · không thể sửa hoặc xoá`}
         </div>
         <div className="px-4">
-          <AuditTimeline entries={entries} {...(english ? { english } : {})} />
+          <AuditTimeline entries={entries} english={english} />
         </div>
       </SheetContent>
     </Sheet>

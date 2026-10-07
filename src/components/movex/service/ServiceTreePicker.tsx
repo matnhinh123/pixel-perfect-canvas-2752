@@ -14,6 +14,7 @@ import { formName } from "@/mock-data/templates";
 import { levelOf, templateOf, treeOrder } from "@/services/serviceCatalogService";
 import type { ServiceRecord } from "@/types";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 /** "Trucking › Inland Trucking" */
 const servicePathLabel = (s: ServiceRecord, list: ServiceRecord[]): string => {
@@ -44,7 +45,9 @@ export function ServiceTreePicker({
   excludeIds: Set<string>;
   invalid?: boolean;
 }) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
+  const noneLabel = t("— Không có (dịch vụ gốc)", "— None (root service)");
   const options = useMemo(
     () => treeOrder(services).filter((s) => !excludeIds.has(s.id)),
     [services, excludeIds],
@@ -66,7 +69,7 @@ export function ServiceTreePicker({
             {selected ? (
               <span className="truncate">{servicePathLabel(selected, services)}</span>
             ) : (
-              <span className="text-muted-foreground">— Không có (dịch vụ gốc)</span>
+              <span className="text-muted-foreground">{noneLabel}</span>
             )}
           </button>
         </PopoverTrigger>
@@ -76,7 +79,7 @@ export function ServiceTreePicker({
         {selected && (
           <button
             type="button"
-            aria-label="Bỏ chọn dịch vụ cha"
+            aria-label={t("Bỏ chọn dịch vụ cha", "Clear parent service")}
             onClick={() => onChange(null)}
             className="absolute right-9 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
           >
@@ -86,18 +89,18 @@ export function ServiceTreePicker({
       </div>
       <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
-          <CommandInput placeholder="Tìm mã, tên dịch vụ…" />
+          <CommandInput placeholder={t("Tìm mã, tên dịch vụ…", "Search service code, name…")} />
           <CommandList>
-            <CommandEmpty>Không tìm thấy dịch vụ.</CommandEmpty>
+            <CommandEmpty>{t("Không tìm thấy dịch vụ.", "No service found.")}</CommandEmpty>
             <CommandGroup>
               <CommandItem
-                value="__root Không có dịch vụ gốc"
+                value={t("__root Không có dịch vụ gốc", "__root None root service")}
                 onSelect={() => {
                   onChange(null);
                   setOpen(false);
                 }}
               >
-                <span className="flex-1 text-muted-foreground">— Không có (dịch vụ gốc)</span>
+                <span className="flex-1 text-muted-foreground">{noneLabel}</span>
                 {!value && <Check className="h-4 w-4 text-primary" />}
               </CommandItem>
               {options.map((s) => (

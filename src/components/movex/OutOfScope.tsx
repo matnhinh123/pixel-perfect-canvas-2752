@@ -2,20 +2,22 @@ import { Link } from "@tanstack/react-router";
 import { Construction } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader, Panel } from "@/components/movex/common";
+import { useT } from "@/lib/i18n";
 
 /** Menu entries that exist in the product but are outside this demo's scope. */
 export function OutOfScope({ title, description }: { title: string; description: string }) {
+  const { t } = useT();
   return (
     <div>
       <PageHeader crumbs={[{ label: title }]} title={title} />
       <Panel title={title}>
         <EmptyState
           icon={<Construction className="h-10 w-10" />}
-          title="Ngoài phạm vi demo"
+          title={t("Ngoài phạm vi demo", "Outside the demo scope")}
           description={description}
           action={
             <Button asChild size="sm">
-              <Link to="/routing">Đi tới Routing</Link>
+              <Link to="/routing">{t("Đi tới Routing", "Go to Routing")}</Link>
             </Button>
           }
         />

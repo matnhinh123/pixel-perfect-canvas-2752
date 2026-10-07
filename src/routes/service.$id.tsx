@@ -48,6 +48,7 @@ import {
 } from "@/services/serviceCatalogService";
 import { formName } from "@/mock-data/templates";
 import { formatDateTime } from "@/lib/format";
+import { tr, useT } from "@/lib/i18n";
 import { TEMPLATES, type ServiceRecord, type Status, type TemplateType } from "@/types";
 
 type Mode = "view" | "edit";
@@ -63,15 +64,28 @@ export const Route = createFileRoute("/service/$id")({
   head: ({ params }) => ({
     meta: [
       { title: params.id === "new" ? "Add Service — MoveX" : "Service Detail — MoveX" },
-      { name: "description", content: "Thông tin dịch vụ, cấu hình form và phân công." },
+      {
+        name: "description",
+        content: tr(
+          "Thông tin dịch vụ, cấu hình form và phân công.",
+          "Service information, form settings and assignment.",
+        ),
+      },
       { property: "og:title", content: "Service Detail — MoveX" },
-      { property: "og:description", content: "Thông tin dịch vụ, cấu hình form và phân công." },
+      {
+        property: "og:description",
+        content: tr(
+          "Thông tin dịch vụ, cấu hình form và phân công.",
+          "Service information, form settings and assignment.",
+        ),
+      },
     ],
   }),
   component: ServiceDetailPage,
 });
 
 function ServiceDetailPage() {
+  const { t } = useT();
   const { id } = Route.useParams();
   const search = Route.useSearch();
   const all = useCollection(serviceRepository);
@@ -82,10 +96,10 @@ function ServiceDetailPage() {
       <Panel>
         <EmptyState
           icon={<XCircle className="h-8 w-8" />}
-          title="Không tìm thấy dịch vụ"
+          title={t("Không tìm thấy dịch vụ", "Service not found")}
           action={
             <Button asChild size="sm">
-              <Link to="/service">Về danh sách Service</Link>
+              <Link to="/service">{t("Về danh sách Service", "Back to Service list")}</Link>
             </Button>
           }
         />
@@ -108,6 +122,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function ServiceView({ source, services }: { source: ServiceRecord; services: ServiceRecord[] }) {
+  const { t } = useT();
   const navigate = useNavigate();
   const search = Route.useSearch();
   const actions = useEntityActions(serviceCrud);
@@ -136,7 +151,8 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
         badge={<StatusBadge status={source.status} />}
         subtitle={
           <>
-            Mã dịch vụ: <span className="font-semibold text-foreground">{source.code}</span>
+            {t("Mã dịch vụ", "Service Code")}:{" "}
+            <span className="font-semibold text-foreground">{source.code}</span>
           </>
         }
         readOnly
@@ -145,7 +161,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
           <>
             <Button variant="outline" size="lg" onClick={() => setAuditOpen(true)}>
               <History className="h-4 w-4" />
-              Lịch sử thay đổi
+              {t("Lịch sử thay đổi", "Change History")}
             </Button>
             {source.status === "Inactive" ? (
               <Button
@@ -176,20 +192,20 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
 
       <Tabs
         value={tab}
-        onValueChange={(t) =>
+        onValueChange={(v) =>
           void navigate({
             to: "/service/$id",
             params: { id: source.id },
-            search: { mode: "view", tab: t as Tab },
+            search: { mode: "view", tab: v as Tab },
             replace: true,
           })
         }
       >
         <TabsList className="mb-4">
-          <TabsTrigger value="info">Thông tin</TabsTrigger>
-          <TabsTrigger value="form">Cấu hình form</TabsTrigger>
+          <TabsTrigger value="info">{t("Thông tin", "Information")}</TabsTrigger>
+          <TabsTrigger value="form">{t("Cấu hình form", "Form Settings")}</TabsTrigger>
           <TabsTrigger value="assign">
-            Phân công
+            {t("Phân công", "Assignment")}
             {assignments.length > 0 && (
               <span className="ml-1.5 rounded-full bg-accent px-1.5 text-xs text-accent-foreground">
                 {assignments.length}
@@ -199,13 +215,13 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
         </TabsList>
 
         <TabsContent value="info" className="flex max-w-4xl flex-col gap-5">
-          <Panel title="Thông tin">
+          <Panel title={t("Thông tin", "Information")}>
             <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-              <InfoRow label="Mã dịch vụ">
+              <InfoRow label={t("Mã dịch vụ", "Service Code")}>
                 <span className="font-semibold">{source.code}</span>
               </InfoRow>
-              <InfoRow label="Tên dịch vụ">{source.name}</InfoRow>
-              <InfoRow label="Dịch vụ cha">
+              <InfoRow label={t("Tên dịch vụ", "Service Name")}>{source.name}</InfoRow>
+              <InfoRow label={t("Dịch vụ cha", "Parent Service")}>
                 {parent ? (
                   <button
                     type="button"
@@ -215,30 +231,32 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
                     {parent.name}
                   </button>
                 ) : (
-                  <span className="text-muted-foreground">— (dịch vụ gốc)</span>
+                  <span className="text-muted-foreground">
+                    {t("— (dịch vụ gốc)", "— (root service)")}
+                  </span>
                 )}
               </InfoRow>
-              <InfoRow label="Nhóm dịch vụ">{root.name}</InfoRow>
+              <InfoRow label={t("Nhóm dịch vụ", "Service Group")}>{root.name}</InfoRow>
               <InfoRow label="Form">
                 <span className="inline-flex items-center gap-2">
                   <Tag tone="tpl">{formName(form)}</Tag>
                   {source.parentId && (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <Lock className="h-3 w-3" />
-                      Kế thừa từ {root.name}
+                      {t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}
                     </span>
                   )}
                 </span>
               </InfoRow>
-              <InfoRow label="Trạng thái">
+              <InfoRow label={t("Trạng thái", "Status")}>
                 <StatusBadge status={source.status} />
               </InfoRow>
               <div className="sm:col-span-2">
-                <InfoRow label="Ghi chú">
+                <InfoRow label={t("Ghi chú", "Notes")}>
                   {source.description || <span className="text-muted-foreground">—</span>}
                 </InfoRow>
               </div>
-              <InfoRow label="Cập nhật lúc">
+              <InfoRow label={t("Cập nhật lúc", "Updated At")}>
                 <span className="text-muted-foreground">
                   {formatDateTime(source.updatedAt)} · {source.updatedBy}
                 </span>
@@ -247,7 +265,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
           </Panel>
 
           <Panel
-            title={`Dịch vụ con (${children.length})`}
+            title={t(`Dịch vụ con (${children.length})`, `Child Services (${children.length})`)}
             bodyClassName="p-0"
             actions={
               <Button
@@ -263,17 +281,22 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
                 }
               >
                 <Plus className="h-4 w-4" />
-                Thêm dịch vụ con
+                {t("Thêm dịch vụ con", "Add Child Service")}
               </Button>
             }
           >
             {children.length === 0 ? (
-              <EmptyState title="Chưa có dịch vụ con" />
+              <EmptyState title={t("Chưa có dịch vụ con", "No child services yet")} />
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    {["Mã dịch vụ", "Tên dịch vụ", "Form", "Trạng thái"].map((h) => (
+                    {[
+                      t("Mã dịch vụ", "Service Code"),
+                      t("Tên dịch vụ", "Service Name"),
+                      "Form",
+                      t("Trạng thái", "Status"),
+                    ].map((h) => (
                       <TableHead key={h} className={thClass}>
                         {h}
                       </TableHead>
@@ -336,6 +359,7 @@ function ServiceEditor({
   source: ServiceRecord | null;
   services: ServiceRecord[];
 }) {
+  const { t } = useT();
   const navigate = useNavigate();
   const search = Route.useSearch();
   const confirm = useConfirm();
@@ -397,16 +421,21 @@ function ServiceEditor({
     const e = validateService(s);
     if (Object.keys(e).length) {
       setErrors(e);
-      setFormError("Chưa thể lưu — vui lòng kiểm tra:");
-      toast.error("Vui lòng kiểm tra các trường được đánh dấu.");
+      setFormError(t("Chưa thể lưu — vui lòng kiểm tra:", "Cannot save yet — please check:"));
+      toast.error(
+        t("Vui lòng kiểm tra các trường được đánh dấu.", "Please check the highlighted fields."),
+      );
       return;
     }
     const oldForm = source ? templateOf(source, services) : null;
     if (source && oldForm && oldForm !== form && descendants.length) {
       const r = await confirm({
-        title: "Đổi Form?",
-        description: `${descendants.length} dịch vụ con sẽ chuyển từ ${formName(oldForm)} sang ${formName(form)}. Phân công dùng form cũ cũng được cập nhật theo.`,
-        confirmLabel: "Đổi Form",
+        title: t("Đổi Form?", "Change Form?"),
+        description: t(
+          `${descendants.length} dịch vụ con sẽ chuyển từ ${formName(oldForm)} sang ${formName(form)}. Phân công dùng form cũ cũng được cập nhật theo.`,
+          `${descendants.length} child service(s) will move from ${formName(oldForm)} to ${formName(form)}. Assignments using the old form are updated too.`,
+        ),
+        confirmLabel: t("Đổi Form", "Change Form"),
         tone: "danger",
       });
       if (r !== "confirm") return;
@@ -414,14 +443,18 @@ function ServiceEditor({
     try {
       const saved = serviceCatalogService.save(s);
       guard.allowNext();
-      toast.success(isNew ? `Đã tạo dịch vụ ${saved.code}` : `Đã lưu dịch vụ ${saved.code}`);
+      toast.success(
+        isNew
+          ? t(`Đã tạo dịch vụ ${saved.code}`, `Service ${saved.code} created`)
+          : t(`Đã lưu dịch vụ ${saved.code}`, `Service ${saved.code} saved`),
+      );
       void navigate({ to: "/service/$id", params: { id: saved.id }, search: { mode: "view" } });
     } catch (err) {
       if (err instanceof BusinessRuleError) {
         setErrors(err.fieldErrors);
         setFormError(err.message);
       }
-      toast.error(err instanceof Error ? err.message : "Lưu thất bại");
+      toast.error(err instanceof Error ? err.message : t("Lưu thất bại", "Save failed"));
     }
   };
 
@@ -431,9 +464,9 @@ function ServiceEditor({
         crumbs={[
           { label: "Service", to: "/service" },
           ...(source ? [{ label: source.code, to: `/service/${source.id}` }] : []),
-          { label: isNew ? "Tạo mới" : "Chỉnh sửa" },
+          { label: isNew ? t("Tạo mới", "New") : t("Chỉnh sửa", "Edit") },
         ]}
-        title={isNew ? "Add Service" : `Chỉnh sửa: ${source.name}`}
+        title={isNew ? "Add Service" : t(`Chỉnh sửa: ${source.name}`, `Edit: ${source.name}`)}
         badge={source ? <StatusBadge status={source.status} /> : undefined}
         dirty={dirty}
         onBack={back}
@@ -442,29 +475,32 @@ function ServiceEditor({
       />
       <FormErrorBanner message={formError} errors={errors} />
 
-      <Panel title="Thông tin dịch vụ" className="max-w-3xl">
+      <Panel title={t("Thông tin dịch vụ", "Service Information")} className="max-w-3xl">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Mã dịch vụ" required error={errors["code"]}>
+          <Field label={t("Mã dịch vụ", "Service Code")} required error={errors["code"]}>
             <Input
               value={s.code}
-              placeholder="VD: TRK-IN-CT"
+              placeholder={t("VD: TRK-IN-CT", "E.g. TRK-IN-CT")}
               onChange={(e) => set("code", e.target.value.toUpperCase())}
               aria-invalid={!!errors["code"] || undefined}
             />
           </Field>
-          <Field label="Tên dịch vụ" required error={errors["name"]}>
+          <Field label={t("Tên dịch vụ", "Service Name")} required error={errors["name"]}>
             <Input
               value={s.name}
-              placeholder="VD: Container Trucking"
+              placeholder={t("VD: Container Trucking", "E.g. Container Trucking")}
               onChange={(e) => set("name", e.target.value)}
               aria-invalid={!!errors["name"] || undefined}
             />
           </Field>
           <Field
-            label="Dịch vụ cha"
+            label={t("Dịch vụ cha", "Parent Service")}
             error={errors["parentId"]}
             className="sm:col-span-2"
-            hint="Bỏ trống nếu đây là dịch vụ gốc (nhóm dịch vụ)."
+            hint={t(
+              "Bỏ trống nếu đây là dịch vụ gốc (nhóm dịch vụ).",
+              "Leave empty if this is a root service (service group).",
+            )}
           >
             <ServiceTreePicker
               services={services}
@@ -474,7 +510,7 @@ function ServiceEditor({
               invalid={!!errors["parentId"]}
             />
           </Field>
-          <Field label="Nhóm dịch vụ">
+          <Field label={t("Nhóm dịch vụ", "Service Group")}>
             <ReadOnlyBox>
               {root ? (
                 <>
@@ -483,13 +519,14 @@ function ServiceEditor({
                 </>
               ) : (
                 <span className="text-muted-foreground">
-                  {s.name.trim() || "Chính dịch vụ này"} (dịch vụ gốc)
+                  {s.name.trim() || t("Chính dịch vụ này", "This service")}{" "}
+                  {t("(dịch vụ gốc)", "(root service)")}
                 </span>
               )}
             </ReadOnlyBox>
           </Field>
           {root ? (
-            <Field label="Form" hint={`Kế thừa từ ${root.name}`}>
+            <Field label="Form" hint={t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}>
               <ReadOnlyBox>
                 <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 <Tag tone="tpl">{formName(form)}</Tag>
@@ -503,13 +540,13 @@ function ServiceEditor({
                 onChange={(v) => set("template", (v || null) as TemplateType | null)}
                 options={["", ...TEMPLATES]}
                 labels={{
-                  "": "Chọn form…",
-                  ...Object.fromEntries(TEMPLATES.map((t) => [t, formName(t)])),
+                  "": t("Chọn form…", "Select form…"),
+                  ...Object.fromEntries(TEMPLATES.map((x) => [x, formName(x)])),
                 }}
               />
             </Field>
           )}
-          <Field label="Trạng thái">
+          <Field label={t("Trạng thái", "Status")}>
             <NativeSelect
               value={s.status}
               onChange={(v) => set("status", v as Status)}
@@ -518,7 +555,7 @@ function ServiceEditor({
               }
             />
           </Field>
-          <Field label="Ghi chú" className="sm:col-span-2">
+          <Field label={t("Ghi chú", "Notes")} className="sm:col-span-2">
             <Textarea
               rows={3}
               value={s.description}
@@ -528,7 +565,10 @@ function ServiceEditor({
         </div>
         {parent && (
           <p className="mt-4 text-xs text-muted-foreground">
-            Dịch vụ con dùng chung Nhóm dịch vụ và Form với dịch vụ gốc {root?.name}.
+            {t(
+              `Dịch vụ con dùng chung Nhóm dịch vụ và Form với dịch vụ gốc ${root?.name ?? ""}.`,
+              `Child services share the Service Group and Form of the root service ${root?.name ?? ""}.`,
+            )}
           </p>
         )}
       </Panel>

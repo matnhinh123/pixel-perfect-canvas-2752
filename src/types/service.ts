@@ -8,6 +8,8 @@ export const TEMPLATES: TemplateType[] = ["Trucking", "Customs", "Freight"];
 export interface TemplateFieldDef {
   key: string;
   label: string;
+  /** English UI label (label is Vietnamese). */
+  labelEn: string;
   /** Core fields exist in every tenant and cannot be removed. */
   core: true;
   /** Locked fields are always visible AND required — the tenant cannot turn them off. */

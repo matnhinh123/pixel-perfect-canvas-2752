@@ -13,6 +13,7 @@ import {
 import { routeTotals } from "@/services/cost/costMath";
 import { displayVersion } from "@/services/costService";
 import { formatVnd } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,6 +31,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
+  const { t } = useT();
   const routes = useCollection(routeRepository).filter((r) => !r.deleted);
   const services = useCollection(serviceRepository).filter((s) => !s.deleted);
   const costs = useCollection(costRepository).filter((c) => !c.deleted);
@@ -54,12 +56,15 @@ function Dashboard() {
     .slice(0, 5);
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Tổng quan vận hành MoveX" />
+      <PageHeader
+        title="Dashboard"
+        subtitle={t("Tổng quan vận hành MoveX", "MoveX operations overview")}
+      />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           label="Active Routes"
           value={String(routes.filter((r) => r.status === "Active").length)}
-          hint={`${routes.length} tổng`}
+          hint={t(`${routes.length} tổng`, `${routes.length} total`)}
           icon={<RouteIcon className="h-4 w-4" />}
         />
         <StatCard
@@ -69,9 +74,9 @@ function Dashboard() {
           icon={<Boxes className="h-4 w-4" />}
         />
         <StatCard
-          label="Toll Cost / tháng (ước tính)"
+          label={t("Toll Cost / tháng (ước tính)", "Toll Cost / month (estimated)")}
           value={formatVnd(tollSum * 22)}
-          hint="Active routes × 22 chuyến"
+          hint={t("Active routes × 22 chuyến", "Active routes × 22 trips")}
           icon={<Wallet className="h-4 w-4" />}
         />
         <StatCard
@@ -83,11 +88,11 @@ function Dashboard() {
       </div>
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Panel
-          title="Routes gần đây"
+          title={t("Routes gần đây", "Recent routes")}
           className="xl:col-span-2"
           actions={
             <Link to="/routing" className="text-sm font-medium text-primary">
-              Xem tất cả
+              {t("Xem tất cả", "View all")}
             </Link>
           }
         >
@@ -103,7 +108,10 @@ function Dashboard() {
                 <div>
                   <div className="text-sm font-semibold">{r.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {r.code} · {r.outbound ? `${routeTotals(r).distanceKm} km` : "chưa tính tuyến"}
+                    {r.code} ·{" "}
+                    {r.outbound
+                      ? `${routeTotals(r).distanceKm} km`
+                      : t("chưa tính tuyến", "route not calculated")}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -115,7 +123,7 @@ function Dashboard() {
           </div>
         </Panel>
         <Panel
-          title="Hoạt động mới"
+          title={t("Hoạt động mới", "Recent activity")}
           actions={
             <Link to="/audit-log" className="text-sm font-medium text-primary">
               Audit Log

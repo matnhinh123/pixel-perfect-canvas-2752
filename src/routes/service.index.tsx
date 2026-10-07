@@ -14,6 +14,7 @@ import {
 } from "@/services/serviceCatalogService";
 import { formName } from "@/mock-data/templates";
 import { formatDateTime } from "@/lib/format";
+import { tr, useT } from "@/lib/i18n";
 import { TEMPLATES, type ServiceRecord } from "@/types";
 
 export const Route = createFileRoute("/service/")({
@@ -22,12 +23,18 @@ export const Route = createFileRoute("/service/")({
       { title: "Service — MoveX" },
       {
         name: "description",
-        content: "Danh mục dịch vụ, cấu hình form và phân công người xử lý.",
+        content: tr(
+          "Danh mục dịch vụ, cấu hình form và phân công người xử lý.",
+          "Service catalog, form settings and handler assignment.",
+        ),
       },
       { property: "og:title", content: "Service — MoveX" },
       {
         property: "og:description",
-        content: "Danh mục dịch vụ, cấu hình form và phân công người xử lý.",
+        content: tr(
+          "Danh mục dịch vụ, cấu hình form và phân công người xử lý.",
+          "Service catalog, form settings and handler assignment.",
+        ),
       },
     ],
   }),
@@ -36,27 +43,30 @@ export const Route = createFileRoute("/service/")({
 
 const FORM_NAMES = TEMPLATES.map((t) => formName(t));
 
-const quickFilters: QuickFilter[] = [
-  {
-    key: "form",
-    allLabel: "Tất cả form",
-    options: FORM_NAMES.map((f) => ({
-      label: f,
-      conditions: [{ field: "form", operator: "eq", value: f }],
-    })),
-  },
-  {
-    key: "status",
-    allLabel: "Tất cả trạng thái",
-    options: ["Active", "Inactive"].map((v) => ({
-      label: v,
-      conditions: [{ field: "status", operator: "eq", value: v }],
-    })),
-  },
-];
-
 function ServiceList() {
+  const { t, lang } = useT();
   const navigate = useNavigate();
+  const quickFilters = useMemo<QuickFilter[]>(
+    () => [
+      {
+        key: "form",
+        allLabel: t("Tất cả form", "All forms"),
+        options: FORM_NAMES.map((f) => ({
+          label: f,
+          conditions: [{ field: "form", operator: "eq", value: f }],
+        })),
+      },
+      {
+        key: "status",
+        allLabel: t("Tất cả trạng thái", "All statuses"),
+        options: ["Active", "Inactive"].map((v) => ({
+          label: v,
+          conditions: [{ field: "status", operator: "eq", value: v }],
+        })),
+      },
+    ],
+    [lang], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const all = useCollection(serviceRepository);
   const rows = useMemo(() => treeOrder(all.filter((s) => !s.deleted)), [all]);
 
@@ -68,7 +78,7 @@ function ServiceList() {
     return [
       {
         key: "code",
-        label: "Mã dịch vụ",
+        label: t("Mã dịch vụ", "Service Code"),
         type: "text",
         pinned: true,
         value: (s) => s.code,
@@ -76,7 +86,7 @@ function ServiceList() {
       },
       {
         key: "name",
-        label: "Tên dịch vụ",
+        label: t("Tên dịch vụ", "Service Name"),
         type: "text",
         value: (s) => s.name,
         render: (s) => (
@@ -94,7 +104,7 @@ function ServiceList() {
       },
       {
         key: "parent",
-        label: "Dịch vụ cha",
+        label: t("Dịch vụ cha", "Parent Service"),
         type: "text",
         value: (s) => (s.parentId ? (byId.get(s.parentId)?.name ?? "") : ""),
         render: (s) =>
@@ -106,7 +116,7 @@ function ServiceList() {
       },
       {
         key: "group",
-        label: "Nhóm dịch vụ",
+        label: t("Nhóm dịch vụ", "Service Group"),
         type: "text",
         value: (s) => groupOf(s, rows),
       },
@@ -120,7 +130,7 @@ function ServiceList() {
       },
       {
         key: "status",
-        label: "Trạng thái",
+        label: t("Trạng thái", "Status"),
         type: "enum",
         options: ["Active", "Inactive", "Draft"],
         value: (s) => s.status,
@@ -128,7 +138,7 @@ function ServiceList() {
       },
       {
         key: "updatedAt",
-        label: "Cập nhật lúc",
+        label: t("Cập nhật lúc", "Updated At"),
         type: "date",
         value: (s) => s.updatedAt,
         render: (s) => (
@@ -136,7 +146,7 @@ function ServiceList() {
         ),
       },
     ];
-  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rows, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <EntityListPage<ServiceRecord>
@@ -144,10 +154,13 @@ function ServiceList() {
       entityType="Service"
       entityLabel="Service"
       title="Service"
-      subtitle="Danh mục dịch vụ, cấu hình form và phân công người xử lý"
+      subtitle={t(
+        "Danh mục dịch vụ, cấu hình form và phân công người xử lý",
+        "Service catalog, form settings and handler assignment",
+      )}
       rows={rows}
       columns={columns}
-      searchPlaceholder="Tìm mã, tên dịch vụ..."
+      searchPlaceholder={t("Tìm mã, tên dịch vụ...", "Search service code, name...")}
       searchValues={(s) => [s.code, s.name]}
       quickFilters={quickFilters}
       crud={serviceCrud}

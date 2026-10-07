@@ -10,6 +10,7 @@ import {
 import { PageHeader, Panel, Tag, thClass } from "@/components/movex/common";
 import { pricingInputs } from "@/mock-data/pricing";
 import { formatVnd } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -20,9 +21,20 @@ export const Route = createFileRoute("/pricing")({
       { property: "og:description", content: "Price lists built from MoveX cost inputs." },
     ],
   }),
-  component: () => (
+  component: PricingPage,
+});
+
+function PricingPage() {
+  const { t } = useT();
+  return (
     <div>
-      <PageHeader title="Pricing" subtitle="Bảng giá (module sẽ phát triển ở giai đoạn sau)" />
+      <PageHeader
+        title="Pricing"
+        subtitle={t(
+          "Bảng giá (module sẽ phát triển ở giai đoạn sau)",
+          "Price lists (module to be built in a later phase)",
+        )}
+      />
       <Panel>
         <div className="overflow-hidden rounded-lg border">
           <Table>
@@ -56,5 +68,5 @@ export const Route = createFileRoute("/pricing")({
         </div>
       </Panel>
     </div>
-  ),
-});
+  );
+}

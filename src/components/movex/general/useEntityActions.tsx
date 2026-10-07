@@ -3,14 +3,17 @@ import type { BaseRecord } from "@/types";
 import type { EntityCrud } from "@/services/crudService";
 import { useConfirm } from "./ConfirmDialog";
 import type { ListLang } from "./listLang";
+import { useLang } from "@/lib/i18n";
 
 /** Shared CRUD action handling: confirm → business-rule check → act → toast. No silent failures. */
 export function useEntityActions<T extends BaseRecord>(
   crud: EntityCrud<T> | undefined,
-  lang: ListLang = "vi",
+  /** Defaults to the app language. */
+  lang?: ListLang,
 ) {
   const confirm = useConfirm();
-  const t = (vi: string, en: string) => (lang === "en" ? en : vi);
+  const app = useLang();
+  const t = (vi: string, en: string) => ((lang ?? app) === "en" ? en : vi);
 
   const setStatus = async (rows: T[], status: "Active" | "Inactive") => {
     if (!crud || rows.length === 0) return false;

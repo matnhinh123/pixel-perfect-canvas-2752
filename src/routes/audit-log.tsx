@@ -8,6 +8,7 @@ import { useCollection } from "@/hooks/use-store";
 import { auditRepository } from "@/repositories";
 import { applySearch } from "@/services/filterService";
 import { AUDIT_ACTION_LABEL } from "@/services/auditService";
+import { useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/audit-log")({
   head: () => ({
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/audit-log")({
 });
 
 function AuditLogPage() {
+  const { t } = useT();
   const all = useCollection(auditRepository);
   const [q, setQ] = useState("");
   const [entity, setEntity] = useState("");
@@ -47,7 +49,13 @@ function AuditLogPage() {
   }, [all, q, entity, action, showViews]);
   return (
     <div>
-      <PageHeader title="Audit Log" subtitle="Lịch sử thay đổi toàn hệ thống (append-only)" />
+      <PageHeader
+        title="Audit Log"
+        subtitle={t(
+          "Lịch sử thay đổi toàn hệ thống (append-only)",
+          "System-wide change history (append-only)",
+        )}
+      />
       <Panel className="max-w-4xl">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="relative w-72">
@@ -55,7 +63,7 @@ function AuditLogPage() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm entity, user, giá trị..."
+              placeholder={t("Tìm entity, user, giá trị...", "Search entity, user, value...")}
               className="pl-9"
             />
           </div>
@@ -63,13 +71,13 @@ function AuditLogPage() {
             value={entity}
             onChange={setEntity}
             options={["", "Route", "Service", "Cost"]}
-            labels={{ "": "Tất cả đối tượng" }}
+            labels={{ "": t("Tất cả đối tượng", "All entities") }}
           />
           <NativeSelect
             value={action}
             onChange={setAction}
             options={["", ...Object.keys(AUDIT_ACTION_LABEL)]}
-            labels={{ "": "Tất cả hành động" }}
+            labels={{ "": t("Tất cả hành động", "All actions") }}
           />
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
@@ -77,11 +85,11 @@ function AuditLogPage() {
               checked={showViews}
               onChange={(e) => setShowViews(e.target.checked)}
             />
-            Hiện sự kiện VIEW
+            {t("Hiện sự kiện VIEW", "Show VIEW events")}
           </label>
           <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5" />
-            {rows.length} sự kiện · chỉ đọc
+            {t(`${rows.length} sự kiện · chỉ đọc`, `${rows.length} events · read-only`)}
           </span>
         </div>
         <AuditTimeline entries={rows} showEntity />

@@ -1,4 +1,5 @@
 import type { VehicleRecord } from "@/types";
+import { tr } from "@/lib/i18n";
 import { tollClassIndex, tollClassLabel } from "@/services/routing/RouteProvider";
 
 /** Vehicle master data. Routing derives group, weight, routing profile and toll class from it. */
@@ -31,6 +32,7 @@ export const VEHICLES: VehicleRecord[] = [
     id: "V-51R88888",
     plate: "51R-88888",
     name: "Đầu kéo Container 40FT",
+    nameEn: "Container Tractor 40FT",
     group: "Tractor / Container Truck",
     weightKg: 18000,
     profile: "Container",
@@ -48,7 +50,9 @@ export const VEHICLES: VehicleRecord[] = [
 export const findVehicle = (id: string | undefined) =>
   id ? VEHICLES.find((v) => v.id === id) : undefined;
 
-export const vehicleLabel = (v: VehicleRecord) => `${v.plate} — ${v.name}`;
+export const vehicleName = (v: VehicleRecord) => (v.nameEn ? tr(v.name, v.nameEn) : v.name);
+
+export const vehicleLabel = (v: VehicleRecord) => `${v.plate} — ${vehicleName(v)}`;
 
 /** Toll classification ("Nhóm 1..5") — derived, never edited by the user. */
 export const vehicleTollClass = (v: VehicleRecord) =>

@@ -10,6 +10,7 @@ import { routeCrud, routeImportConfig } from "@/services/routeService";
 import { routeTotals } from "@/services/cost/costMath";
 import { LOCATIONS } from "@/mock-data/locations";
 import { formatDateTime, formatDuration, formatVnd } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 import { VEHICLE_PROFILES, type RoutePoint, type RouteRecord, type VehicleProfile } from "@/types";
 
 export const Route = createFileRoute("/routing/")({
@@ -24,200 +25,226 @@ export const Route = createFileRoute("/routing/")({
   component: RoutingList,
 });
 
-const PROFILE_LABEL: Record<VehicleProfile, string> = {
-  Truck: "Xe tải",
-  Container: "Xe container",
-  Car: "Ô tô",
-  Motorcycle: "Xe máy",
-};
+type T = (vi: string, en: string) => string;
+
+const profileLabels = (t: T): Record<VehicleProfile, string> => ({
+  Truck: t("Xe tải", "Truck"),
+  Container: t("Xe container", "Container truck"),
+  Car: t("Ô tô", "Car"),
+  Motorcycle: t("Xe máy", "Motorcycle"),
+});
 const codeOf = (p: RoutePoint) => LOCATIONS.find((l) => l.id === p.locationId)?.code ?? "";
 
-const columns: ListColumn<RouteRecord>[] = [
-  {
-    key: "code",
-    label: "Mã route",
-    type: "text",
-    pinned: true,
-    value: (r) => r.code,
-    render: (r) => <span className="font-semibold text-primary">{r.code}</span>,
-  },
-  {
-    key: "name",
-    label: "Tên route",
-    type: "text",
-    value: (r) => r.name,
-    className: "font-medium",
-  },
-  {
-    key: "originCode",
-    label: "Location Code đi",
-    type: "text",
-    value: (r) => codeOf(r.origin),
-    render: (r) => <span className="font-medium text-primary">{codeOf(r.origin) || "—"}</span>,
-  },
-  {
-    key: "origin",
-    label: "Điểm đi",
-    type: "text",
-    value: (r) => r.origin.name,
-    className: "max-w-40 truncate text-muted-foreground",
-  },
-  {
-    key: "destinationCode",
-    label: "Location Code đến",
-    type: "text",
-    value: (r) => codeOf(r.destination),
-    render: (r) => <span className="font-medium text-primary">{codeOf(r.destination) || "—"}</span>,
-  },
-  {
-    key: "destination",
-    label: "Điểm đến",
-    type: "text",
-    value: (r) => r.destination.name,
-    className: "max-w-40 truncate text-muted-foreground",
-  },
-  {
-    key: "waypoints",
-    label: "Điểm dừng",
-    type: "text",
-    value: (r) => r.waypoints.map((w) => w.name).join(" → "),
-    render: (r) =>
-      r.waypoints.length ? (
-        <span title={r.waypoints.map((w) => w.name).join(" → ")}>{r.waypoints.length} điểm</span>
-      ) : (
-        <span className="text-muted-foreground">—</span>
+const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
+  const PROFILE_LABEL = profileLabels(t);
+  return [
+    {
+      key: "code",
+      label: t("Mã route", "Route code"),
+      type: "text",
+      pinned: true,
+      value: (r) => r.code,
+      render: (r) => <span className="font-semibold text-primary">{r.code}</span>,
+    },
+    {
+      key: "name",
+      label: t("Tên route", "Route name"),
+      type: "text",
+      value: (r) => r.name,
+      className: "font-medium",
+    },
+    {
+      key: "originCode",
+      label: t("Location Code đi", "Origin location code"),
+      type: "text",
+      value: (r) => codeOf(r.origin),
+      render: (r) => <span className="font-medium text-primary">{codeOf(r.origin) || "—"}</span>,
+    },
+    {
+      key: "origin",
+      label: t("Điểm đi", "Origin"),
+      type: "text",
+      value: (r) => r.origin.name,
+      className: "max-w-40 truncate text-muted-foreground",
+    },
+    {
+      key: "destinationCode",
+      label: t("Location Code đến", "Destination location code"),
+      type: "text",
+      value: (r) => codeOf(r.destination),
+      render: (r) => (
+        <span className="font-medium text-primary">{codeOf(r.destination) || "—"}</span>
       ),
-  },
-  {
-    key: "type",
-    label: "Loại route",
-    type: "enum",
-    options: ["Single Trip", "Round Trip"],
-    value: (r) => r.type,
-    render: (r) => <Tag>{r.type}</Tag>,
-  },
-  {
-    key: "vehicleProfile",
-    label: "Phương tiện",
-    type: "enum",
-    options: VEHICLE_PROFILES,
-    value: (r) => r.vehicleProfile,
-    render: (r) => <Tag>{PROFILE_LABEL[r.vehicleProfile]}</Tag>,
-  },
-  {
-    key: "distance",
-    label: "Khoảng cách (km)",
-    type: "number",
-    value: (r) => (r.outbound ? routeTotals(r).distanceKm : null),
-    render: (r) =>
-      r.outbound ? (
-        `${routeTotals(r).distanceKm} km`
-      ) : (
-        <span className="text-muted-foreground">Chưa tính</span>
+    },
+    {
+      key: "destination",
+      label: t("Điểm đến", "Destination"),
+      type: "text",
+      value: (r) => r.destination.name,
+      className: "max-w-40 truncate text-muted-foreground",
+    },
+    {
+      key: "waypoints",
+      label: t("Điểm dừng", "Waypoints"),
+      type: "text",
+      value: (r) => r.waypoints.map((w) => w.name).join(" → "),
+      render: (r) =>
+        r.waypoints.length ? (
+          <span title={r.waypoints.map((w) => w.name).join(" → ")}>
+            {t(`${r.waypoints.length} điểm`, `${r.waypoints.length} stops`)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      key: "type",
+      label: t("Loại route", "Route type"),
+      type: "enum",
+      options: ["Single Trip", "Round Trip"],
+      value: (r) => r.type,
+      render: (r) => <Tag>{r.type}</Tag>,
+    },
+    {
+      key: "vehicleProfile",
+      label: t("Phương tiện", "Vehicle"),
+      type: "enum",
+      options: VEHICLE_PROFILES,
+      value: (r) => r.vehicleProfile,
+      render: (r) => <Tag>{PROFILE_LABEL[r.vehicleProfile]}</Tag>,
+    },
+    {
+      key: "distance",
+      label: t("Khoảng cách (km)", "Distance (km)"),
+      type: "number",
+      value: (r) => (r.outbound ? routeTotals(r).distanceKm : null),
+      render: (r) =>
+        r.outbound ? (
+          `${routeTotals(r).distanceKm} km`
+        ) : (
+          <span className="text-muted-foreground">{t("Chưa tính", "Not calculated")}</span>
+        ),
+    },
+    {
+      key: "time",
+      label: t("Thời gian ước tính", "Estimated time"),
+      type: "number",
+      value: (r) => (r.outbound ? routeTotals(r).estimatedTimeMin : null),
+      render: (r) => (r.outbound ? formatDuration(routeTotals(r).estimatedTimeMin) : "—"),
+    },
+    {
+      key: "toll",
+      label: t("Phí cầu đường (₫)", "Toll fees (₫)"),
+      type: "number",
+      value: (r) => routeTotals(r).totalRouteCost,
+      render: (r) => (
+        <span className="font-medium">{formatVnd(routeTotals(r).totalRouteCost)}</span>
       ),
-  },
-  {
-    key: "time",
-    label: "Thời gian ước tính",
-    type: "number",
-    value: (r) => (r.outbound ? routeTotals(r).estimatedTimeMin : null),
-    render: (r) => (r.outbound ? formatDuration(routeTotals(r).estimatedTimeMin) : "—"),
-  },
-  {
-    key: "toll",
-    label: "Phí cầu đường (₫)",
-    type: "number",
-    value: (r) => routeTotals(r).totalRouteCost,
-    render: (r) => <span className="font-medium">{formatVnd(routeTotals(r).totalRouteCost)}</span>,
-  },
-  {
-    key: "description",
-    label: "Ghi chú",
-    type: "text",
-    value: (r) => r.description ?? "",
-    className: "max-w-56 truncate text-muted-foreground",
-  },
-  {
-    key: "status",
-    label: "Trạng thái",
-    type: "enum",
-    options: ["Active", "Inactive"],
-    value: (r) => r.status,
-    render: (r) => <StatusBadge status={r.status} />,
-  },
-  {
-    key: "updatedAt",
-    label: "Cập nhật lúc",
-    type: "date",
-    value: (r) => r.updatedAt,
-    render: (r) => (
-      <span className="whitespace-nowrap text-xs text-muted-foreground">
-        {formatDateTime(r.updatedAt)}
-      </span>
-    ),
-    defaultHidden: true,
-  },
-];
+    },
+    {
+      key: "description",
+      label: t("Ghi chú", "Notes"),
+      type: "text",
+      value: (r) => r.description ?? "",
+      className: "max-w-56 truncate text-muted-foreground",
+    },
+    {
+      key: "status",
+      label: t("Trạng thái", "Status"),
+      type: "enum",
+      options: ["Active", "Inactive"],
+      value: (r) => r.status,
+      render: (r) => <StatusBadge status={r.status} />,
+    },
+    {
+      key: "updatedAt",
+      label: t("Cập nhật lúc", "Updated at"),
+      type: "date",
+      value: (r) => r.updatedAt,
+      render: (r) => (
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
+          {formatDateTime(r.updatedAt)}
+        </span>
+      ),
+      defaultHidden: true,
+    },
+  ];
+};
 
-const quickFilters: QuickFilter[] = [
-  {
-    key: "type",
-    allLabel: "Tất cả loại route",
-    options: ["Single Trip", "Round Trip"].map((v) => ({
-      label: v,
-      conditions: [{ field: "type", operator: "eq", value: v }],
-    })),
-  },
-  {
-    key: "vehicle",
-    allLabel: "Tất cả phương tiện",
-    options: VEHICLE_PROFILES.map((v) => ({
-      label: PROFILE_LABEL[v],
-      conditions: [{ field: "vehicleProfile", operator: "eq", value: v }],
-    })),
-  },
-  {
-    key: "status",
-    allLabel: "Tất cả trạng thái",
-    options: ["Active", "Inactive"].map((v) => ({
-      label: v,
-      conditions: [{ field: "status", operator: "eq", value: v }],
-    })),
-  },
-  {
-    key: "distance",
-    allLabel: "Mọi khoảng cách",
-    options: [
-      {
-        label: "< 50 km",
-        conditions: [{ field: "distance", operator: "between", value: "", value2: "49.99" }],
-      },
-      {
-        label: "50 – 100 km",
-        conditions: [{ field: "distance", operator: "between", value: "50", value2: "100" }],
-      },
-      {
-        label: "> 100 km",
-        conditions: [{ field: "distance", operator: "between", value: "100.01", value2: "" }],
-      },
-    ],
-  },
-];
+const quickFiltersFor = (t: T): QuickFilter[] => {
+  const PROFILE_LABEL = profileLabels(t);
+  return [
+    {
+      key: "type",
+      allLabel: t("Tất cả loại route", "All route types"),
+      options: ["Single Trip", "Round Trip"].map((v) => ({
+        label: v,
+        conditions: [{ field: "type", operator: "eq", value: v }],
+      })),
+    },
+    {
+      key: "vehicle",
+      allLabel: t("Tất cả phương tiện", "All vehicles"),
+      options: VEHICLE_PROFILES.map((v) => ({
+        label: PROFILE_LABEL[v],
+        conditions: [{ field: "vehicleProfile", operator: "eq", value: v }],
+      })),
+    },
+    {
+      key: "status",
+      allLabel: t("Tất cả trạng thái", "All statuses"),
+      options: ["Active", "Inactive"].map((v) => ({
+        label: v,
+        conditions: [{ field: "status", operator: "eq", value: v }],
+      })),
+    },
+    {
+      key: "distance",
+      allLabel: t("Mọi khoảng cách", "Any distance"),
+      options: [
+        {
+          label: "< 50 km",
+          conditions: [{ field: "distance", operator: "between", value: "", value2: "49.99" }],
+        },
+        {
+          label: "50 – 100 km",
+          conditions: [{ field: "distance", operator: "between", value: "50", value2: "100" }],
+        },
+        {
+          label: "> 100 km",
+          conditions: [{ field: "distance", operator: "between", value: "100.01", value2: "" }],
+        },
+      ],
+    },
+  ];
+};
 
 function RoutingList() {
+  const { t, lang } = useT();
   const navigate = useNavigate();
   const all = useCollection(routeRepository);
   const rows = useMemo(() => all.filter((r) => !r.deleted), [all]);
+  // `t` is recreated every render; the language is the real dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const columns = useMemo(() => columnsFor(t), [lang]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const quickFilters = useMemo(() => quickFiltersFor(t), [lang]);
   return (
     <EntityListPage<RouteRecord>
       screen="routing"
       entityType="Route"
       entityLabel="Route"
       title="Routing"
-      subtitle="Quản lý tuyến đường, khoảng cách và phí cầu đường"
+      subtitle={t(
+        "Quản lý tuyến đường, khoảng cách và phí cầu đường",
+        "Manage routes, distances and toll fees",
+      )}
       rows={rows}
       columns={columns}
-      searchPlaceholder="Tìm route code, tên, mã/điểm đi/đến, ghi chú..."
+      searchPlaceholder={t(
+        "Tìm route code, tên, mã/điểm đi/đến, ghi chú...",
+        "Search route code, name, origin/destination code or name, notes...",
+      )}
       searchValues={(r) => [
         r.code,
         r.name,
@@ -229,7 +256,7 @@ function RoutingList() {
       ]}
       quickFilters={quickFilters}
       crud={routeCrud}
-      addLabel="Thêm mới Route"
+      addLabel={t("Thêm mới Route", "New Route")}
       onAdd={() => void navigate({ to: "/routing/$id", params: { id: "new" } })}
       onView={(r) =>
         void navigate({ to: "/routing/$id", params: { id: r.id }, search: { mode: "view" } })
@@ -240,7 +267,7 @@ function RoutingList() {
       importConfig={routeImportConfig}
       extraRowActions={[
         {
-          label: "Chi phí của route",
+          label: t("Chi phí của route", "Route costs"),
           icon: <Receipt className="h-4 w-4" />,
           onClick: (r) => void navigate({ to: "/cost", search: { route: r.code } }),
         },

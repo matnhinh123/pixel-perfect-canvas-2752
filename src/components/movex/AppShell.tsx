@@ -30,6 +30,7 @@ import { currentUser } from "@/services/session";
 import { useCollection } from "@/hooks/use-store";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { setLang, useT } from "@/lib/i18n";
 import { useConfirm } from "./general/ConfirmDialog";
 
 interface NavItem {
@@ -175,6 +176,7 @@ function UnreadCounter({ onUnread }: { onUnread: (n: number) => void }) {
 }
 
 function Notifications() {
+  const { t } = useT();
   const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
@@ -193,7 +195,7 @@ function Notifications() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Thông báo"
+          aria-label={t("Thông báo", "Notifications")}
           className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 text-amber-500 shadow-sm hover:bg-white"
         >
           <Bell className="h-4 w-4 fill-amber-400" />
@@ -205,7 +207,9 @@ function Notifications() {
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" side="right" className="w-96 p-0">
-        <div className="border-b px-4 py-3 text-sm font-semibold">Hoạt động gần đây</div>
+        <div className="border-b px-4 py-3 text-sm font-semibold">
+          {t("Hoạt động gần đây", "Recent activity")}
+        </div>
         {open && <NotificationList onUnread={() => undefined} />}
         <Link
           to="/audit-log"
@@ -213,7 +217,7 @@ function Notifications() {
           className="flex items-center justify-center gap-1 border-t px-4 py-2.5 text-sm font-medium text-primary hover:bg-accent"
         >
           <History className="h-4 w-4" />
-          Xem toàn bộ Audit Log
+          {t("Xem toàn bộ Audit Log", "View full Audit Log")}
         </Link>
       </PopoverContent>
     </Popover>
@@ -230,7 +234,56 @@ const VnFlag = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const UkFlag = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 60 30" className={className} aria-hidden>
+    <clipPath id="uk-flag">
+      <rect width="60" height="30" rx="4" />
+    </clipPath>
+    <g clipPath="url(#uk-flag)">
+      <rect width="60" height="30" fill="#012169" />
+      <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" strokeWidth="6" />
+      <path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" strokeWidth="3" />
+      <path d="M30,0 V30 M0,15 H60" stroke="#fff" strokeWidth="10" />
+      <path d="M30,0 V30 M0,15 H60" stroke="#C8102E" strokeWidth="6" />
+    </g>
+  </svg>
+);
+
+/** VI / EN switch (flag of the current language). */
+function LanguageMenu() {
+  const { t, lang } = useT();
+  const Flag = lang === "en" ? UkFlag : VnFlag;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={t("Ngôn ngữ", "Language")}
+          title={t("Ngôn ngữ", "Language")}
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 shadow-sm hover:bg-white"
+        >
+          <Flag className="h-4 w-6" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>{t("Ngôn ngữ", "Language")}</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => setLang("vi")}>
+          <VnFlag className="h-3 w-4.5" />
+          Tiếng Việt
+          {lang === "vi" && <Check className="ml-auto h-4 w-4" />}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setLang("en")}>
+          <UkFlag className="h-3 w-4.5" />
+          English
+          {lang === "en" && <Check className="ml-auto h-4 w-4" />}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
+  const { t } = useT();
   const confirm = useConfirm();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -243,10 +296,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const resetDemo = async () => {
     const r = await confirm({
-      title: "Reset dữ liệu demo?",
-      description:
+      title: t("Reset dữ liệu demo?", "Reset demo data?"),
+      description: t(
         "Toàn bộ route, service, cost, audit, lịch sử import và cấu hình cột lưu trên trình duyệt này sẽ được thay bằng dữ liệu mẫu ban đầu.",
+        "All routes, services, costs, audit, import history and column settings saved in this browser will be replaced by the original demo data.",
+      ),
       confirmLabel: "Reset",
+      cancelLabel: t("Huỷ", "Cancel"),
       tone: "danger",
     });
     if (r === "confirm") {
@@ -286,33 +342,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               collapsed && "flex-col",
             )}
           >
-            {!collapsed && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Ngôn ngữ"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 shadow-sm hover:bg-white"
-                  >
-                    <VnFlag className="h-4 w-6" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Ngôn ngữ</DropdownMenuLabel>
-                  <DropdownMenuItem>
-                    <VnFlag className="h-3 w-4.5" />
-                    Tiếng Việt
-                    <Check className="ml-auto h-4 w-4" />
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled>English (sắp có)</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            <LanguageMenu />
             <Notifications />
             <button
               type="button"
               onClick={toggle}
-              aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"}
+              aria-label={
+                collapsed ? t("Mở rộng menu", "Expand menu") : t("Thu gọn menu", "Collapse menu")
+              }
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 text-primary shadow-sm hover:bg-white"
             >
               {collapsed ? (
@@ -344,14 +381,18 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel>Phân hệ</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("Phân hệ", "Modules")}</DropdownMenuLabel>
               <DropdownMenuItem>
                 <Home className="h-4 w-4 text-brand" />
                 Master Data
                 <Check className="ml-auto h-4 w-4" />
               </DropdownMenuItem>
-              <DropdownMenuItem disabled>Operations (ngoài phạm vi demo)</DropdownMenuItem>
-              <DropdownMenuItem disabled>Finance (ngoài phạm vi demo)</DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                Operations {t("(ngoài phạm vi demo)", "(not in this demo)")}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                Finance {t("(ngoài phạm vi demo)", "(not in this demo)")}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void navigate({ to: "/" })}>
                 Dashboard
@@ -410,7 +451,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="Tài khoản"
+                aria-label={t("Tài khoản", "Account")}
                 className="rounded-md p-1.5 text-white/90 hover:bg-white/10"
               >
                 <LogOut className="h-4 w-4" />
@@ -419,15 +460,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             <DropdownMenuContent align="end" side="top">
               <DropdownMenuItem onClick={() => void resetDemo()}>
                 <RotateCcw className="h-4 w-4" />
-                Reset dữ liệu demo
+                {t("Reset dữ liệu demo", "Reset demo data")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() =>
-                  toast.info("Bản demo không có đăng nhập — bạn đang dùng tài khoản mẫu Thuy Vu.")
+                  toast.info(
+                    t(
+                      "Bản demo không có đăng nhập — bạn đang dùng tài khoản mẫu Thuy Vu.",
+                      "This demo has no sign-in — you are using the sample account Thuy Vu.",
+                    ),
+                  )
                 }
               >
                 <LogOut className="h-4 w-4" />
-                Đăng xuất
+                {t("Đăng xuất", "Sign out")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n";
 
 export type ConfirmResult = "confirm" | "cancel" | "alt";
 
@@ -30,6 +31,7 @@ const Ctx = createContext<ConfirmFn | null>(null);
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [opts, setOpts] = useState<ConfirmOptions | null>(null);
   const resolver = useRef<((r: ConfirmResult) => void) | null>(null);
+  const { t } = useT();
 
   const confirm = useCallback<ConfirmFn>((o) => {
     setOpts(o);
@@ -65,7 +67,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <Button variant="outline" onClick={() => close("cancel")}>
-              {opts?.cancelLabel ?? "Huỷ"}
+              {opts?.cancelLabel ?? t("Huỷ", "Cancel")}
             </Button>
             {opts?.altLabel && (
               <Button variant="secondary" onClick={() => close("alt")}>
@@ -74,7 +76,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             )}
             {!opts?.hideConfirm && (
               <Button variant={danger ? "destructive" : "default"} onClick={() => close("confirm")}>
-                {opts?.confirmLabel ?? "Xác nhận"}
+                {opts?.confirmLabel ?? t("Xác nhận", "Confirm")}
               </Button>
             )}
           </AlertDialogFooter>

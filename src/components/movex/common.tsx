@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 const tones: Record<string, string> = {
   Active: "bg-success-soft text-success",
@@ -58,7 +59,7 @@ export function PageHeader({
   actions,
   onBack,
   badge,
-  rootLabel = "Danh mục",
+  rootLabel,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
@@ -66,17 +67,18 @@ export function PageHeader({
   actions?: ReactNode;
   onBack?: (() => void) | undefined;
   badge?: ReactNode;
-  /** First breadcrumb; screens with an English UI pass "Master Data". */
+  /** First breadcrumb; defaults to "Danh mục" / "Master Data" by app language. */
   rootLabel?: string;
 }) {
-  const trail: Crumb[] = [{ label: rootLabel }, ...(crumbs ?? [])];
+  const { t } = useT();
+  const trail: Crumb[] = [{ label: rootLabel ?? t("Danh mục", "Master Data") }, ...(crumbs ?? [])];
   return (
     <div className="mb-5">
       <nav
         aria-label="Breadcrumb"
         className="mb-3 flex items-center gap-1.5 text-[15px] text-muted-foreground"
       >
-        <Link to="/" aria-label="Trang chủ" className="hover:text-primary">
+        <Link to="/" aria-label={t("Trang chủ", "Home")} className="hover:text-primary">
           <Home className="h-4 w-4" />
         </Link>
         {trail.map((c, i) => (
@@ -102,7 +104,7 @@ export function PageHeader({
             <button
               type="button"
               onClick={onBack}
-              aria-label="Quay lại"
+              aria-label={t("Quay lại", "Back")}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-card text-foreground shadow-sm hover:border-primary hover:text-primary"
             >
               <ArrowLeft className="h-5 w-5" />

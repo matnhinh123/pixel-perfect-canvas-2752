@@ -1,4 +1,5 @@
 import type { Department, Employee } from "@/types";
+import { tr } from "@/lib/i18n";
 
 /** Demo departments / employees used by "Phân công". Replace with the HR master when it exists. */
 export const DEPARTMENTS: Department[] = [
@@ -19,6 +20,6 @@ export const EMPLOYEES: Employee[] = [
 
 export const departmentName = (id: string) => DEPARTMENTS.find((d) => d.id === id)?.name ?? id;
 export const employeeName = (id: string | null) =>
-  id ? (EMPLOYEES.find((e) => e.id === id)?.name ?? id) : "Cả phòng";
+  id ? (EMPLOYEES.find((e) => e.id === id)?.name ?? id) : tr("Cả phòng", "Whole department");
 export const employeesOf = (departmentId: string) =>
   EMPLOYEES.filter((e) => e.departmentId === departmentId);

@@ -1,6 +1,7 @@
 import { LOCATIONS } from "@/mock-data/locations";
 import { PROVIDER_ONLY_GATES } from "@/mock-data/tollCatalog";
 import { activeTollGates } from "@/services/routing/tollGates";
+import { tr } from "@/lib/i18n";
 import type {
   LocationSuggestion,
   RouteCalculation,
@@ -73,25 +74,47 @@ export function computeMockRoutes(
 ): RouteCalculation[] {
   if (req.points.length < 2)
     throw new RouteProviderError(
-      "At least an origin and a destination are required.",
+      tr(
+        "Cần có ít nhất điểm đi và điểm đến.",
+        "At least an origin and a destination are required.",
+      ),
       "INVALID_REQUEST",
     );
   const first = req.points[0]!;
   const last = req.points[req.points.length - 1]!;
   if (req.points.length === 2 && haversineKm(first, last) < 0.05)
-    throw new RouteProviderError("Origin and destination are the same location.", "ZERO_RESULTS");
+    throw new RouteProviderError(
+      tr("Điểm đi và điểm đến trùng nhau.", "Origin and destination are the same location."),
+      "ZERO_RESULTS",
+    );
 
   const baseWarnings: string[] = [];
   let capacity = req.capacityKg;
   if ((req.vehicle === "Truck" || req.vehicle === "Container") && !capacity) {
     capacity = 10000;
-    baseWarnings.push("Capacity not provided for truck/container — assumed 10,000 kg.");
+    baseWarnings.push(
+      tr(
+        "Chưa nhập tải trọng cho xe tải/container — tạm tính 10.000 kg.",
+        "Capacity not provided for truck/container — assumed 10,000 kg.",
+      ),
+    );
   }
   const cls = tollClassIndex(req.vehicle, capacity);
   if (cls === null)
-    baseWarnings.push("Motorcycles are not allowed on expressways — toll gates are not applied.");
+    baseWarnings.push(
+      tr(
+        "Xe máy không được đi cao tốc — không áp dụng trạm thu phí.",
+        "Motorcycles are not allowed on expressways — toll gates are not applied.",
+      ),
+    );
   const peak = isPeakHour(req.departureTime);
-  if (peak) baseWarnings.push("Khởi hành giờ cao điểm — thời gian ước tính đã cộng thêm 10%.");
+  if (peak)
+    baseWarnings.push(
+      tr(
+        "Khởi hành giờ cao điểm — thời gian ước tính đã cộng thêm 10%.",
+        "Peak-hour departure — estimated time includes an extra 10%.",
+      ),
+    );
 
   const geometries = VARIANTS.map((v) => {
     const g: [number, number][] = [];
@@ -134,7 +157,13 @@ export function computeMockRoutes(
             lat: g.lat,
             lng: g.lng,
           }));
-  if (ferrySkipped) baseWarnings.push("Đã tránh phà — tuyến đi vòng qua cầu.");
+  if (ferrySkipped)
+    baseWarnings.push(
+      tr(
+        "Đã tránh phà — tuyến đi vòng qua cầu.",
+        "Ferry avoided — the route detours via a bridge.",
+      ),
+    );
 
   const providerOnly = (idx: number, geometry: [number, number][], t: number): TollStation => {
     const gate = PROVIDER_ONLY_GATES[idx]!;
@@ -193,7 +222,7 @@ export function computeMockRoutes(
 
     return {
       id: `ALT-${v + 1}`,
-      label: `Tuyến ${v + 1}`,
+      label: tr(`Tuyến ${v + 1}`, `Route ${v + 1}`),
       recommended: v === 0,
       distance,
       estimatedTime,

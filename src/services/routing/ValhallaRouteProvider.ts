@@ -1,4 +1,5 @@
 import { activeTollGates } from "@/services/routing/tollGates";
+import { tr } from "@/lib/i18n";
 import type {
   LocationSuggestion,
   RouteCalculation,
@@ -73,7 +74,10 @@ export class ValhallaRouteProvider implements RouteProvider {
           body: JSON.stringify(body),
         });
       } catch {
-        throw new RouteProviderError("Không kết nối được dịch vụ tìm đường.", "NETWORK");
+        throw new RouteProviderError(
+          tr("Không kết nối được dịch vụ tìm đường.", "Could not reach the routing service."),
+          "NETWORK",
+        );
       }
     };
     let res = await post(500);
@@ -85,7 +89,11 @@ export class ValhallaRouteProvider implements RouteProvider {
     } | null;
     if (!res.ok || !json?.trip)
       throw new RouteProviderError(
-        json?.error ?? "Không tìm thấy tuyến đường phù hợp cho xe tải.",
+        json?.error ??
+          tr(
+            "Không tìm thấy tuyến đường phù hợp cho xe tải.",
+            "No suitable truck route was found.",
+          ),
         res.status === 400 ? "ZERO_RESULTS" : "ERROR_UNKNOWN",
       );
 
@@ -139,7 +147,7 @@ export class ValhallaRouteProvider implements RouteProvider {
             }));
     return {
       id: `ALT-${i + 1}`,
-      label: `Tuyến ${i + 1}`,
+      label: tr(`Tuyến ${i + 1}`, `Route ${i + 1}`),
       recommended: i === 0,
       distance,
       estimatedTime: Math.round(trip.summary.time / 60),
@@ -149,7 +157,10 @@ export class ValhallaRouteProvider implements RouteProvider {
       tollCost: tollStations.reduce((s, t) => s + t.price * t.passCount, 0),
       tollStations,
       warnings: [
-        "Đường đi theo mạng lưới đường bộ OSM (chế độ xe tải); phí cầu đường ước tính theo danh mục trạm đã biết.",
+        tr(
+          "Đường đi theo mạng lưới đường bộ OSM (chế độ xe tải); phí cầu đường ước tính theo danh mục trạm đã biết.",
+          "Route follows the OSM road network (truck mode); tolls are estimated from the known toll station list.",
+        ),
       ],
       roadTypes: { national: distance, expressway: 0, other: 0 },
       provider: "valhalla",

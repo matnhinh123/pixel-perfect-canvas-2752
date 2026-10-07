@@ -44,6 +44,8 @@ export interface VehicleRecord {
   id: string;
   plate: string;
   name: string;
+  /** English name when `name` is Vietnamese (shown when the UI is in English). */
+  nameEn?: string;
   group: VehicleGroup;
   weightKg: number;
   /** Routing API profile (Vietmap `vehicle` param). */

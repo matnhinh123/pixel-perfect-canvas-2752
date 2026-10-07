@@ -18,6 +18,7 @@ import { useTemplateConfig } from "@/hooks/use-store";
 import { formName, TEMPLATE_FIELDS } from "@/mock-data/templates";
 import { rootOf, serviceCatalogService, templateOf } from "@/services/serviceCatalogService";
 import type { ServiceRecord, TenantFieldSetting } from "@/types";
+import { useT } from "@/lib/i18n";
 
 /** Tab "Cấu hình form": Visible / Required per field of the form the service inherits. */
 export function ServiceFormConfig({
@@ -27,6 +28,7 @@ export function ServiceFormConfig({
   service: ServiceRecord;
   services: ServiceRecord[];
 }) {
+  const { t } = useT();
   const cfg = useTemplateConfig();
   const form = templateOf(service, services);
   const root = rootOf(service, services);
@@ -38,8 +40,14 @@ export function ServiceFormConfig({
 
   if (!form)
     return (
-      <Panel title="Cấu hình form">
-        <EmptyState title="Dịch vụ chưa có Form" description="Chọn Form cho dịch vụ gốc trước." />
+      <Panel title={t("Cấu hình form", "Form Settings")}>
+        <EmptyState
+          title={t("Dịch vụ chưa có Form", "This service has no Form yet")}
+          description={t(
+            "Chọn Form cho dịch vụ gốc trước.",
+            "Select a Form for the root service first.",
+          )}
+        />
       </Panel>
     );
 
@@ -55,12 +63,16 @@ export function ServiceFormConfig({
       id: service.id,
       label: service.code,
     });
-    toast.success(n ? `Đã lưu cấu hình ${formName(form)}` : "Không có thay đổi");
+    toast.success(
+      n
+        ? t(`Đã lưu cấu hình ${formName(form)}`, `${formName(form)} settings saved`)
+        : t("Không có thay đổi", "No changes"),
+    );
   };
 
   return (
     <Panel
-      title="Cấu hình form"
+      title={t("Cấu hình form", "Form Settings")}
       bodyClassName="p-0"
       actions={
         !inherited && dirty ? (
@@ -84,7 +96,7 @@ export function ServiceFormConfig({
           <>
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
               <Lock className="h-3 w-3" />
-              Kế thừa từ {root.name}
+              {t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}
             </span>
             <Link
               to="/service/$id"
@@ -92,21 +104,28 @@ export function ServiceFormConfig({
               search={{ mode: "view", tab: "form" }}
               className="ml-auto text-xs font-semibold text-primary hover:underline"
             >
-              Chỉnh ở {root.name} →
+              {t(`Chỉnh ở ${root.name} →`, `Edit in ${root.name} →`)}
             </Link>
           </>
         ) : (
           <span className="text-xs text-muted-foreground">
-            Áp dụng cho mọi dịch vụ dùng {formName(form)}.
+            {t(
+              `Áp dụng cho mọi dịch vụ dùng ${formName(form)}.`,
+              `Applies to every service using ${formName(form)}.`,
+            )}
           </span>
         )}
       </div>
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className={thClass}>Trường</TableHead>
-            <TableHead className={`${thClass} w-32 text-center`}>Hiển thị</TableHead>
-            <TableHead className={`${thClass} w-32 text-center`}>Bắt buộc</TableHead>
+            <TableHead className={thClass}>{t("Trường", "Field")}</TableHead>
+            <TableHead className={`${thClass} w-32 text-center`}>
+              {t("Hiển thị", "Visible")}
+            </TableHead>
+            <TableHead className={`${thClass} w-32 text-center`}>
+              {t("Bắt buộc", "Required")}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -114,19 +133,25 @@ export function ServiceFormConfig({
             const s = draft[def.key] ?? { visible: true, required: false };
             const locked = def.coreMandatory;
             const disabled = locked || inherited;
+            const label = t(def.label, def.labelEn);
             return (
               <TableRow key={def.key}>
                 <TableCell className="py-2.5 font-medium">
                   <span className="inline-flex items-center gap-1.5">
-                    {def.label}
+                    {label}
                     {locked && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span tabIndex={0} aria-label="Trường cố định">
+                          <span tabIndex={0} aria-label={t("Trường cố định", "Locked field")}>
                             <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                           </span>
                         </TooltipTrigger>
-                        <TooltipContent>Trường cố định, luôn hiển thị và bắt buộc</TooltipContent>
+                        <TooltipContent>
+                          {t(
+                            "Trường cố định, luôn hiển thị và bắt buộc",
+                            "Locked field, always visible and required",
+                          )}
+                        </TooltipContent>
                       </Tooltip>
                     )}
                   </span>
@@ -135,7 +160,7 @@ export function ServiceFormConfig({
                   <Switch
                     checked={s.visible}
                     disabled={disabled}
-                    aria-label={`Hiển thị ${def.label}`}
+                    aria-label={t(`Hiển thị ${label}`, `${label} visible`)}
                     onCheckedChange={(v) => set(def.key, { visible: v })}
                   />
                 </TableCell>
@@ -143,7 +168,7 @@ export function ServiceFormConfig({
                   <Switch
                     checked={s.required}
                     disabled={disabled || !s.visible}
-                    aria-label={`Bắt buộc ${def.label}`}
+                    aria-label={t(`Bắt buộc ${label}`, `${label} required`)}
                     onCheckedChange={(v) => set(def.key, { required: v })}
                   />
                 </TableCell>

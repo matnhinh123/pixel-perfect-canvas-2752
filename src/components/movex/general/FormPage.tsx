@@ -4,6 +4,7 @@ import { AlertCircle, Loader2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader, type Crumb } from "@/components/movex/common";
 import { useConfirm } from "./ConfirmDialog";
+import { tr, useT } from "@/lib/i18n";
 
 /**
  * Blocks in-app navigation and tab close while the form is dirty.
@@ -20,9 +21,12 @@ export function useUnsavedChangesGuard(dirty: boolean) {
       if (skip.current || !dirtyRef.current) return false;
       const r = await confirm({
         title: "You have unsaved changes.",
-        description: "Bạn có thay đổi chưa lưu. Nếu rời trang bây giờ, các thay đổi sẽ bị mất.",
-        confirmLabel: "Bỏ thay đổi",
-        cancelLabel: "Ở lại trang",
+        description: tr(
+          "Bạn có thay đổi chưa lưu. Nếu rời trang bây giờ, các thay đổi sẽ bị mất.",
+          "If you leave this page now, your changes will be lost.",
+        ),
+        confirmLabel: tr("Bỏ thay đổi", "Discard changes"),
+        cancelLabel: tr("Ở lại trang", "Stay on page"),
         tone: "danger",
       });
       return r !== "confirm";
@@ -57,7 +61,7 @@ export function FormPageHeader({
   extra,
   saveLabel = "Save",
   rootLabel,
-  unsavedLabel = "Chưa lưu",
+  unsavedLabel,
 }: {
   crumbs: Crumb[];
   title: ReactNode;
@@ -75,6 +79,7 @@ export function FormPageHeader({
   rootLabel?: string;
   unsavedLabel?: string;
 }) {
+  const { t } = useT();
   return (
     <PageHeader
       crumbs={crumbs}
@@ -86,7 +91,7 @@ export function FormPageHeader({
           {badge}
           {dirty && !readOnly && (
             <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning">
-              {unsavedLabel}
+              {unsavedLabel ?? t("Chưa lưu", "Unsaved")}
             </span>
           )}
         </>

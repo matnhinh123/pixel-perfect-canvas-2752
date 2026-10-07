@@ -5,6 +5,7 @@ import type {
   TollStation,
   VehicleProfile,
 } from "@/types";
+import { tr } from "@/lib/i18n";
 
 /**
  * Provider-agnostic routing contract. UI components never talk to Vietmap (or any vendor) directly:
@@ -49,7 +50,8 @@ export function tollClassIndex(profile: VehicleProfile, capacityKg?: number): nu
   }
 }
 
-export const tollClassLabel = (idx: number | null) => (idx === null ? "—" : `Nhóm ${idx + 1}`);
+export const tollClassLabel = (idx: number | null) =>
+  idx === null ? "—" : tr(`Nhóm ${idx + 1}`, `Class ${idx + 1}`);
 
 /** Map MoveX profile to the Vietmap Route v4 `vehicle` parameter. */
 export const vietmapVehicle = (p: VehicleProfile) =>

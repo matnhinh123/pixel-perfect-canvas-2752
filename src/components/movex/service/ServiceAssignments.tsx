@@ -41,6 +41,7 @@ import {
 } from "@/services/serviceAssignmentService";
 import { templateOf } from "@/services/serviceCatalogService";
 import type { ServiceAssignment, ServiceRecord, Status } from "@/types";
+import { useT } from "@/lib/i18n";
 
 /** Tab "Phân công": departments / employees that handle this service. */
 export function ServiceAssignments({
@@ -50,6 +51,7 @@ export function ServiceAssignments({
   service: ServiceRecord;
   services: ServiceRecord[];
 }) {
+  const { t } = useT();
   const confirm = useConfirm();
   const all = useCollection(serviceAssignmentRepository);
   const rows = serviceAssignmentService.forService(service.id, all);
@@ -58,19 +60,19 @@ export function ServiceAssignments({
 
   const remove = async (a: ServiceAssignment) => {
     const r = await confirm({
-      title: "Xoá phân công?",
+      title: t("Xoá phân công?", "Delete assignment?"),
       description: `${departmentName(a.departmentId)} · ${employeeName(a.employeeId)}`,
-      confirmLabel: "Xoá",
+      confirmLabel: t("Xoá", "Delete"),
       tone: "danger",
     });
     if (r !== "confirm") return;
     serviceAssignmentService.remove(service, a.id);
-    toast.success("Đã xoá phân công");
+    toast.success(t("Đã xoá phân công", "Assignment deleted"));
   };
 
   return (
     <Panel
-      title="Phân công"
+      title={t("Phân công", "Assignment")}
       bodyClassName="p-0"
       actions={
         <Button
@@ -80,20 +82,30 @@ export function ServiceAssignments({
           onClick={() => setEditing("new")}
         >
           <Plus className="h-4 w-4" />
-          Thêm phân công
+          {t("Thêm phân công", "Add Assignment")}
         </Button>
       }
     >
       {rows.length === 0 ? (
         <EmptyState
-          title="Chưa có phân công"
-          description="Thêm phòng ban hoặc nhân viên xử lý dịch vụ này."
+          title={t("Chưa có phân công", "No assignments yet")}
+          description={t(
+            "Thêm phòng ban hoặc nhân viên xử lý dịch vụ này.",
+            "Add the departments or employees that handle this service.",
+          )}
         />
       ) : (
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              {["Phòng ban", "Nhân viên", "Form", "Ghi chú", "Trạng thái", "Thao tác"].map((h) => (
+              {[
+                t("Phòng ban", "Department"),
+                t("Nhân viên", "Employee"),
+                "Form",
+                t("Ghi chú", "Notes"),
+                t("Trạng thái", "Status"),
+                t("Thao tác", "Actions"),
+              ].map((h) => (
                 <TableHead key={h} className={thClass}>
                   {h}
                 </TableHead>
@@ -110,7 +122,9 @@ export function ServiceAssignments({
                   {a.employeeId ? (
                     employeeName(a.employeeId)
                   ) : (
-                    <span className="text-muted-foreground">Cả phòng</span>
+                    <span className="text-muted-foreground">
+                      {t("Cả phòng", "Whole department")}
+                    </span>
                   )}
                 </TableCell>
                 <TableCell className="py-2.5">
@@ -130,7 +144,7 @@ export function ServiceAssignments({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      aria-label="Sửa phân công"
+                      aria-label={t("Sửa phân công", "Edit assignment")}
                       onClick={() => setEditing(a)}
                     >
                       <Pencil className="h-4 w-4" />
@@ -139,7 +153,7 @@ export function ServiceAssignments({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:text-destructive"
-                      aria-label="Xoá phân công"
+                      aria-label={t("Xoá phân công", "Delete assignment")}
                       onClick={() => void remove(a)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -175,6 +189,7 @@ function AssignmentDialog({
   initial: ServiceAssignment | null;
   onClose: () => void;
 }) {
+  const { t } = useT();
   const [d, setD] = useState<AssignmentDraft>(() =>
     initial
       ? {
@@ -205,11 +220,15 @@ function AssignmentDialog({
     }
     try {
       serviceAssignmentService.save(service, d, initial?.id);
-      toast.success(initial ? "Đã cập nhật phân công" : "Đã thêm phân công");
+      toast.success(
+        initial
+          ? t("Đã cập nhật phân công", "Assignment updated")
+          : t("Đã thêm phân công", "Assignment added"),
+      );
       onClose();
     } catch (err) {
       if (err instanceof BusinessRuleError) setErrors(err.fieldErrors);
-      else toast.error("Lưu thất bại");
+      else toast.error(t("Lưu thất bại", "Save failed"));
     }
   };
 
@@ -217,10 +236,14 @@ function AssignmentDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{initial ? "Sửa phân công" : "Thêm phân công"}</DialogTitle>
+          <DialogTitle>
+            {initial
+              ? t("Sửa phân công", "Edit Assignment")
+              : t("Thêm phân công", "Add Assignment")}
+          </DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Phòng ban" required error={errors["departmentId"]}>
+          <Field label={t("Phòng ban", "Department")} required error={errors["departmentId"]}>
             <NativeSelect
               value={d.departmentId}
               invalid={!!errors["departmentId"]}
@@ -231,19 +254,23 @@ function AssignmentDialog({
               }}
               options={["", ...DEPARTMENTS.map((x) => x.id)]}
               labels={{
-                "": "Chọn phòng ban…",
+                "": t("Chọn phòng ban…", "Select department…"),
                 ...Object.fromEntries(DEPARTMENTS.map((x) => [x.id, x.name])),
               }}
             />
           </Field>
-          <Field label="Nhân viên" error={errors["employeeId"]} hint="Bỏ trống = cả phòng">
+          <Field
+            label={t("Nhân viên", "Employee")}
+            error={errors["employeeId"]}
+            hint={t("Bỏ trống = cả phòng", "Empty = whole department")}
+          >
             <NativeSelect
               value={d.employeeId ?? ""}
               disabled={!d.departmentId}
               onChange={(v) => set("employeeId", v || null)}
               options={["", ...staff.map((x) => x.id)]}
               labels={{
-                "": "— Cả phòng",
+                "": t("— Cả phòng", "— Whole department"),
                 ...Object.fromEntries(staff.map((x) => [x.id, x.name])),
               }}
             />
@@ -256,17 +283,17 @@ function AssignmentDialog({
               labels={{ "": "—", ...(form ? { [form]: formName(form) } : {}) }}
             />
           </Field>
-          <Field label="Trạng thái">
+          <Field label={t("Trạng thái", "Status")}>
             <NativeSelect
               value={d.status}
               onChange={(v) => set("status", v as Status)}
               options={["Active", "Inactive"]}
             />
           </Field>
-          <Field label="Ghi chú" className="col-span-2">
+          <Field label={t("Ghi chú", "Notes")} className="col-span-2">
             <Input
               value={d.note}
-              placeholder="VD: Xử lý chính"
+              placeholder={t("VD: Xử lý chính", "E.g. Main handler")}
               onChange={(e) => set("note", e.target.value)}
             />
           </Field>

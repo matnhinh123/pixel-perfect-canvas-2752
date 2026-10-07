@@ -5,6 +5,7 @@ import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
 import { asReadOnlyRecord } from "@/components/movex/OutOfScope";
 import { LOCATIONS } from "@/mock-data/locations";
+import { useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/location")({
   head: () => ({
@@ -19,10 +20,10 @@ export const Route = createFileRoute("/location")({
 type Row = ReturnType<typeof asReadOnlyRecord<(typeof LOCATIONS)[number]>>;
 
 const PROVINCES = [...new Set(LOCATIONS.map((l) => l.province))];
-const columns: ListColumn<Row>[] = [
+const columnsFor = (t: (vi: string, en: string) => string): ListColumn<Row>[] => [
   {
     key: "id",
-    label: "Mã địa điểm",
+    label: t("Mã địa điểm", "Location code"),
     type: "text",
     pinned: true,
     value: (r) => r.code ?? r.id,
@@ -30,30 +31,30 @@ const columns: ListColumn<Row>[] = [
   },
   {
     key: "name",
-    label: "Tên địa điểm",
+    label: t("Tên địa điểm", "Location name"),
     type: "text",
     value: (r) => r.name,
     className: "font-medium",
   },
   {
     key: "address",
-    label: "Địa chỉ",
+    label: t("Địa chỉ", "Address"),
     type: "text",
     value: (r) => r.address,
     className: "text-muted-foreground",
   },
   {
     key: "province",
-    label: "Tỉnh / Thành phố",
+    label: t("Tỉnh / Thành phố", "Province / City"),
     type: "enum",
     options: PROVINCES,
     value: (r) => r.province,
   },
-  { key: "lat", label: "Vĩ độ", type: "number", value: (r) => r.lat },
-  { key: "lng", label: "Kinh độ", type: "number", value: (r) => r.lng },
+  { key: "lat", label: t("Vĩ độ", "Latitude"), type: "number", value: (r) => r.lat },
+  { key: "lng", label: t("Kinh độ", "Longitude"), type: "number", value: (r) => r.lng },
   {
     key: "status",
-    label: "Trạng thái",
+    label: t("Trạng thái", "Status"),
     type: "enum",
     options: ["Active"],
     value: (r) => r.status,
@@ -62,29 +63,39 @@ const columns: ListColumn<Row>[] = [
 ];
 
 function LocationList() {
+  const { t, lang } = useT();
   const rows = useMemo(() => LOCATIONS.map(asReadOnlyRecord), []);
+  // `t` is recreated every render; the language is the real dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const columns = useMemo(() => columnsFor(t), [lang]);
   return (
     <EntityListPage<Row>
       screen="location"
       entityType="Location"
       entityLabel="Location"
       title="Location"
-      subtitle="Danh mục địa điểm dùng cho Routing (điểm đi, điểm dừng, điểm đến)"
+      subtitle={t(
+        "Danh mục địa điểm dùng cho Routing (điểm đi, điểm dừng, điểm đến)",
+        "Location master data used by Routing (origin, waypoints, destination)",
+      )}
       rows={rows}
       columns={columns}
-      searchPlaceholder="Tìm mã, tên, địa chỉ..."
+      searchPlaceholder={t("Tìm mã, tên, địa chỉ...", "Search code, name, address...")}
       searchValues={(r) => [r.id, r.code ?? "", r.name, r.address, r.province]}
       quickFilters={[
         {
           key: "province",
-          allLabel: "Tất cả tỉnh/TP",
+          allLabel: t("Tất cả tỉnh/TP", "All provinces/cities"),
           options: PROVINCES.map((p) => ({
             label: p,
             conditions: [{ field: "province", operator: "eq", value: p }],
           })),
         },
       ]}
-      readOnlyReason="Danh mục Location ở chế độ chỉ đọc trong bản demo."
+      readOnlyReason={t(
+        "Danh mục Location ở chế độ chỉ đọc trong bản demo.",
+        "The Location list is read-only in this demo.",
+      )}
     />
   );
 }

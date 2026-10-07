@@ -6,6 +6,7 @@ import { formName } from "@/mock-data/templates";
 import { auditService } from "./auditService";
 import { BusinessRuleError, stampCreate, stampUpdate } from "./crudService";
 import { templateOf } from "./serviceCatalogService";
+import { tr } from "@/lib/i18n";
 
 export type AssignmentDraft = Pick<
   ServiceAssignment,
@@ -25,11 +26,17 @@ const describe = (a: AssignmentDraft) =>
 
 export function validateAssignment(a: AssignmentDraft, service: ServiceRecord) {
   const e: Record<string, string> = {};
-  if (!a.departmentId) e["departmentId"] = "Chọn phòng ban.";
+  if (!a.departmentId) e["departmentId"] = tr("Chọn phòng ban.", "Select a department.");
   if (a.employeeId && !employeesOf(a.departmentId).some((x) => x.id === a.employeeId))
-    e["employeeId"] = "Nhân viên không thuộc phòng ban đã chọn.";
+    e["employeeId"] = tr(
+      "Nhân viên không thuộc phòng ban đã chọn.",
+      "The employee does not belong to the selected department.",
+    );
   if (a.form && a.form !== templateOf(service))
-    e["form"] = `Chỉ chọn ${formName(templateOf(service))} cho dịch vụ này.`;
+    e["form"] = tr(
+      `Chỉ chọn ${formName(templateOf(service))} cho dịch vụ này.`,
+      `Only ${formName(templateOf(service))} can be selected for this service.`,
+    );
   return e;
 }
 
@@ -40,7 +47,10 @@ export const serviceAssignmentService = {
   save(service: ServiceRecord, draft: AssignmentDraft, id?: string): ServiceAssignment {
     const errors = validateAssignment(draft, service);
     if (Object.keys(errors).length)
-      throw new BusinessRuleError("Vui lòng kiểm tra các trường được đánh dấu.", errors);
+      throw new BusinessRuleError(
+        tr("Vui lòng kiểm tra các trường được đánh dấu.", "Please check the highlighted fields."),
+        errors,
+      );
     const clean = { ...draft, note: draft.note.trim() };
     const base = {
       entityType: "Service" as const,
@@ -56,7 +66,12 @@ export const serviceAssignmentService = {
         ...stampCreate(),
       };
       serviceAssignmentRepository.insert(rec);
-      auditService.log({ ...base, action: "CREATE", field: "Phân công", newValue: describe(rec) });
+      auditService.log({
+        ...base,
+        action: "CREATE",
+        field: tr("Phân công", "Assignment"),
+        newValue: describe(rec),
+      });
       return rec;
     }
     const next = stampUpdate({ ...existing, ...clean });
@@ -64,7 +79,7 @@ export const serviceAssignmentService = {
     auditService.log({
       ...base,
       action: "UPDATE",
-      field: "Phân công",
+      field: tr("Phân công", "Assignment"),
       oldValue: `${describe(existing)} · ${existing.status}`,
       newValue: `${describe(next)} · ${next.status}`,
     });
@@ -81,7 +96,7 @@ export const serviceAssignmentService = {
       entityId: service.id,
       entityLabel: service.code,
       action: "DELETE",
-      field: "Phân công",
+      field: tr("Phân công", "Assignment"),
       oldValue: describe(a),
     });
   },
