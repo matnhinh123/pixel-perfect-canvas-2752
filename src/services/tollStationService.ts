@@ -27,7 +27,12 @@ export const newTollStationDraft = (): TollStationDraft => ({
   prices: [0, 0, 0, 0, 0],
 });
 
-export function validateTollStation(d: TollStationDraft, id?: string): Record<string, string> {
+/** `requireCoords: false` — tolls typed in on a route (no position known; not auto-matched later). */
+export function validateTollStation(
+  d: TollStationDraft,
+  id?: string,
+  { requireCoords = true }: { requireCoords?: boolean } = {},
+): Record<string, string> {
   const e: Record<string, string> = {};
   const code = d.code.trim().toUpperCase();
   if (!code) e["code"] = "Nhập mã trạm.";
@@ -38,15 +43,17 @@ export function validateTollStation(d: TollStationDraft, id?: string): Record<st
   )
     e["code"] = `Mã trạm ${code} đã tồn tại.`;
   if (!d.name.trim()) e["name"] = "Nhập tên trạm.";
-  if (!Number.isFinite(d.lat) || Math.abs(d.lat) > 90) e["lat"] = "Vĩ độ không hợp lệ.";
-  if (!Number.isFinite(d.lng) || Math.abs(d.lng) > 180) e["lng"] = "Kinh độ không hợp lệ.";
+  if (requireCoords || Number.isFinite(d.lat) || Number.isFinite(d.lng)) {
+    if (!Number.isFinite(d.lat) || Math.abs(d.lat) > 90) e["lat"] = "Vĩ độ không hợp lệ.";
+    if (!Number.isFinite(d.lng) || Math.abs(d.lng) > 180) e["lng"] = "Kinh độ không hợp lệ.";
+  }
   if (d.prices.some((p) => !Number.isFinite(p) || p < 0)) e["prices"] = "Giá vé phải ≥ 0.";
   return e;
 }
 
 export const tollStationService = {
-  save(d: TollStationDraft, id?: string): TollGateRecord {
-    const errors = validateTollStation(d, id);
+  save(d: TollStationDraft, id?: string, opts?: { requireCoords?: boolean }): TollGateRecord {
+    const errors = validateTollStation(d, id, opts);
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Vui lòng kiểm tra các trường được đánh dấu.", errors);
     const clean = { ...d, code: d.code.trim().toUpperCase(), name: d.name.trim() };

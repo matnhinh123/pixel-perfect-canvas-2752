@@ -29,6 +29,8 @@ import {
   RouteAlternativeSelector,
 } from "@/components/movex/routing/RouteAlternativeSelector";
 import { TollStationTable, type TollRow } from "@/components/movex/routing/TollStationTable";
+import { AddTollDialog, type TollLeg } from "@/components/movex/routing/AddTollDialog";
+import { tollClassIndex } from "@/services/routing/RouteProvider";
 import { useCollection } from "@/hooks/use-store";
 import { routeRepository } from "@/repositories";
 import {
@@ -48,6 +50,7 @@ import { formatDuration, formatVnd } from "@/lib/format";
 import {
   VEHICLE_PROFILES,
   type RouteCalculation,
+  type TollStation,
   type RoutePoint,
   type RouteRecord,
   type RouteType,
@@ -147,6 +150,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const [calcError, setCalcError] = useState<string | null>(null);
   const [lastSig, setLastSig] = useState(() => (initial.outbound ? calcSig(initial) : ""));
   const [auditOpen, setAuditOpen] = useState(false);
+  const [addTollOpen, setAddTollOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [legView, setLegView] = useState<LegView>("both");
   /** Editor actions (recalculate, pick alternative) written to the audit trail on Save. */
@@ -369,6 +373,41 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       outbound: alt,
       ...(p.returnMode !== "custom" ? { returnLeg: reverseLeg(alt) } : {}),
     }));
+  };
+
+  /** Add a toll (from Toll Station or typed in). Same route reversed: it applies to both legs. */
+  const addToll = (toll: TollStation, leg: TollLeg) => {
+    const withToll = (c: RouteCalculation): RouteCalculation => {
+      const tollStations = [...c.tollStations.filter((t) => t.id !== toll.id), toll];
+      return {
+        ...c,
+        tollStations,
+        tollCost: tollStations.reduce((n, t) => n + t.price * t.passCount, 0),
+      };
+    };
+    setR((p) => {
+      if (leg === "Return" && p.returnMode === "custom")
+        return { ...p, returnLeg: p.returnLeg && withToll(p.returnLeg) };
+      const outbound = p.outbound && withToll(p.outbound);
+      return {
+        ...p,
+        outbound,
+        alternatives: p.alternatives.map((a, j) =>
+          altId(a, j) === p.selectedRouteId ? withToll(a) : a,
+        ),
+        ...(p.returnMode !== "custom" && outbound ? { returnLeg: reverseLeg(outbound) } : {}),
+      };
+    });
+    setPending((q) => [
+      ...q,
+      {
+        action: "UPDATE",
+        field: "Tolls",
+        newValue: `+ ${toll.code ?? ""} ${toll.name} (${formatVnd(toll.price)})`.trim(),
+        note: leg === "Return" ? "Return Trip" : "Outbound",
+      },
+    ]);
+    toast.success(`Added toll ${toll.name}`);
   };
 
   /** Edit a toll fee. Same route reversed: one toll, one price — both legs follow the outbound. */
@@ -795,6 +834,19 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
           <Panel
             title={`Toll Stations${r.outbound ? ` (${selectedName.replace(" (Recommended)", "")})` : ""}`}
             bodyClassName="p-0"
+            actions={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 border-primary/40 text-primary"
+                disabled={!r.outbound || loading}
+                title={r.outbound ? "Add Toll" : "Calculate the route first"}
+                onClick={() => setAddTollOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Add Toll
+              </Button>
+            }
           >
             {totals.calculated && (
               <div className="flex flex-wrap gap-x-8 gap-y-1 border-b bg-muted/40 px-4 py-2 text-sm">
@@ -821,6 +873,14 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
         </div>
       </div>
 
+      <AddTollDialog
+        open={addTollOpen}
+        onOpenChange={setAddTollOpen}
+        tollClass={tollClassIndex(r.vehicleProfile, r.capacityKg) ?? 0}
+        existingIds={new Set(tollRows.map((x) => x.station.id))}
+        legs={round && r.returnMode === "custom" ? ["Outbound", "Return"] : ["Outbound"]}
+        onAdd={addToll}
+      />
       <AuditHistoryDrawer
         open={auditOpen}
         onOpenChange={setAuditOpen}
