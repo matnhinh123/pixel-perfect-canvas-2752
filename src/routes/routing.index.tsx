@@ -55,7 +55,7 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
     },
     {
       key: "originCode",
-      label: t("Location Code đi", "Origin location code"),
+      label: t("Mã đi", "Origin code"),
       type: "text",
       value: (r) => codeOf(r.origin),
       render: (r) => <span className="font-medium text-primary">{codeOf(r.origin) || "—"}</span>,
@@ -69,7 +69,7 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
     },
     {
       key: "destinationCode",
-      label: t("Location Code đến", "Destination location code"),
+      label: t("Mã đến", "Dest. code"),
       type: "text",
       value: (r) => codeOf(r.destination),
       render: (r) => (
@@ -91,7 +91,10 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
       render: (r) =>
         r.waypoints.length ? (
           <span title={r.waypoints.map((w) => w.name).join(" → ")}>
-            {t(`${r.waypoints.length} điểm`, `${r.waypoints.length} stops`)}
+            {t(
+              `${r.waypoints.length} điểm`,
+              `${r.waypoints.length} ${r.waypoints.length === 1 ? "stop" : "stops"}`,
+            )}
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -119,7 +122,7 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
     },
     {
       key: "time",
-      label: t("Thời gian ước tính", "Estimated time"),
+      label: t("Thời gian", "Est. time"),
       type: "number",
       value: (r) => (r.outbound ? routeTotals(r).estimatedTimeMin : null),
       render: (r) => (r.outbound ? formatDuration(routeTotals(r).estimatedTimeMin) : "—"),
@@ -150,7 +153,7 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
     },
     {
       key: "updatedAt",
-      label: t("Cập nhật lúc", "Updated at"),
+      label: t("Cập nhật", "Updated"),
       type: "date",
       value: (r) => r.updatedAt,
       render: (r) => (
@@ -168,34 +171,34 @@ const quickFiltersFor = (t: T): QuickFilter[] => {
   return [
     {
       key: "vehicle",
-      allLabel: t("Tất cả phương tiện", "All vehicles"),
+      allLabel: t("Phương tiện: Tất cả", "Vehicle: All"),
       options: VEHICLE_PROFILES.map((v) => ({
-        label: PROFILE_LABEL[v],
+        label: `${t("Phương tiện", "Vehicle")}: ${PROFILE_LABEL[v]}`,
         conditions: [{ field: "vehicleProfile", operator: "eq", value: v }],
       })),
     },
     {
       key: "status",
-      allLabel: t("Tất cả trạng thái", "All statuses"),
+      allLabel: t("Trạng thái: Tất cả", "Status: All"),
       options: ["Active", "Inactive"].map((v) => ({
-        label: v,
+        label: `${t("Trạng thái", "Status")}: ${v}`,
         conditions: [{ field: "status", operator: "eq", value: v }],
       })),
     },
     {
       key: "distance",
-      allLabel: t("Mọi khoảng cách", "Any distance"),
+      allLabel: t("Khoảng cách: Tất cả", "Distance: All"),
       options: [
         {
-          label: "< 50 km",
+          label: `${t("Khoảng cách", "Distance")}: < 50 km`,
           conditions: [{ field: "distance", operator: "between", value: "", value2: "49.99" }],
         },
         {
-          label: "50 – 100 km",
+          label: `${t("Khoảng cách", "Distance")}: 50 – 100 km`,
           conditions: [{ field: "distance", operator: "between", value: "50", value2: "100" }],
         },
         {
-          label: "> 100 km",
+          label: `${t("Khoảng cách", "Distance")}: > 100 km`,
           conditions: [{ field: "distance", operator: "between", value: "100.01", value2: "" }],
         },
       ],
@@ -219,10 +222,6 @@ function RoutingList() {
       entityType="Route"
       entityLabel="Route"
       title="Routing"
-      subtitle={t(
-        "Quản lý tuyến đường, khoảng cách và phí cầu đường",
-        "Manage routes, distances and toll fees",
-      )}
       rows={rows}
       columns={columns}
       searchPlaceholder={t(
@@ -239,8 +238,9 @@ function RoutingList() {
         r.description ?? "",
       ]}
       quickFilters={quickFilters}
+      showRefresh={false}
       crud={routeCrud}
-      addLabel={t("Thêm mới Route", "New Route")}
+      addLabel="Add Route"
       onAdd={() => void navigate({ to: "/routing/$id", params: { id: "new" } })}
       onView={(r) =>
         void navigate({ to: "/routing/$id", params: { id: r.id }, search: { mode: "view" } })

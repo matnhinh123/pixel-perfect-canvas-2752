@@ -279,7 +279,7 @@ export function DataTable<T extends { id: string }>({
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="min-w-20 text-center">
-              Trang {page} / {pages}
+              {t("Trang", "Page")} {page} / {pages}
             </span>
             <Button
               variant="outline"

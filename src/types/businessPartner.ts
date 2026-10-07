@@ -1,7 +1,7 @@
 import type { BaseRecord } from "./common";
 
-export type BpRole = "Customer" | "Vendor" | "Employee";
-export const BP_ROLES: readonly BpRole[] = ["Customer", "Vendor", "Employee"];
+export type BpRole = "Customer" | "Vendor";
+export const BP_ROLES: readonly BpRole[] = ["Customer", "Vendor"];
 
 /** Free-form row id so React keys stay stable while a table is being edited. */
 interface Row {

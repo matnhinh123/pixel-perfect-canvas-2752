@@ -267,7 +267,6 @@ function BpForm({
                 [
                   ["Customer", t("Công nợ phải thu · TK 131", "Receivable · account 131")],
                   ["Vendor", t("Công nợ phải trả · TK 331", "Payable · account 331")],
-                  ["Employee", t("Nhân viên nội bộ", "Internal staff")],
                 ] as const
               ).map(([r, hint]) => (
                 <label

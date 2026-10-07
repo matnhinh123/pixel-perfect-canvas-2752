@@ -1,5 +1,5 @@
 // App UI language (VI / EN). Strings are written inline as t("tiếng Việt", "English"); data such as
-// place names, people and seed records is not translated. The choice is remembered per browser.
+// place names, people and seed records is not translated. English by default; the choice is remembered per browser.
 import { useSyncExternalStore } from "react";
 
 export type Lang = "vi" | "en";
@@ -9,9 +9,10 @@ const listeners = new Set<() => void>();
 
 const read = (): Lang => {
   try {
-    return typeof window !== "undefined" && window.localStorage.getItem(KEY) === "en" ? "en" : "vi";
+    // English unless the user explicitly picked Vietnamese in the language switch.
+    return typeof window !== "undefined" && window.localStorage.getItem(KEY) === "vi" ? "vi" : "en";
   } catch {
-    return "vi";
+    return "en";
   }
 };
 
@@ -38,7 +39,7 @@ const subscribe = (cb: () => void) => {
 
 /** Current language, re-rendering when it changes. */
 export function useLang(): Lang {
-  return useSyncExternalStore(subscribe, getLang, () => "vi");
+  return useSyncExternalStore(subscribe, getLang, () => "en");
 }
 
 /** In components: `const { t } = useT(); t("Lưu", "Save")`. */

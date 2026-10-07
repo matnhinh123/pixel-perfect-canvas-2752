@@ -1,4 +1,4 @@
-// Dropdown catalogs for the Location (Source Master) form. Stand-ins for the future Common Code master.
+// Dropdown catalogs for the Location form. Stand-ins for the future Common Code master.
 
 /** Location Type → its Location Sub Types (Sub Type stays disabled until a Type is picked). */
 export const LOCATION_TYPES: Record<string, readonly string[]> = {

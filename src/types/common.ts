@@ -4,7 +4,14 @@
 export type Status = "Active" | "Draft" | "Inactive";
 
 export type EntityType =
-  "Route" | "Service" | "Cost" | "Cost Group" | "Location" | "Vehicle" | "Toll Station" | "Business Partner";
+  | "Route"
+  | "Service"
+  | "Cost"
+  | "Cost Group"
+  | "Location"
+  | "Vehicle"
+  | "Toll Station"
+  | "Business Partner";
 
 /** Every persisted record carries these fields so the generic repository can soft-delete & audit. */
 export interface BaseRecord {

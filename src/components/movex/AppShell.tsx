@@ -44,7 +44,7 @@ interface NavItem {
 /** Master Data menu (design: colourful emoji-style icons, orange active item). */
 export const NAV: NavItem[] = [
   { to: "/business-partner", label: "Business Partner", icon: "💼" },
-  { to: "/location", label: "Source Master", icon: "📍" },
+  { to: "/location", label: "Location", icon: "📍" },
   { to: "/vehicle", label: "Vehicle", icon: "🚚" },
   { to: "/toll-station", label: "Toll Station", icon: "🏛️" },
   { to: "/routing", label: "Route Management", icon: "🗺️" },

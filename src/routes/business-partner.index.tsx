@@ -42,7 +42,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     options: [...LEGAL_TYPES],
     value: (r) => r.legalType,
   },
-  { key: "taxCode", width: 120, label: "Identify ID", type: "text", value: (r) => r.taxCode },
+  { key: "taxCode", width: 120, label: "Tax ID", type: "text", value: (r) => r.taxCode },
   {
     key: "invoiceSerial",
     width: 115,
@@ -86,7 +86,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     key: "phone",
     width: 130,
     defaultHidden: true,
-    label: "Phone Number",
+    label: "Phone",
     type: "text",
     value: (r) => r.phone,
   },
@@ -145,7 +145,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   {
     key: "invoiceLanguage",
     width: 150,
-    label: "Def Invoicing Language",
+    label: "Invoice Lang.",
     type: "text",
     value: (r) => r.invoiceLanguage,
     defaultHidden: true,
@@ -153,7 +153,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   {
     key: "currency",
     width: 110,
-    label: "Def Currency",
+    label: "Currency",
     type: "text",
     value: (r) => r.currency,
     defaultHidden: true,
@@ -162,7 +162,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     key: "businessCategory",
     width: 160,
     truncate: true,
-    label: "Business Category",
+    label: "Category",
     type: "text",
     value: (r) => r.businessCategory,
     defaultHidden: true,
@@ -170,7 +170,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   {
     key: "partnerScope",
     width: 130,
-    label: "Partner Scope",
+    label: "Scope",
     type: "text",
     value: (r) => r.partnerScope,
     defaultHidden: true,
@@ -179,7 +179,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     key: "serviceProviderType",
     width: 170,
     truncate: true,
-    label: "Service Provider Type",
+    label: "Provider Type",
     type: "text",
     value: (r) => r.serviceProviderType,
     defaultHidden: true,
@@ -187,7 +187,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   {
     key: "inHouse",
     width: 120,
-    label: "In-house Partner",
+    label: "In-house",
     type: "enum",
     options: ["Yes", "No"],
     value: (r) => (r.inHouse ? "Yes" : "No"),
@@ -283,7 +283,7 @@ function BusinessPartnerList() {
           })),
         },
       ]}
-      creationDate={(r) => r.createdAt}
+      showRefresh={false}
       crud={bpCrud}
       addLabel="Add Business Partner"
       onAdd={() =>

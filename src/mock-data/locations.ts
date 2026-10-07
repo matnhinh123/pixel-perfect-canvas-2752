@@ -207,7 +207,7 @@ export const findLocationByName = (name: string) => {
 /** Location master record (editable on the Location screen; used by Routing stop pickers). */
 export type LocationMasterRecord = LocationRecord &
   BaseRecord & {
-    // Source Master fields. Optional: rows saved before these existed simply lack them.
+    // Location fields. Optional: rows saved before these existed simply lack them.
     country?: string;
     locationType?: string;
     locationSubType?: string;

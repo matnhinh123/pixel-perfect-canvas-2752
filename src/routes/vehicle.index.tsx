@@ -63,7 +63,7 @@ function Expiry({ ymd, t }: { ymd: string; t: T }) {
 const allColumns = (t: T): ListColumn<Row>[] => [
   {
     key: "plateNumber",
-    label: "Plate Number",
+    label: t("Biển số", "Plate No."),
     type: "text",
     pinned: true,
     width: 130,
@@ -72,7 +72,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "vehicleType",
-    label: "Vehicle Type",
+    label: t("Loại xe", "Type"),
     type: "enum",
     options: VEHICLE_TYPES,
     width: 120,
@@ -81,7 +81,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "vehicleGroup",
-    label: "Vehicle Group",
+    label: t("Nhóm xe", "Group"),
     type: "text",
     width: 130,
     value: (r) => r.vehicleGroup,
@@ -89,7 +89,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "modelCode",
-    label: "Model Code",
+    label: "Model",
     type: "text",
     width: 160,
     truncate: true,
@@ -99,7 +99,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   {
     key: "productionCountry",
     defaultHidden: true,
-    label: "Production Country",
+    label: t("Xuất xứ", "Origin"),
     type: "enum",
     options: PRODUCTION_COUNTRIES,
     width: 150,
@@ -109,7 +109,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   {
     key: "chassisNumber",
     defaultHidden: true,
-    label: "Chassis Number (VIN)",
+    label: t("Số khung", "VIN"),
     type: "text",
     width: 190,
     value: (r) => r.chassisNumber,
@@ -117,7 +117,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   {
     key: "engineNumber",
     defaultHidden: true,
-    label: "Engine Number",
+    label: t("Số máy", "Engine No."),
     type: "text",
     width: 150,
     truncate: true,
@@ -126,7 +126,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "registrationExpiry",
-    label: "Registration Expiration Date",
+    label: t("Hạn đăng ký", "Reg. Expiry"),
     type: "date",
     width: 175,
     value: (r) => r.registrationExpiry,
@@ -134,7 +134,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "inspectionExpiry",
-    label: "Inspection Expiration Date",
+    label: t("Hạn đăng kiểm", "Insp. Expiry"),
     type: "date",
     width: 170,
     value: (r) => r.inspectionExpiry,
@@ -258,7 +258,7 @@ function VehicleList() {
           })),
         },
       ]}
-      creationDate={(r) => r.createdAt}
+      showRefresh={false}
       crud={vehicleCrud}
       addLabel="Add Vehicle"
       onAdd={() => void navigate({ to: "/vehicle/$id", params: { id: "new" }, search: {} })}

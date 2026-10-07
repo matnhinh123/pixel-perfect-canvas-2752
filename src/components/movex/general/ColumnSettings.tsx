@@ -38,9 +38,12 @@ export function ColumnSettings({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" className="h-10">
           <Columns3 className="h-4 w-4" />
-          {t("Cột hiển thị", "Columns")}
+          {t("Cột", "Columns")}
+          <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+            {visibleCount}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">

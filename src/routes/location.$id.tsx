@@ -35,9 +35,7 @@ export const Route = createFileRoute("/location/$id")({
   validateSearch: (s: Record<string, unknown>): { mode?: Mode } =>
     s["mode"] === "view" || s["mode"] === "edit" ? { mode: s["mode"] } : {},
   head: ({ params }) => ({
-    meta: [
-      { title: params.id === "new" ? "Create Source Master — MoveX" : "Source Master — MoveX" },
-    ],
+    meta: [{ title: params.id === "new" ? "Create Location — MoveX" : "Location — MoveX" }],
   }),
   component: LocationPage,
 });
@@ -53,7 +51,7 @@ function LocationPage() {
       <Panel>
         <EmptyState
           icon={<XCircle className="h-8 w-8" />}
-          title={t("Không tìm thấy địa điểm", "Source Master not found")}
+          title={t("Không tìm thấy địa điểm", "Location not found")}
           action={
             <Button asChild size="sm">
               <Link to="/location">{t("Về danh sách", "Back to list")}</Link>
@@ -139,8 +137,8 @@ function LocationForm({
       guard.allowNext();
       toast.success(
         isNew
-          ? t(`Đã thêm địa điểm ${saved.code}`, `Source Master ${saved.code} added`)
-          : t(`Đã lưu địa điểm ${saved.code}`, `Source Master ${saved.code} saved`),
+          ? t(`Đã thêm địa điểm ${saved.code}`, `Location ${saved.code} added`)
+          : t(`Đã lưu địa điểm ${saved.code}`, `Location ${saved.code} saved`),
       );
       void navigate({ to: "/location/$id", params: { id: saved.id }, search: { mode: "view" } });
     } catch (err) {
@@ -156,7 +154,7 @@ function LocationForm({
     <div>
       <FormPageHeader
         crumbs={[
-          { label: "Source Master", to: "/location" },
+          { label: "Location", to: "/location" },
           ...(source ? [{ label: source.code ?? source.name }] : []),
           {
             label: isNew ? "Add New" : readOnly ? t("Chi tiết", "Detail") : t("Chỉnh sửa", "Edit"),
@@ -164,7 +162,7 @@ function LocationForm({
         ]}
         title={
           isNew
-            ? "Create Source Master"
+            ? "Create Location"
             : readOnly
               ? source.name
               : t(`Chỉnh sửa: ${source.name}`, `Edit: ${source.name}`)

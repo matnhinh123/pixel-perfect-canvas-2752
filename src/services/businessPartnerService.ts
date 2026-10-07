@@ -178,6 +178,8 @@ export const newBusinessPartnerDraft = (): BusinessPartnerDraft => ({
 /** Draft for editing an existing record: an empty table gets one blank row ready for input. */
 export const draftOf = (r: BusinessPartnerRecord): BusinessPartnerDraft => {
   const d = structuredClone(r) as BusinessPartnerDraft;
+  // The Employee role was removed; ignore it on records saved earlier.
+  d.roles = d.roles.filter((x) => x === "Customer" || x === "Vendor");
   const fill = <T>(rows: T[], blank: () => T) => (rows.length ? rows : [blank()]);
   d.documents = fill(d.documents, blankDocument);
   d.customer.creditTerms = fill(d.customer.creditTerms, blankCredit);
@@ -381,7 +383,7 @@ export const businessPartnerService = {
         tr("Vui lòng kiểm tra các trường được đánh dấu.", "Please check the highlighted fields."),
         errors,
       );
-    const roleOrder: BpRole[] = ["Customer", "Vendor", "Employee"];
+    const roleOrder: BpRole[] = ["Customer", "Vendor"];
     const clean = {
       ...d,
       bpCode: d.bpCode.trim().toUpperCase(),

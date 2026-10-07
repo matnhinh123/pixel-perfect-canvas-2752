@@ -66,10 +66,14 @@ export function AdvancedFilter({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant={value.length ? "secondary" : "outline"} size="sm">
+        <Button variant={value.length ? "secondary" : "outline"} className="h-10">
           <Filter className="h-4 w-4" />
-          {t("Bộ lọc nâng cao", "Filter")}
-          {value.length ? ` (${value.length})` : ""}
+          {t("Bộ lọc", "Filter")}
+          {value.length > 0 && (
+            <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+              {value.length}
+            </span>
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[620px] p-0">

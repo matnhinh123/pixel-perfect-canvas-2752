@@ -14,7 +14,7 @@ import { useT } from "@/lib/i18n";
 export const Route = createFileRoute("/location/")({
   head: () => ({
     meta: [
-      { title: "Source Master — MoveX" },
+      { title: "Location — MoveX" },
       { name: "description", content: "Location (source) master data used by Routing." },
     ],
   }),
@@ -29,7 +29,7 @@ const yesNo = (v: boolean | undefined) => (v ? "Yes" : "No");
 const columnsFor = (t: T): ListColumn<Row>[] => [
   {
     key: "id",
-    label: t("Mã địa điểm", "Location Code"),
+    label: t("Mã", "Code"),
     type: "text",
     pinned: true,
     width: 130,
@@ -38,7 +38,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "name",
-    label: t("Tên địa điểm", "Location Name"),
+    label: t("Tên", "Name"),
     type: "text",
     width: 200,
     truncate: true,
@@ -47,7 +47,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "locationType",
-    label: "Location Type",
+    label: t("Loại", "Type"),
     type: "enum",
     options: Object.keys(LOCATION_TYPES),
     width: 140,
@@ -57,7 +57,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   {
     key: "locationSubType",
     defaultHidden: true,
-    label: "Location Sub Type",
+    label: t("Loại phụ", "Sub Type"),
     type: "text",
     width: 170,
     truncate: true,
@@ -65,7 +65,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "serviceMode",
-    label: "Service Mode",
+    label: t("Phương thức", "Mode"),
     type: "enum",
     options: SERVICE_MODES,
     width: 120,
@@ -107,7 +107,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "externalCode",
-    label: "External Code",
+    label: "Ext. Code",
     type: "text",
     width: 130,
     defaultHidden: true,
@@ -115,7 +115,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "operatorName",
-    label: "Operator Name",
+    label: t("Đơn vị vận hành", "Operator"),
     type: "text",
     width: 160,
     truncate: true,
@@ -124,7 +124,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "customsControlled",
-    label: "Customs Controlled",
+    label: t("Hải quan", "Customs"),
     type: "enum",
     options: ["Yes", "No"],
     width: 150,
@@ -133,7 +133,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "bonded",
-    label: "Bonded",
+    label: t("Ngoại quan", "Bonded"),
     type: "enum",
     options: ["Yes", "No"],
     width: 100,
@@ -183,12 +183,8 @@ function LocationList() {
     <EntityListPage<Row>
       screen="location"
       entityType="Location"
-      entityLabel="Source Master"
-      title="Source Master"
-      subtitle={t(
-        "Danh mục địa điểm dùng cho Routing (điểm đi, điểm dừng, điểm đến)",
-        "Location master data used by Routing (origin, waypoints, destination)",
-      )}
+      entityLabel="Location"
+      title="Location"
       rows={rows}
       columns={columns}
       searchPlaceholder={t(
@@ -222,9 +218,9 @@ function LocationList() {
           })),
         },
       ]}
-      creationDate={(r) => r.createdAt}
+      showRefresh={false}
       crud={locationCrud}
-      addLabel={t("Thêm địa điểm", "Add Source Master")}
+      addLabel="Add Location"
       onAdd={() => void navigate({ to: "/location/$id", params: { id: "new" }, search: {} })}
       onView={(r) => open(r, "view")}
       onEdit={(r) => open(r, "edit")}

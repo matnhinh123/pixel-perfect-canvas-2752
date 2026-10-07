@@ -140,33 +140,33 @@ function TollStationList() {
   const quickFilters: QuickFilter[] = [
     {
       key: "feeType",
-      allLabel: "All fee types",
+      allLabel: "Fee Type: All",
       options: FEE_TYPE_OPTIONS.map((f) => ({
-        label: f,
+        label: `Fee Type: ${f}`,
         conditions: [{ field: "feeType", operator: "eq", value: f }],
       })),
     },
     {
       key: "area",
-      allLabel: "All areas",
+      allLabel: "Area: All",
       options: areas.map((a) => ({
-        label: a,
+        label: `Area: ${a}`,
         conditions: [{ field: "area", operator: "eq", value: a }],
       })),
     },
     {
       key: "status",
-      allLabel: "All statuses",
+      allLabel: "Status: All",
       options: ["Active", "Inactive"].map((s) => ({
-        label: s,
+        label: `Status: ${s}`,
         conditions: [{ field: "status", operator: "eq", value: s }],
       })),
     },
     {
       key: "source",
-      allLabel: "All sources",
+      allLabel: "Source: All",
       options: SOURCES.map((s) => ({
-        label: s,
+        label: `Source: ${s}`,
         conditions: [{ field: "source", operator: "eq", value: s }],
       })),
     },
@@ -180,12 +180,12 @@ function TollStationList() {
       entityType="Toll Station"
       entityLabel="Toll Station"
       title="Toll Station"
-      subtitle="Toll stations and their rates for the 5 toll groups"
       rows={rows}
       columns={columns}
       searchPlaceholder="Search code, name, Vietmap ID..."
       searchValues={(g) => [g.code, g.name, g.vietmapId ?? ""]}
       quickFilters={quickFilters}
+      showRefresh={false}
       crud={tollStationCrud}
       allowDelete={false}
       addLabel="Add Toll Station"
