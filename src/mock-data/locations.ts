@@ -1,4 +1,4 @@
-import type { LocationRecord } from "@/types";
+import type { BaseRecord, LocationRecord } from "@/types";
 
 const loc = (
   id: string,
@@ -202,3 +202,16 @@ export const findLocationByName = (name: string) => {
       `${l.name}, ${l.address}`.toLowerCase() === n,
   );
 };
+
+/** Location master record (editable on the Location screen; used by Routing stop pickers). */
+export type LocationMasterRecord = LocationRecord & BaseRecord;
+
+export const seedLocations = (): LocationMasterRecord[] =>
+  LOCATIONS.map((l) => ({
+    ...l,
+    status: "Active",
+    createdAt: "2026-09-01T02:00:00.000Z",
+    createdBy: "Nguyễn Minh Anh",
+    updatedAt: "2026-09-01T02:00:00.000Z",
+    updatedBy: "Nguyễn Minh Anh",
+  }));

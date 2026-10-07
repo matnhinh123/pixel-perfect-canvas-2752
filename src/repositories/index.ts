@@ -22,6 +22,7 @@ import {
 } from "@/mock-data/seed";
 import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
+import { seedLocations, type LocationMasterRecord } from "@/mock-data/locations";
 import { createCollection, readJson, subscribeKey, writeJson } from "./storage";
 
 export const routeRepository = createCollection<RouteRecord>("routes", seedRoutes);
@@ -35,6 +36,11 @@ export const costRepository = createCollection<CostRecord>("costs", () => seedCo
 // Master Data > Cost: cost groups and cost items (master data only).
 export const costGroupRepository = createCollection<CostGroupRecord>("cost-groups", seedCostGroups);
 export const costItemRepository = createCollection<CostItemRecord>("cost-items", seedCostItems);
+/** Location master; Routing stop pickers read active locations from it. */
+export const locationRepository = createCollection<LocationMasterRecord>(
+  "locations",
+  seedLocations,
+);
 /** Toll Station master; Routing matches gates on the route against it. */
 export const tollStationRepository = createCollection<TollGateRecord>(
   "toll-stations",

@@ -32,7 +32,6 @@ import { TollStationTable, type TollRow } from "@/components/movex/routing/TollS
 import { AddTollDialog, type TollLeg } from "@/components/movex/routing/AddTollDialog";
 import { tollClassIndex } from "@/services/routing/RouteProvider";
 import { useCollection } from "@/hooks/use-store";
-import { routeRepository } from "@/repositories";
 import {
   emptyPoint,
   newRouteDraft,
@@ -45,7 +44,7 @@ import { reverseLeg, routingService, validateRouteInput } from "@/services/routi
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import { routeLegs, routeTotals } from "@/services/cost/costMath";
-import { LOCATIONS } from "@/mock-data/locations";
+import { locationRepository, routeRepository } from "@/repositories";
 import { formatDuration, formatVnd } from "@/lib/format";
 import {
   VEHICLE_PROFILES,
@@ -150,6 +149,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const [calcError, setCalcError] = useState<string | null>(null);
   const [lastSig, setLastSig] = useState(() => (initial.outbound ? calcSig(initial) : ""));
   const [auditOpen, setAuditOpen] = useState(false);
+  const locationsAll = useCollection(locationRepository);
   const [addTollOpen, setAddTollOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [legView, setLegView] = useState<LegView>("both");
@@ -175,6 +175,12 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
     clearErrors(k as string);
   };
   const seq = [r.origin, ...r.waypoints, r.destination];
+  const usedLocationIds = new Set(
+    [...seq, ...r.returnWaypoints].map((p) => p.locationId).filter(Boolean),
+  );
+  const locations = locationsAll.filter(
+    (l) => !l.deleted && (l.status === "Active" || usedLocationIds.has(l.id)),
+  );
   const setSequence = (next: RoutePoint[]) => {
     if (next.length < 2) return;
     setR((p) => ({
@@ -674,13 +680,13 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 onModeChange={(m) => set("returnMode", m)}
                 returnWaypoints={r.returnWaypoints}
                 onReturnWaypointsChange={(w) => set("returnWaypoints", w)}
-                locations={LOCATIONS}
+                locations={locations}
               />
             ) : (
               <StopList
                 seq={seq}
                 onChange={setSequence}
-                locations={LOCATIONS}
+                locations={locations}
                 errors={{
                   origin: errors["origin"],
                   destination: errors["destination"],

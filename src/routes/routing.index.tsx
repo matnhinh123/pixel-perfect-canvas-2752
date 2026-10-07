@@ -8,7 +8,7 @@ import { useCollection } from "@/hooks/use-store";
 import { routeRepository } from "@/repositories";
 import { routeCrud, routeImportConfig } from "@/services/routeService";
 import { routeTotals } from "@/services/cost/costMath";
-import { LOCATIONS } from "@/mock-data/locations";
+import { allLocations } from "@/services/routing/locationStore";
 import { formatDateTime, formatDuration, formatVnd } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { VEHICLE_PROFILES, type RoutePoint, type RouteRecord, type VehicleProfile } from "@/types";
@@ -33,7 +33,7 @@ const profileLabels = (t: T): Record<VehicleProfile, string> => ({
   Car: t("Ô tô", "Car"),
   Motorcycle: t("Xe máy", "Motorcycle"),
 });
-const codeOf = (p: RoutePoint) => LOCATIONS.find((l) => l.id === p.locationId)?.code ?? "";
+const codeOf = (p: RoutePoint) => allLocations().find((l) => l.id === p.locationId)?.code ?? "";
 
 const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
   const PROFILE_LABEL = profileLabels(t);

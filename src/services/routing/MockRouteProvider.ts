@@ -1,4 +1,4 @@
-import { LOCATIONS } from "@/mock-data/locations";
+import { activeLocations } from "@/services/routing/locationStore";
 import { PROVIDER_ONLY_GATES } from "@/mock-data/tollCatalog";
 import { activeTollGates } from "@/services/routing/tollGates";
 import { tr } from "@/lib/i18n";
@@ -263,7 +263,7 @@ export class MockRouteProvider implements RouteProvider {
 
   async searchLocation(text: string): Promise<LocationSuggestion[]> {
     await delay(150);
-    return searchLocations(LOCATIONS, text, text.trim() ? 8 : 12).map((l) => ({
+    return searchLocations(activeLocations(), text, text.trim() ? 8 : 12).map((l) => ({
       id: l.id,
       name: l.name,
       address: l.address,

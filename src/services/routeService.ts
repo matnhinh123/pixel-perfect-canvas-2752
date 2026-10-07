@@ -1,6 +1,10 @@
 import { VEHICLE_PROFILES, type RouteRecord, type RoutePoint, type VehicleProfile } from "@/types";
 import { costRepository, routeRepository, uid } from "@/repositories";
-import { findLocationByName, LOCATIONS } from "@/mock-data/locations";
+import {
+  activeLocations,
+  allLocations,
+  findLocationByName,
+} from "@/services/routing/locationStore";
 import { findVehicle, routeVehicleFields, vehicleLabel, VEHICLES } from "@/mock-data/vehicles";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -28,7 +32,7 @@ export const routeCrud = makeCrud<RouteRecord>({
 
 /** Location code of a stop: the master code, else the master id without "LOC-", else "VIA" (dragged point). */
 const stopCode = (p: RoutePoint) => {
-  const l = LOCATIONS.find((x) => x.id === p.locationId);
+  const l = allLocations().find((x) => x.id === p.locationId);
   return l ? (l.code ?? l.id.replace(/^LOC-/, "")) : p.name ? "VIA" : "";
 };
 
@@ -308,7 +312,7 @@ export const routeImportConfig: ImportEntityConfig = {
   rollback: (ids) => routeCrud.removeMany(ids),
   sampleFile: () => {
     const header = routeImportConfig.columns.map((c) => c.header);
-    const locs = LOCATIONS.filter(
+    const locs = activeLocations().filter(
       (l) =>
         l.province === "TP. Hồ Chí Minh" ||
         l.province === "Bình Dương" ||
