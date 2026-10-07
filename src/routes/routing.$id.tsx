@@ -625,7 +625,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                     }}
                   />
                 </Field>
-                <Field label="Travel Time">
+                <Field label="Estimated Time">
                   <Input
                     className="h-10"
                     readOnly

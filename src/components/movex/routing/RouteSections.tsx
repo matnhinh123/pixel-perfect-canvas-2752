@@ -82,14 +82,9 @@ const emptyStop = (note?: string): RoutePoint => ({
   ...(note ? { note } : {}),
 });
 
-/** Stop type of a row: Pickup / Delivery (first row defaults to Pickup, the others to Delivery). */
+/** Type of a stop between Departure and Destination: Pickup / Delivery (default Delivery). */
 export const STOP_TYPES = ["Pickup", "Delivery"] as const;
-export const stopTypeOf = (p: RoutePoint, index: number) =>
-  p.stopType === "Pickup" || p.stopType === "Delivery"
-    ? p.stopType
-    : index === 0
-      ? "Pickup"
-      : "Delivery";
+export const stopTypeOf = (p: RoutePoint) => (p.stopType === "Pickup" ? "Pickup" : "Delivery");
 
 /** What a row keeps when its location changes: note and the chosen Type. */
 const extras = (p: RoutePoint) => ({
@@ -212,12 +207,19 @@ export function StopList({
                 </span>
               </TableCell>
               <TableCell className="py-1.5">
-                <NativeSelect
-                  value={stopTypeOf(p, i)}
-                  onChange={(v) => update(i, { ...p, stopType: v })}
-                  options={STOP_TYPES}
-                  className="h-8 w-full"
-                />
+                {/* First / last rows are always Departure / Destination. */}
+                {kind === "origin" ? (
+                  <span className="px-2 text-sm">Departure</span>
+                ) : kind === "destination" ? (
+                  <span className="px-2 text-sm">Destination</span>
+                ) : (
+                  <NativeSelect
+                    value={stopTypeOf(p)}
+                    onChange={(v) => update(i, { ...p, stopType: v })}
+                    options={STOP_TYPES}
+                    className="h-8 w-full"
+                  />
+                )}
               </TableCell>
               <TableCell className="py-1.5">
                 {locked ? (
