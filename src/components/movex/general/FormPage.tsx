@@ -56,6 +56,8 @@ export function FormPageHeader({
   readOnly,
   extra,
   saveLabel = "Save",
+  rootLabel,
+  unsavedLabel = "Chưa lưu",
 }: {
   crumbs: Crumb[];
   title: ReactNode;
@@ -70,10 +72,13 @@ export function FormPageHeader({
   readOnly?: boolean;
   extra?: ReactNode;
   saveLabel?: string;
+  rootLabel?: string;
+  unsavedLabel?: string;
 }) {
   return (
     <PageHeader
       crumbs={crumbs}
+      {...(rootLabel ? { rootLabel } : {})}
       onBack={onBack}
       title={title}
       badge={
@@ -81,7 +86,7 @@ export function FormPageHeader({
           {badge}
           {dirty && !readOnly && (
             <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning">
-              Chưa lưu
+              {unsavedLabel}
             </span>
           )}
         </>

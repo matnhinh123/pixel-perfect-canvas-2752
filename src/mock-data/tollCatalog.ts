@@ -1,4 +1,4 @@
-import type { FeeType } from "@/types";
+import type { BaseRecord, FeeType } from "@/types";
 
 /**
  * Mock toll gate catalog (Toll Station master data) used by MockRouteProvider and the Toll Station list.
@@ -193,3 +193,16 @@ export const PROVIDER_ONLY_GATES: { name: string; prices: MockTollGate["prices"]
   { name: "Trạm BOT Ninh Lộc", prices: [15000, 20000, 30000, 45000, 60000] },
   { name: "Trạm BOT tuyến tránh Phan Rang", prices: [25000, 35000, 50000, 65000, 90000] },
 ];
+
+/** Toll Station master record (editable on the Toll Station screen, used by Routing). */
+export type TollGateRecord = MockTollGate & BaseRecord;
+
+export const seedTollStations = (): TollGateRecord[] =>
+  MOCK_TOLL_GATES.map((g) => ({
+    ...g,
+    status: "Active",
+    createdAt: "2026-09-01T02:00:00.000Z",
+    createdBy: "Nguyễn Minh Anh",
+    updatedAt: "2026-09-01T02:00:00.000Z",
+    updatedBy: "Nguyễn Minh Anh",
+  }));

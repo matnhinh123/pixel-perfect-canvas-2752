@@ -3,7 +3,8 @@ import { stationsTotal } from "@/services/cost/costMath";
 import { formatDuration, formatVnd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export const altTitle = (a: RouteCalculation, i: number) => a.label ?? `Tuyến ${i + 1}`;
+// Providers label alternatives in Vietnamese ("Tuyến n"); this screen shows them in English.
+export const altTitle = (_a: RouteCalculation, i: number) => `Route ${i + 1}`;
 
 /** Compact radio cards above the map: one per alternative returned by the last calculation. */
 export function RouteAlternativeSelector({
@@ -20,14 +21,14 @@ export function RouteAlternativeSelector({
   if (alternatives.length === 0)
     return (
       <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
-        Chưa có phương án tuyến — chọn Điểm đi, Điểm đến rồi bấm{" "}
-        <span className="font-medium text-foreground">Tính lại lộ trình</span>.
+        No route yet — choose Origin and Destination, then click{" "}
+        <span className="font-medium text-foreground">Recalculate Route</span>.
       </p>
     );
   return (
     <div
       role="radiogroup"
-      aria-label="Lựa chọn tuyến"
+      aria-label="Route options"
       className="grid gap-2"
       style={{ gridTemplateColumns: `repeat(${Math.min(alternatives.length, 3)}, minmax(0, 1fr))` }}
     >
@@ -60,7 +61,7 @@ export function RouteAlternativeSelector({
                 {altTitle(a, i)}
                 {a.recommended && (
                   <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
-                    Đề xuất
+                    Recommended
                   </span>
                 )}
               </span>

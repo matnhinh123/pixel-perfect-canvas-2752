@@ -2,6 +2,8 @@
 // client later; services and UI keep working against the same surface.
 import type {
   AuditEvent,
+  CostGroupRecord,
+  CostItemRecord,
   CostRecord,
   ImportBatch,
   RouteRecord,
@@ -18,6 +20,8 @@ import {
   seedServices,
   seedTemplateConfig,
 } from "@/mock-data/seed";
+import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
+import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
 import { createCollection, readJson, subscribeKey, writeJson } from "./storage";
 
 export const routeRepository = createCollection<RouteRecord>("routes", seedRoutes);
@@ -28,6 +32,14 @@ export const serviceAssignmentRepository = createCollection<ServiceAssignment>(
   seedServiceAssignments,
 );
 export const costRepository = createCollection<CostRecord>("costs", () => seedCosts(seedRoutes()));
+// Master Data > Cost: cost groups and cost items (master data only).
+export const costGroupRepository = createCollection<CostGroupRecord>("cost-groups", seedCostGroups);
+export const costItemRepository = createCollection<CostItemRecord>("cost-items", seedCostItems);
+/** Toll Station master; Routing matches gates on the route against it. */
+export const tollStationRepository = createCollection<TollGateRecord>(
+  "toll-stations",
+  seedTollStations,
+);
 export const importHistoryRepository = createCollection<ImportBatch>(
   "import-history",
   seedImportHistory,

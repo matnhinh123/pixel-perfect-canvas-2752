@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { StatusBadge } from "@/components/movex/common";
 import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
-import { asReadOnlyRecord } from "@/components/movex/OutOfScope";
+import { TollStationDrawer } from "@/components/movex/TollStationDrawer";
+import { useCollection } from "@/hooks/use-store";
+import { tollStationRepository } from "@/repositories";
+import { tollStationCrud } from "@/services/tollStationService";
 import { FEE_TYPE_LABEL } from "@/components/movex/routing/RouteSections";
-import { MOCK_TOLL_GATES } from "@/mock-data/tollCatalog";
+import type { TollGateRecord } from "@/mock-data/tollCatalog";
 import { formatVnd } from "@/lib/format";
 
 export const Route = createFileRoute("/toll-station")({
@@ -20,10 +23,9 @@ export const Route = createFileRoute("/toll-station")({
   component: TollStationList,
 });
 
-type Row = ReturnType<typeof asReadOnlyRecord<(typeof MOCK_TOLL_GATES)[number]>>;
-const PROVINCES = [...new Set(MOCK_TOLL_GATES.map((g) => g.province))];
+type Row = TollGateRecord;
 
-const columns: ListColumn<Row>[] = [
+const columnsFor = (provinces: string[]): ListColumn<Row>[] => [
   {
     key: "code",
     label: "Mã trạm",
@@ -38,7 +40,7 @@ const columns: ListColumn<Row>[] = [
     key: "province",
     label: "Tỉnh / Thành phố",
     type: "enum",
-    options: PROVINCES,
+    options: provinces,
     value: (r) => r.province,
   },
   {
@@ -60,7 +62,7 @@ const columns: ListColumn<Row>[] = [
     key: "status",
     label: "Trạng thái",
     type: "enum",
-    options: ["Active"],
+    options: ["Active", "Inactive"],
     value: (r) => r.status,
     render: (r) => <StatusBadge status={r.status} />,
   },
@@ -68,31 +70,46 @@ const columns: ListColumn<Row>[] = [
 
 function TollStationList() {
   const { q } = Route.useSearch();
-  const rows = useMemo(() => MOCK_TOLL_GATES.map(asReadOnlyRecord), []);
+  const all = useCollection(tollStationRepository);
+  const rows = useMemo(() => all.filter((g) => !g.deleted), [all]);
+  const provinces = useMemo(() => [...new Set(rows.map((g) => g.province))], [rows]);
+  const columns = useMemo(() => columnsFor(provinces), [provinces]);
+  const [editing, setEditing] = useState<Row | "new" | null>(null);
   return (
-    <EntityListPage<Row>
-      key={q ?? ""}
-      screen="toll-station"
-      entityType="Toll Station"
-      entityLabel="Toll Station"
-      title="Toll Station"
-      subtitle="Danh mục trạm thu phí và giá vé theo nhóm xe (MD-06) — dữ liệu tham khảo cho Routing"
-      rows={rows}
-      columns={columns}
-      searchPlaceholder="Tìm mã trạm, tên trạm, tuyến..."
-      searchValues={(r) => [r.code, r.name, r.road, r.province]}
-      quickFilters={[
-        {
-          key: "province",
-          allLabel: "Tất cả tỉnh/TP",
-          options: PROVINCES.map((p) => ({
-            label: p,
-            conditions: [{ field: "province", operator: "eq", value: p }],
-          })),
-        },
-      ]}
-      readOnlyReason="Danh mục Toll Station ở chế độ chỉ đọc trong bản demo."
-      {...(q ? { initialSearch: q } : {})}
-    />
+    <>
+      <EntityListPage<Row>
+        key={q ?? ""}
+        screen="toll-station"
+        entityType="Toll Station"
+        entityLabel="Toll Station"
+        title="Toll Station"
+        subtitle="Danh mục trạm thu phí và giá vé theo nhóm xe (MD-06) — dữ liệu tham khảo cho Routing"
+        rows={rows}
+        columns={columns}
+        searchPlaceholder="Tìm mã trạm, tên trạm, tuyến..."
+        searchValues={(r) => [r.code, r.name, r.road, r.province]}
+        quickFilters={[
+          {
+            key: "province",
+            allLabel: "Tất cả tỉnh/TP",
+            options: provinces.map((p) => ({
+              label: p,
+              conditions: [{ field: "province", operator: "eq", value: p }],
+            })),
+          },
+        ]}
+        crud={tollStationCrud}
+        addLabel="Thêm trạm"
+        onAdd={() => setEditing("new")}
+        onView={setEditing}
+        onEdit={setEditing}
+        {...(q ? { initialSearch: q } : {})}
+      />
+      <TollStationDrawer
+        open={!!editing}
+        station={editing === "new" ? null : editing}
+        onClose={() => setEditing(null)}
+      />
+    </>
   );
 }

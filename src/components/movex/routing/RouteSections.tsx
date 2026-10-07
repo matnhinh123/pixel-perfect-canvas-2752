@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,12 +44,12 @@ import {
 import { cn } from "@/lib/utils";
 
 export const FEE_TYPE_LABEL: Record<FeeType, string> = {
-  Toll: "Cầu đường",
-  Bridge: "Cầu đường",
-  Ferry: "Phà",
+  Toll: "Toll",
+  Bridge: "Bridge",
+  Ferry: "Ferry",
 };
 
-// ---------- Stop list (Danh sách điểm dừng) ----------
+// ---------- Stop list ----------
 type StopKind = "origin" | "stop" | "destination";
 
 export function StopBadge({ kind, index }: { kind: StopKind; index: number }) {
@@ -128,22 +128,29 @@ export function StopList({
   };
 
   return (
-    <Table>
+    <Table className="table-fixed">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          {["", "#", "Loại điểm", "Location Code", "Location", "Địa chỉ / Ghi chú", "Thao tác"].map(
-            (h, i) => (
-              <TableHead
-                key={i}
-                className={cn(
-                  "h-10 text-sm font-semibold text-foreground",
-                  (i === 1 || i === 6) && "text-center",
-                )}
-              >
-                {h}
-              </TableHead>
-            ),
-          )}
+          {(
+            [
+              ["No.", "10%"],
+              ["Stop Type", "18%"],
+              ["Location Code", "24%"],
+              ["Location", "38%"],
+              ["Actions", "10%"],
+            ] as const
+          ).map(([h, w], i) => (
+            <TableHead
+              key={i}
+              style={{ width: w }}
+              className={cn(
+                "h-10 text-sm font-semibold text-foreground",
+                (i === 0 || i === 4) && "text-center",
+              )}
+            >
+              {h}
+            </TableHead>
+          ))}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -174,29 +181,31 @@ export function StopList({
                 dragFrom === i && "opacity-50",
               )}
             >
-              <TableCell className="w-8 text-muted-foreground">
-                {kind === "stop" ? (
-                  <span
-                    className="flex cursor-grab items-center active:cursor-grabbing"
-                    onMouseDown={() => setArmed(i)}
-                    onMouseUp={() => setArmed(null)}
-                    title="Kéo để đổi thứ tự điểm dừng"
-                  >
-                    <GripVertical className="h-4 w-4" />
-                  </span>
-                ) : (
-                  <GripVertical className="h-4 w-4 opacity-20" />
-                )}
+              <TableCell className="text-muted-foreground">
+                <span className="flex items-center justify-center gap-1">
+                  {kind === "stop" ? (
+                    <span
+                      className="flex cursor-grab items-center active:cursor-grabbing"
+                      onMouseDown={() => setArmed(i)}
+                      onMouseUp={() => setArmed(null)}
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </span>
+                  ) : (
+                    <GripVertical className="h-4 w-4 opacity-20" />
+                  )}
+                  {i + 1}
+                </span>
               </TableCell>
-              <TableCell className="w-10 text-center text-muted-foreground">{i + 1}</TableCell>
-              <TableCell className="w-28 whitespace-nowrap">
+              <TableCell className="truncate">
                 {kind === "origin"
-                  ? (labels?.origin ?? "Điểm đi")
+                  ? (labels?.origin ?? "Departure")
                   : kind === "destination"
-                    ? (labels?.destination ?? "Điểm đến")
-                    : "Điểm dừng"}
+                    ? (labels?.destination ?? "Destination")
+                    : "Stop"}
               </TableCell>
-              <TableCell className="w-40 py-1.5">
+              <TableCell className="py-1.5">
                 {locked ? (
                   <span className="block px-2 text-sm">
                     {locations.find((l) => l.id === p.locationId)?.code ?? "—"}
@@ -209,11 +218,11 @@ export function StopList({
                     value={p.locationId ?? null}
                     onChange={(l) => update(i, l ? toPoint(l, p.note) : emptyStop(p.note))}
                     invalid={invalid}
-                    placeholder="Nhập mã…"
+                    placeholder="Code…"
                   />
                 )}
               </TableCell>
-              <TableCell className="min-w-56 py-1.5">
+              <TableCell className="py-1.5">
                 <span className="flex items-center gap-2">
                   {/* Locked endpoints = return leg, which runs B → A. */}
                   <StopBadge
@@ -233,29 +242,17 @@ export function StopList({
                         invalid={invalid}
                         placeholder={
                           kind === "origin"
-                            ? "Nhập tên điểm đi…"
+                            ? "Search departure…"
                             : kind === "destination"
-                              ? "Nhập tên điểm đến…"
-                              : "Nhập tên điểm dừng…"
+                              ? "Search destination…"
+                              : "Search stop…"
                         }
                       />
                     )}
                   </span>
                 </span>
               </TableCell>
-              <TableCell className="py-1.5">
-                <Input
-                  value={p.note ?? ""}
-                  disabled={locked}
-                  onChange={(e) => {
-                    const { note: _drop, ...rest } = p;
-                    update(i, e.target.value ? { ...rest, note: e.target.value } : rest);
-                  }}
-                  placeholder={p.address || "Ghi chú"}
-                  className="h-9 border-transparent bg-transparent shadow-none placeholder:text-muted-foreground hover:border-input focus-visible:bg-card disabled:cursor-default disabled:opacity-100"
-                />
-              </TableCell>
-              <TableCell className="w-20 text-center">
+              <TableCell className="text-center">
                 {locked ? (
                   <span className="text-muted-foreground">--</span>
                 ) : (
@@ -265,7 +262,7 @@ export function StopList({
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        aria-label="Thao tác điểm"
+                        aria-label="Stop actions"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
@@ -275,14 +272,14 @@ export function StopList({
                         <>
                           <DropdownMenuItem disabled={i <= 1} onSelect={() => move(i, i - 1)}>
                             <ArrowUp className="h-4 w-4" />
-                            Di chuyển lên
+                            Move up
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             disabled={i >= last - 1}
                             onSelect={() => move(i, i + 1)}
                           >
                             <ArrowDown className="h-4 w-4" />
-                            Di chuyển xuống
+                            Move down
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -290,7 +287,7 @@ export function StopList({
                             onSelect={() => onChange(seq.filter((_, j) => j !== i))}
                           >
                             <Trash2 className="h-4 w-4" />
-                            Xoá điểm dừng
+                            Remove stop
                           </DropdownMenuItem>
                         </>
                       ) : (
@@ -299,7 +296,7 @@ export function StopList({
                           onSelect={() => update(i, emptyStop(p.note))}
                         >
                           <X className="h-4 w-4" />
-                          Bỏ chọn địa điểm
+                          Clear location
                         </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
@@ -314,36 +311,92 @@ export function StopList({
   );
 }
 
-// ---------- Round trip: return leg (Chiều về) ----------
-export function ReturnRouteSection({
+// ---------- Round trip: Outbound on top, Return Trip below ----------
+function TripSection({
+  title,
+  tone,
+  action,
+  children,
+}: {
+  title: string;
+  tone: "Outbound" | "Return";
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex min-h-12 items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2">
+        <Tag tone={tone}>{title}</Tag>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const addStopButton = (onClick: () => void) => (
+  <Button
+    variant="outline"
+    size="sm"
+    className="h-8 border-primary/40 text-primary"
+    onClick={onClick}
+  >
+    <Plus className="h-4 w-4" />
+    Add Stop
+  </Button>
+);
+
+export function RoundTripStops({
+  seq,
+  onSeqChange,
+  onAddStop,
+  errors,
   mode,
   onModeChange,
-  origin,
-  waypoints,
-  destination,
   returnWaypoints,
   onReturnWaypointsChange,
   locations,
 }: {
+  seq: RoutePoint[];
+  onSeqChange: (seq: RoutePoint[]) => void;
+  onAddStop: () => void;
+  errors?: {
+    origin?: string | undefined;
+    destination?: string | undefined;
+    waypoints?: string | undefined;
+  };
   mode: "auto" | "custom";
   onModeChange: (m: "auto" | "custom") => void;
-  origin: RoutePoint;
-  waypoints: RoutePoint[];
-  destination: RoutePoint;
   returnWaypoints: RoutePoint[];
   onReturnWaypointsChange: (w: RoutePoint[]) => void;
   locations: LocationRecord[];
 }) {
-  const reversed = [destination, ...[...waypoints].reverse(), origin];
+  const origin = seq[0]!;
+  const destination = seq[seq.length - 1]!;
   const custom = [destination, ...returnWaypoints, origin];
   return (
-    <div className="border-t">
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 px-4 py-2.5">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Tag tone="Return">Return</Tag>
-          Chiều về
-        </div>
-        <div className="flex flex-wrap items-center gap-5 text-sm" role="radiogroup">
+    <div className="divide-y">
+      <TripSection title="Outbound" tone="Outbound" action={addStopButton(onAddStop)}>
+        <StopList
+          seq={seq}
+          onChange={onSeqChange}
+          locations={locations}
+          {...(errors ? { errors } : {})}
+        />
+      </TripSection>
+      <TripSection
+        title="Return Trip"
+        tone="Return"
+        action={
+          mode === "custom"
+            ? addStopButton(() => onReturnWaypointsChange([...returnWaypoints, emptyStop()]))
+            : undefined
+        }
+      >
+        <div
+          className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b px-4 py-2.5 text-sm"
+          role="radiogroup"
+        >
           {(
             [
               ["auto", "Same route reversed"],
@@ -362,42 +415,26 @@ export function ReturnRouteSection({
             </label>
           ))}
         </div>
-      </div>
-      {mode === "auto" ? (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 text-sm">
-          {reversed.map((p, i) => (
-            <span key={i} className="flex items-center gap-2">
-              {i > 0 && <span className="text-muted-foreground">→</span>}
-              <StopBadge
-                kind={i === 0 ? "destination" : i === reversed.length - 1 ? "origin" : "stop"}
-                index={i}
-              />
-              <span>{p.name || "—"}</span>
+        {mode === "auto" ? (
+          <div className="flex flex-col gap-2 px-4 py-3 text-sm">
+            <span className="flex items-center gap-2">
+              <StopBadge kind="destination" index={0} />B – {destination.name || "—"}
             </span>
-          ))}
-        </div>
-      ) : (
-        <>
+            <span className="flex items-center gap-2">
+              <StopBadge kind="origin" index={0} />A – {origin.name || "—"}
+            </span>
+            <span className="text-xs text-muted-foreground">Same route as outbound, reversed.</span>
+          </div>
+        ) : (
           <StopList
             seq={custom}
             onChange={(next) => onReturnWaypointsChange(next.slice(1, -1))}
             locations={locations}
             lockEndpoints
-            labels={{ origin: "Điểm đi (B)", destination: "Điểm về (A)" }}
+            labels={{ origin: "Departure (B)", destination: "Destination (A)" }}
           />
-          <div className="px-4 pb-3 pt-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 border-primary/40 text-primary"
-              onClick={() => onReturnWaypointsChange([...returnWaypoints, emptyStop()])}
-            >
-              <Plus className="h-4 w-4" />
-              Thêm điểm dừng chiều về
-            </Button>
-          </div>
-        </>
-      )}
+        )}
+      </TripSection>
     </div>
   );
 }
@@ -410,7 +447,7 @@ type Row = {
   manualId?: string;
   note?: string;
 };
-const LEG_LABEL = { Outbound: "Chiều đi", Return: "Chiều về", Manual: "Chi phí thủ công" } as const;
+const LEG_LABEL = { Outbound: "Outbound", Return: "Return Trip", Manual: "Manual costs" } as const;
 
 export function TollBreakdown({
   outbound,
@@ -422,7 +459,8 @@ export function TollBreakdown({
   outbound: LegFigures | null;
   ret: LegFigures | null;
   manualCosts: ManualCost[];
-  onAddManual: () => void;
+  /** Omitted = no "Add Manual Cost" button (existing manual costs are still listed). */
+  onAddManual?: () => void;
   onRemoveManual: (id: string) => void;
 }) {
   const rows: Row[] = [
@@ -461,14 +499,14 @@ export function TollBreakdown({
           <TableHeader>
             <TableRow>
               {[
-                "Thứ tự",
-                "Trạm thu phí",
-                "Loại phí",
-                "Nhóm xe",
-                "Đơn giá",
-                "Số lượt",
-                "Thành tiền",
-                "Nguồn",
+                "No.",
+                "Toll Station",
+                "Fee Type",
+                "Vehicle Class",
+                "Unit Price",
+                "Passes",
+                "Amount",
+                "Source",
                 "",
               ].map((h) => (
                 <TableHead key={h} className={thClass}>
@@ -488,8 +526,8 @@ export function TollBreakdown({
                     <Tag tone={g === "Manual" ? "Manual" : g}>{LEG_LABEL[g]}</Tag>
                     <span className="ml-2 text-muted-foreground">
                       {g === "Manual"
-                        ? "Phà, phụ phí giờ cao điểm, chi phí khác"
-                        : `${items.length} trạm · tạm tính ${formatVnd(sub)}`}
+                        ? "Ferry, peak-hour surcharge, other costs"
+                        : `${items.length} stations · subtotal ${formatVnd(sub)}`}
                     </span>
                   </TableCell>
                 </TableRow>,
@@ -528,7 +566,7 @@ export function TollBreakdown({
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => onRemoveManual(x.manualId!)}
-                          aria-label="Xoá chi phí"
+                          aria-label="Remove cost"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -543,10 +581,10 @@ export function TollBreakdown({
                       className="py-3 text-center text-xs text-muted-foreground"
                     >
                       {g === "Manual"
-                        ? "Chưa có chi phí thủ công."
+                        ? "No manual costs yet."
                         : outbound
-                          ? "Chiều này không qua trạm thu phí."
-                          : 'Bấm "Tính lại lộ trình" để lấy danh sách trạm.'}
+                          ? "No toll stations on this leg."
+                          : 'Click "Recalculate Route" to load toll stations.'}
                     </TableCell>
                   </TableRow>
                 ),
@@ -556,8 +594,8 @@ export function TollBreakdown({
           <TableFooter>
             <TableRow>
               <TableCell colSpan={6} className="text-right text-xs text-muted-foreground">
-                Chiều đi {formatVnd(outTotal)}
-                {ret ? ` + Chiều về ${formatVnd(retTotal)}` : ""} + Thủ công{" "}
+                Outbound {formatVnd(outTotal)}
+                {ret ? ` + Return Trip ${formatVnd(retTotal)}` : ""} + Manual{" "}
                 {formatVnd(manualTotal)}
               </TableCell>
               <TableCell colSpan={3} className="font-bold text-primary">
@@ -567,10 +605,12 @@ export function TollBreakdown({
           </TableFooter>
         </Table>
       </div>
-      <Button variant="outline" size="sm" className="mt-3" onClick={onAddManual}>
-        <Plus className="h-4 w-4" />
-        Add Manual Cost
-      </Button>
+      {onAddManual && (
+        <Button variant="outline" size="sm" className="mt-3" onClick={onAddManual}>
+          <Plus className="h-4 w-4" />
+          Add Manual Cost
+        </Button>
+      )}
     </div>
   );
 }
@@ -594,8 +634,8 @@ export function ManualCostDialog({
   const submit = () => {
     const e: Record<string, string> = {};
     const amt = Number(f.amount);
-    if (!f.amount || !(amt > 0)) e["amount"] = "Số tiền phải lớn hơn 0.";
-    if (!f.reason.trim()) e["reason"] = "Vui lòng nhập lý do.";
+    if (!f.amount || !(amt > 0)) e["amount"] = "Amount must be greater than 0.";
+    if (!f.reason.trim()) e["reason"] = "Please enter a reason.";
     setErrors(e);
     if (Object.keys(e).length) return;
     onAdd({
@@ -612,20 +652,20 @@ export function ManualCostDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Thêm chi phí thủ công</DialogTitle>
+          <DialogTitle>Add Manual Cost</DialogTitle>
           <DialogDescription>
-            Các chi phí routing engine không biết: phà, phụ phí giờ cao điểm, chi phí khác.
+            Costs the routing engine does not know: ferry, peak-hour surcharge, other.
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Loại chi phí" required>
+          <Field label="Cost Type" required>
             <NativeSelect
               value={f.costType}
               onChange={(v) => setF({ ...f, costType: v as ManualCostType })}
               options={MANUAL_COST_TYPES}
             />
           </Field>
-          <Field label="Số tiền (₫)" required error={errors["amount"]}>
+          <Field label="Amount (₫)" required error={errors["amount"]}>
             <Input
               type="number"
               min={0}
@@ -633,14 +673,14 @@ export function ManualCostDialog({
               onChange={(e) => setF({ ...f, amount: e.target.value })}
             />
           </Field>
-          <Field label="Lý do" required error={errors["reason"]} className="col-span-2">
+          <Field label="Reason" required error={errors["reason"]} className="col-span-2">
             <Input
               value={f.reason}
               onChange={(e) => setF({ ...f, reason: e.target.value })}
               placeholder="VD: Ferry surcharge"
             />
           </Field>
-          <Field label="Ghi chú" className="col-span-2">
+          <Field label="Notes" className="col-span-2">
             <Textarea
               rows={2}
               value={f.note}
@@ -650,11 +690,11 @@ export function ManualCostDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Huỷ
+            Cancel
           </Button>
           <Button onClick={submit}>
             <Plus className="h-4 w-4" />
-            Thêm
+            Add
           </Button>
         </DialogFooter>
       </DialogContent>

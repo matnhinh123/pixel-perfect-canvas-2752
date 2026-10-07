@@ -9,7 +9,7 @@ import type {
 } from "@/types";
 import { profileNeedsCapacity } from "@/types";
 import { findVehicle } from "@/mock-data/vehicles";
-import { MOCK_TOLL_GATES } from "@/mock-data/tollCatalog";
+import { activeTollGates } from "@/services/routing/tollGates";
 import { MockRouteProvider } from "./MockRouteProvider";
 import type { RouteProvider } from "./RouteProvider";
 import { RouteProviderError } from "./RouteProvider";
@@ -48,10 +48,10 @@ type CalcInput = Pick<
 
 /** Why "Tính lại lộ trình" cannot run yet, or null when the input is complete. */
 export function validateRouteInput(r: CalcInput): string | null {
-  if (!hasCoords(r.origin)) return "Chọn Điểm đi từ danh sách gợi ý.";
-  if (!hasCoords(r.destination)) return "Chọn Điểm đến từ danh sách gợi ý.";
+  if (!hasCoords(r.origin)) return "Choose the Origin from the suggestions.";
+  if (!hasCoords(r.destination)) return "Choose the Destination from the suggestions.";
   const bad = r.waypoints.findIndex((w) => !hasCoords(w));
-  if (bad >= 0) return `Điểm dừng ${bad + 1} chưa có địa điểm — chọn địa điểm hoặc xoá dòng.`;
+  if (bad >= 0) return `Stop ${bad + 1} has no location — choose one or remove the row.`;
   return null;
 }
 
@@ -75,7 +75,7 @@ function reconcile(stations: TollStation[]): TollStation[] {
   return stations.map((t) => {
     if (t.reconciled !== undefined) return t;
     const n = normalizeText(t.name);
-    const g = MOCK_TOLL_GATES.find((x) => {
+    const g = activeTollGates().find((x) => {
       const m = normalizeText(x.name);
       return m === n || n.includes(m) || m.includes(n);
     });
@@ -94,9 +94,21 @@ const applyTerrain = (c: RouteCalculation, terrain?: RouteRecord["terrain"]): Ro
     ? {
         ...c,
         estimatedTime: Math.round(c.estimatedTime * HIGHLAND_TIME_FACTOR),
-        warnings: [...c.warnings, "Địa hình cao nguyên — thời gian ước tính đã cộng thêm 25%."],
+        warnings: [...c.warnings, "Highland terrain — estimated time increased by 25%."],
       }
     : c;
+
+/** Return leg of "Same route reversed": the outbound leg B → A — identical distance, time and tolls. */
+export function reverseLeg(c: RouteCalculation): RouteCalculation {
+  const { id: _id, label: _label, recommended: _rec, ...leg } = c;
+  return {
+    ...leg,
+    geometry: [...c.geometry].reverse(),
+    instructions: [],
+    tollStations: [...c.tollStations].reverse(),
+    warnings: [],
+  };
+}
 
 export interface RouteCalcResult {
   alternatives: RouteCalculation[];
@@ -117,21 +129,22 @@ export const routingService = {
       await provider.calculateRoutes(toRequest([r.origin, ...r.waypoints, r.destination], r))
     ).map((c) => applyTerrain(reconcileCalc(c), r.terrain));
     if (alternatives.length === 0)
-      throw new RouteProviderError("Không tìm thấy tuyến phù hợp.", "ZERO_RESULTS");
-    let returnLeg: RouteCalculation | null = null;
-    {
-      // Always computed so Single / Round totals can both be shown after one calculation.
-      const back =
-        r.returnMode === "custom"
-          ? r.returnWaypoints.filter(hasCoords)
-          : [...r.waypoints].reverse();
-      returnLeg = applyTerrain(
-        reconcileCalc(
-          await provider.calculateRoute(toRequest([r.destination, ...back, r.origin], r)),
-        ),
-        r.terrain,
-      );
-    }
+      throw new RouteProviderError("No suitable route found.", "ZERO_RESULTS");
+    // Always computed so Single / Round totals can both be shown after one calculation.
+    // "Same route reversed" is exactly the outbound route driven back (same km, time, tolls);
+    // only a custom return route is routed again.
+    const best = alternatives.find((a) => a.recommended) ?? alternatives[0]!;
+    const returnLeg =
+      r.returnMode === "custom"
+        ? applyTerrain(
+            reconcileCalc(
+              await provider.calculateRoute(
+                toRequest([r.destination, ...r.returnWaypoints.filter(hasCoords), r.origin], r),
+              ),
+            ),
+            r.terrain,
+          )
+        : reverseLeg(best);
     return { alternatives, returnLeg };
   },
 

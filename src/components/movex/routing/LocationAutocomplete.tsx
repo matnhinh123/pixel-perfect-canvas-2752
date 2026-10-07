@@ -95,7 +95,7 @@ export function LocationAutocomplete({
       aria-expanded={open}
       aria-autocomplete="list"
       aria-invalid={invalid || undefined}
-      placeholder={placeholder ?? "Nhập mã hoặc tên địa điểm…"}
+      placeholder={placeholder ?? "Search code or location…"}
       className={cn(
         "h-full w-full bg-transparent text-sm outline-none disabled:cursor-not-allowed",
         inline ? "pl-2 pr-7" : "pl-9 pr-8",
@@ -136,7 +136,7 @@ export function LocationAutocomplete({
     <button
       type="button"
       tabIndex={-1}
-      aria-label="Xoá địa điểm"
+      aria-label="Clear location"
       className={cn(
         "absolute right-2 rounded p-0.5 text-muted-foreground hover:text-foreground",
         inline && "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
@@ -183,7 +183,7 @@ export function LocationAutocomplete({
       >
         {items.length === 0 ? (
           <div className="px-3 py-3 text-sm text-muted-foreground">
-            Không tìm thấy địa điểm phù hợp với “{text}”.
+            No location matches “{text}”.
           </div>
         ) : (
           <div ref={listRef} role="listbox" className="max-h-72 overflow-y-auto">

@@ -1,4 +1,4 @@
-import { MOCK_TOLL_GATES } from "@/mock-data/tollCatalog";
+import { activeTollGates } from "@/services/routing/tollGates";
 import type {
   LocationSuggestion,
   RouteCalculation,
@@ -118,8 +118,10 @@ export class ValhallaRouteProvider implements RouteProvider {
     const tollStations: TollStation[] =
       cls === null
         ? []
-        : MOCK_TOLL_GATES.map((g) => ({ g, near: nearestVertex(geometry, g) }))
-            .filter((h) => h.near.km < 0.4 && !(req.avoidFerry && h.g.feeType === "Ferry"))
+        : activeTollGates()
+            .map((g) => ({ g, near: nearestVertex(geometry, g) }))
+            // Station coordinates are approximate: a gate within 1 km of the line counts as passed.
+            .filter((h) => h.near.km < 1 && !(req.avoidFerry && h.g.feeType === "Ferry"))
             .sort((a, b) => a.near.index - b.near.index)
             .map(({ g }) => ({
               id: g.id,

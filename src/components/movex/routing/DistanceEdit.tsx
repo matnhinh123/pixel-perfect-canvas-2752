@@ -36,12 +36,12 @@ export function DistanceEdit({
           className="h-7 w-24 rounded border bg-background px-1.5 text-sm font-semibold"
         />
         <span className="text-sm">km</span>
-        <button type="button" aria-label="Lưu" onClick={commit} className="text-primary">
+        <button type="button" aria-label="Save" onClick={commit} className="text-primary">
           <Check className="h-4 w-4" />
         </button>
         <button
           type="button"
-          aria-label="Huỷ"
+          aria-label="Cancel"
           onClick={() => setEditing(false)}
           className="text-muted-foreground"
         >
@@ -54,8 +54,8 @@ export function DistanceEdit({
       <span className="font-semibold">{km} km</span>
       <button
         type="button"
-        title="Điều chỉnh khoảng cách"
-        aria-label="Điều chỉnh khoảng cách"
+        title="Adjust distance"
+        aria-label="Adjust distance"
         onClick={() => {
           setDraft(String(km));
           setEditing(true);
@@ -67,8 +67,8 @@ export function DistanceEdit({
       {adjusted && (
         <button
           type="button"
-          title="Khôi phục khoảng cách tính toán"
-          aria-label="Khôi phục khoảng cách tính toán"
+          title="Restore calculated distance"
+          aria-label="Restore calculated distance"
           onClick={() => onChange(null)}
           className="text-muted-foreground hover:text-primary"
         >

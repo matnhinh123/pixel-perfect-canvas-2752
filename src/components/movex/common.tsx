@@ -58,6 +58,7 @@ export function PageHeader({
   actions,
   onBack,
   badge,
+  rootLabel = "Danh mục",
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
@@ -65,8 +66,10 @@ export function PageHeader({
   actions?: ReactNode;
   onBack?: (() => void) | undefined;
   badge?: ReactNode;
+  /** First breadcrumb; screens with an English UI pass "Master Data". */
+  rootLabel?: string;
 }) {
-  const trail: Crumb[] = [{ label: "Danh mục" }, ...(crumbs ?? [])];
+  const trail: Crumb[] = [{ label: rootLabel }, ...(crumbs ?? [])];
   return (
     <div className="mb-5">
       <nav

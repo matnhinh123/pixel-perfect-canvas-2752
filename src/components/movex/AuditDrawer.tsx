@@ -24,13 +24,17 @@ const actionTone = (a: AuditEvent["action"]) =>
 export function AuditTimeline({
   entries,
   showEntity,
+  english,
 }: {
   entries: AuditEvent[];
   showEntity?: boolean;
+  english?: boolean;
 }) {
   if (entries.length === 0)
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">Chưa có lịch sử thay đổi.</p>
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        {english ? "No change history yet." : "Chưa có lịch sử thay đổi."}
+      </p>
     );
   return (
     <ol className="relative ml-2 border-l-2 border-border">
@@ -85,29 +89,34 @@ export function AuditHistoryDrawer({
   entityType,
   entityId,
   title,
+  english,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   entityType: EntityType;
   entityId: string | undefined;
   title: string;
+  /** Screens with an English UI (Routing Detail). */
+  english?: boolean;
 }) {
   const entries = useEntityAudit(entityType, entityId);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[460px] overflow-y-auto sm:max-w-[460px]">
         <SheetHeader>
-          <SheetTitle>Lịch sử thay đổi</SheetTitle>
+          <SheetTitle>{english ? "Change History" : "Lịch sử thay đổi"}</SheetTitle>
           <SheetDescription>
             {entityType} · {title}
           </SheetDescription>
         </SheetHeader>
         <div className="mx-4 mb-4 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-          <Lock className="h-3.5 w-3.5" /> Nhật ký chỉ ghi thêm · {entries.length} sự kiện · không
-          thể sửa hoặc xoá
+          <Lock className="h-3.5 w-3.5" />
+          {english
+            ? `Append-only log · ${entries.length} events · cannot be edited or deleted`
+            : `Nhật ký chỉ ghi thêm · ${entries.length} sự kiện · không thể sửa hoặc xoá`}
         </div>
         <div className="px-4">
-          <AuditTimeline entries={entries} />
+          <AuditTimeline entries={entries} {...(english ? { english } : {})} />
         </div>
       </SheetContent>
     </Sheet>

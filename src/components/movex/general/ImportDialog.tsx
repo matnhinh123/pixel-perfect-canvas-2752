@@ -44,6 +44,7 @@ import { importHistoryRepository } from "@/repositories";
 import { useCollection } from "@/hooks/use-store";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useT } from "./listLang";
 
 const STEPS = [
   "Tải template",
@@ -52,6 +53,14 @@ const STEPS = [
   "Xem kết quả",
   "Xác nhận import",
 ] as const;
+const STEPS_EN = ["Download template", "Upload file", "Validate", "Review", "Confirm import"];
+const CHECKS_EN = [
+  "File structure",
+  "Required fields",
+  "References / master data",
+  "Duplicates",
+  "Row rules",
+];
 const CHECKS = [
   "Cấu trúc file",
   "Trường bắt buộc",
@@ -74,6 +83,7 @@ export function ImportDialog({
   entityLabel: string;
   initialTab?: "import" | "history";
 }) {
+  const { t, en } = useT();
   const [step, setStep] = useState(0);
   const [validating, setValidating] = useState(false);
   const [result, setResult] = useState<ImportValidation | null>(null);
@@ -125,22 +135,29 @@ export function ImportDialog({
     setStep(4);
     if (b.successRows)
       toast.success(
-        `Đã import ${b.successRows} bản ghi ${entityLabel}${b.failedRows ? `, ${b.failedRows} dòng bị loại` : ""}`,
+        t(
+          `Đã import ${b.successRows} bản ghi ${entityLabel}${b.failedRows ? `, ${b.failedRows} dòng bị loại` : ""}`,
+          `Imported ${b.successRows} ${entityLabel} record(s)${b.failedRows ? `, ${b.failedRows} row(s) rejected` : ""}`,
+        ),
       );
-    else toast.error("Không có dòng nào được import.");
+    else toast.error(t("Không có dòng nào được import.", "No rows were imported."));
   };
 
   const rollback = async (id: string, name: string) => {
     const r = await confirm({
-      title: "Rollback lần import này?",
-      description: `Toàn bộ bản ghi tạo bởi "${name}" sẽ bị gỡ (soft delete). Thao tác được ghi vào audit log.`,
+      title: t("Rollback lần import này?", "Roll back this import?"),
+      description: t(
+        `Toàn bộ bản ghi tạo bởi "${name}" sẽ bị gỡ (soft delete). Thao tác được ghi vào audit log.`,
+        `All records created by "${name}" will be removed (soft delete). This is written to the audit log.`,
+      ),
+      cancelLabel: t("Huỷ", "Cancel"),
       confirmLabel: "Rollback",
       tone: "danger",
     });
     if (r !== "confirm") return;
     try {
       rollbackImport(config, id);
-      toast.success("Đã rollback lần import");
+      toast.success(t("Đã rollback lần import", "Import rolled back"));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rollback failed");
     }
@@ -154,18 +171,23 @@ export function ImportDialog({
         <DialogHeader>
           <DialogTitle>Import {entityLabel}</DialogTitle>
           <DialogDescription>
-            Import file Excel (CSV) với 5 bước kiểm tra. Dòng lỗi không bao giờ bị import âm thầm.
+            {t(
+              "Import file Excel (CSV) với 5 bước kiểm tra. Dòng lỗi không bao giờ bị import âm thầm.",
+              "Import an Excel (CSV) file with 5 validation steps. Invalid rows are never imported silently.",
+            )}
           </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue={initialTab}>
           <TabsList>
             <TabsTrigger value="import">Import</TabsTrigger>
-            <TabsTrigger value="history">Lịch sử import ({batches.length})</TabsTrigger>
+            <TabsTrigger value="history">
+              {t("Lịch sử import", "Import history")} ({batches.length})
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="import" className="mt-4">
             <ol className="mb-5 grid grid-cols-5 gap-2">
-              {STEPS.map((s, i) => (
+              {(en ? STEPS_EN : STEPS).map((s, i) => (
                 <li
                   key={s}
                   className={cn(
@@ -186,9 +208,11 @@ export function ImportDialog({
             {step <= 1 && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-lg border p-4">
-                  <div className="mb-1 text-sm font-semibold">1. Tải template</div>
+                  <div className="mb-1 text-sm font-semibold">
+                    1. {t("Tải template", "Download template")}
+                  </div>
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Các cột:{" "}
+                    {t("Các cột:", "Columns:")}{" "}
                     {config.columns.map((c) => `${c.header}${c.required ? "*" : ""}`).join(", ")}
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -212,14 +236,15 @@ export function ImportDialog({
                       }}
                     >
                       <FileSpreadsheet className="h-4 w-4" />
-                      File mẫu (20 dòng)
+                      {t("File mẫu (20 dòng)", "Sample file (20 rows)")}
                     </Button>
                   </div>
                 </div>
                 <div className="rounded-lg border border-dashed p-4">
                   <div className="mb-1 text-sm font-semibold">2. Upload file Excel</div>
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Lưu sheet Excel dạng <b>CSV UTF-8</b> rồi upload tại đây.
+                    {t("Lưu sheet Excel dạng", "Save the Excel sheet as")} <b>CSV UTF-8</b>{" "}
+                    {t("rồi upload tại đây.", "and upload it here.")}
                   </p>
                   <input
                     ref={fileRef}
@@ -234,7 +259,7 @@ export function ImportDialog({
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" onClick={() => fileRef.current?.click()}>
                       <Upload className="h-4 w-4" />
-                      Chọn file…
+                      {t("Chọn file…", "Choose file…")}
                     </Button>
                     <Button
                       variant="secondary"
@@ -243,7 +268,7 @@ export function ImportDialog({
                         runValidation(`${config.screen}_sample_20rows.csv`, config.sampleFile())
                       }
                     >
-                      Dùng file demo (20 dòng)
+                      {t("Dùng file demo (20 dòng)", "Use demo file (20 rows)")}
                     </Button>
                   </div>
                 </div>
@@ -254,10 +279,10 @@ export function ImportDialog({
               <div className="rounded-lg border p-5">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  Đang kiểm tra…
+                  {t("Đang kiểm tra…", "Validating…")}
                 </div>
                 <ol className="space-y-1 text-sm text-muted-foreground">
-                  {CHECKS.map((c, i) => (
+                  {(en ? CHECKS_EN : CHECKS).map((c, i) => (
                     <li key={c}>
                       {i + 1}. {c}
                     </li>
@@ -273,7 +298,8 @@ export function ImportDialog({
                     <AlertCircle className="mt-0.5 h-4 w-4 text-destructive" />
                     <div>
                       <div className="font-semibold text-destructive">
-                        Cấu trúc file không hợp lệ — {result.fileName}
+                        {t("Cấu trúc file không hợp lệ", "Invalid file structure")} —{" "}
+                        {result.fileName}
                       </div>
                       <div>{result.structureError}</div>
                     </div>
@@ -282,15 +308,17 @@ export function ImportDialog({
                   <>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="rounded-lg border p-3">
-                        <div className="text-xs text-muted-foreground">Tổng số dòng</div>
+                        <div className="text-xs text-muted-foreground">
+                          {t("Tổng số dòng", "Total rows")}
+                        </div>
                         <div className="text-xl font-bold">{result.totalRows}</div>
                       </div>
                       <div className="rounded-lg border p-3">
-                        <div className="text-xs text-muted-foreground">Hợp lệ</div>
+                        <div className="text-xs text-muted-foreground">{t("Hợp lệ", "Valid")}</div>
                         <div className="text-xl font-bold text-success">{validCount}</div>
                       </div>
                       <div className="rounded-lg border p-3">
-                        <div className="text-xs text-muted-foreground">Lỗi</div>
+                        <div className="text-xs text-muted-foreground">{t("Lỗi", "Errors")}</div>
                         <div className="text-xl font-bold text-destructive">
                           {result.invalidRowCount}
                         </div>
@@ -300,7 +328,7 @@ export function ImportDialog({
                       <div>
                         <div className="mb-2 flex items-center justify-between">
                           <span className="text-sm font-semibold">
-                            Danh sách lỗi ({result.errors.length})
+                            {t("Danh sách lỗi", "Errors")} ({result.errors.length})
                           </span>
                           <Button
                             variant="outline"
@@ -313,14 +341,17 @@ export function ImportDialog({
                             }
                           >
                             <Download className="h-4 w-4" />
-                            Tải file lỗi
+                            {t("Tải file lỗi", "Download error file")}
                           </Button>
                         </div>
                         <div className="max-h-56 overflow-y-auto rounded-lg border">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                {["Dòng", "Trường", "Giá trị", "Lỗi", "Bước"].map((h) => (
+                                {(en
+                                  ? ["Row", "Field", "Value", "Error", "Step"]
+                                  : ["Dòng", "Trường", "Giá trị", "Lỗi", "Bước"]
+                                ).map((h) => (
                                   <TableHead key={h} className={thClass}>
                                     {h}
                                   </TableHead>
@@ -348,15 +379,17 @@ export function ImportDialog({
                     )}
                     {result.invalidRowCount > 0 && validCount > 0 && (
                       <p className="rounded-lg bg-warning-soft px-3 py-2 text-sm text-warning">
-                        Partial Success: chỉ {validCount} dòng hợp lệ được import. Sửa file lỗi và
-                        import phần còn lại sau.
+                        {t(
+                          `Partial Success: chỉ ${validCount} dòng hợp lệ được import. Sửa file lỗi và import phần còn lại sau.`,
+                          `Partial success: only ${validCount} valid rows will be imported. Fix the error file and import the rest later.`,
+                        )}
                       </p>
                     )}
                   </>
                 )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={reset}>
-                    Upload file khác
+                    {t("Upload file khác", "Upload another file")}
                   </Button>
                   <Button disabled={!!result.structureError || validCount === 0} onClick={doImport}>
                     Confirm Import {validCount > 0 ? `(${validCount} rows)` : ""}
@@ -370,12 +403,14 @@ export function ImportDialog({
                 <CheckCircle2 className="h-10 w-10 text-success" />
                 <div className="text-lg font-semibold">{done.status}</div>
                 <p className="text-sm text-muted-foreground">
-                  {done.success} dòng đã import · {done.failed} dòng bị loại. Danh sách đã được cập
-                  nhật; lần import được ghi vào Audit Log và Lịch sử import.
+                  {t(
+                    `${done.success} dòng đã import · ${done.failed} dòng bị loại. Danh sách đã được cập nhật; lần import được ghi vào Audit Log và Lịch sử import.`,
+                    `${done.success} rows imported · ${done.failed} rows rejected. The list is updated; this import is in the Audit Log and Import history.`,
+                  )}
                 </p>
                 <div className="mt-2 flex gap-2">
                   <Button variant="outline" onClick={reset}>
-                    Import file khác
+                    {t("Import file khác", "Import another file")}
                   </Button>
                   <Button onClick={() => close(false)}>Xong</Button>
                 </div>
@@ -389,14 +424,14 @@ export function ImportDialog({
                 <TableHeader>
                   <TableRow>
                     {[
-                      "Tên file",
-                      "Đối tượng",
-                      "Người import",
-                      "Thời gian",
-                      "Tổng",
-                      "Thành công",
-                      "Lỗi",
-                      "Trạng thái",
+                      t("Tên file", "File name"),
+                      t("Đối tượng", "Entity"),
+                      t("Người import", "Imported by"),
+                      t("Thời gian", "Time"),
+                      t("Tổng", "Total"),
+                      t("Thành công", "Success"),
+                      t("Lỗi", "Errors"),
+                      t("Trạng thái", "Status"),
                       "",
                     ].map((h) => (
                       <TableHead key={h} className={thClass}>
@@ -444,7 +479,7 @@ export function ImportDialog({
                   {batches.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                        Chưa có lần import nào.
+                        {t("Chưa có lần import nào.", "No imports yet.")}
                       </TableCell>
                     </TableRow>
                   )}

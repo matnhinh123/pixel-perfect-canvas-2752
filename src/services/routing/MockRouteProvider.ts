@@ -1,5 +1,6 @@
 import { LOCATIONS } from "@/mock-data/locations";
-import { MOCK_TOLL_GATES, PROVIDER_ONLY_GATES } from "@/mock-data/tollCatalog";
+import { PROVIDER_ONLY_GATES } from "@/mock-data/tollCatalog";
+import { activeTollGates } from "@/services/routing/tollGates";
 import type {
   LocationSuggestion,
   RouteCalculation,
@@ -111,7 +112,8 @@ export function computeMockRoutes(
   const baseStations: TollStation[] =
     cls === null
       ? []
-      : MOCK_TOLL_GATES.map((g) => ({ g, near: nearestVertex(base, g) }))
+      : activeTollGates()
+          .map((g) => ({ g, near: nearestVertex(base, g) }))
           .filter((h) => h.near.km < 3.5)
           .filter((h) => {
             if (req.avoidFerry && h.g.feeType === "Ferry") ferrySkipped = true;

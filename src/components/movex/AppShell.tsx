@@ -1,8 +1,9 @@
-import { Link, useHydrated, useNavigate } from "@tanstack/react-router";
+import { Link, useHydrated, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Bell,
   Check,
+  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   EllipsisVertical,
@@ -31,20 +32,108 @@ import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "./general/ConfirmDialog";
 
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  /** Sub-pages shown in a drop-down under the item. */
+  children?: { to: string; label: string }[];
+}
+
 /** Master Data menu (design: colourful emoji-style icons, orange active item). */
-export const NAV = [
+export const NAV: NavItem[] = [
   { to: "/business-partner", label: "Business Partner", icon: "💼" },
   { to: "/location", label: "Location", icon: "📍" },
   { to: "/vehicle", label: "Vehicle", icon: "🚚" },
   { to: "/toll-station", label: "Toll Station", icon: "🏛️" },
   { to: "/routing", label: "Routing", icon: "🗺️" },
   { to: "/service", label: "Service", icon: "🧩" },
-  { to: "/cost", label: "Cost", icon: "💰" },
+  {
+    to: "/cost",
+    label: "Cost",
+    icon: "💰",
+    children: [
+      { to: "/cost", label: "Cost" },
+      { to: "/cost-group", label: "Cost Group" },
+    ],
+  },
   { to: "/pricing", label: "Pricing", icon: "🏷️" },
   { to: "/vendor-tariff", label: "Vendor Tariff", icon: "📜" },
   { to: "/common-code", label: "Common Code", icon: "📋" },
   { to: "/exchange-rate", label: "Exchange Rate / UoM", icon: "💲" },
-] as const;
+];
+
+const navLinkClass =
+  "flex items-center gap-3 rounded-xl px-4 py-2.5 text-[15px] font-semibold text-white/95 transition-colors hover:bg-white/10";
+
+/** Menu item with sub-pages: expands in place, or opens a drop-down when the sidebar is collapsed. */
+function NavGroup({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const children = item.children ?? [];
+  const inside = children.some((c) => path === c.to || path.startsWith(`${c.to}/`));
+  const [open, setOpen] = useState(inside);
+  useEffect(() => {
+    if (inside) setOpen(true);
+  }, [inside]);
+  const icon = <span className="w-6 text-center text-lg leading-none">{item.icon}</span>;
+
+  if (collapsed)
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={item.label}
+            className={cn(
+              navLinkClass,
+              "justify-center px-0",
+              inside && "bg-brand text-white shadow-md",
+            )}
+          >
+            {icon}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start">
+          <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
+          {children.map((c) => (
+            <DropdownMenuItem key={c.to} asChild>
+              <Link to={c.to}>{c.label}</Link>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={cn(navLinkClass, "w-full", inside && !open && "bg-brand text-white shadow-md")}
+      >
+        {icon}
+        <span className="flex-1 text-left">{item.label}</span>
+        <ChevronDown className={cn("h-4 w-4 transition-transform", !open && "-rotate-90")} />
+      </button>
+      {open && (
+        <div className="mt-1 flex flex-col gap-1 pl-9">
+          {children.map((c) => (
+            <Link
+              key={c.to}
+              to={c.to}
+              activeOptions={{ exact: false }}
+              className="rounded-lg px-3 py-2 text-sm font-semibold text-white/90 transition-colors hover:bg-white/10"
+              activeProps={{ className: "bg-brand! text-white shadow-md" }}
+            >
+              {c.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const COLLAPSE_KEY = "ui:sidebar-collapsed";
 const SEEN_KEY = "ui:notifications-seen-at";
@@ -276,6 +365,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
           {NAV.map((n) => {
+            if (n.children) return <NavGroup key={n.to} item={n} collapsed={collapsed} />;
             const item = (
               <Link
                 key={n.to}

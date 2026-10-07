@@ -22,6 +22,7 @@ import {
 import { NativeSelect, thClass } from "@/components/movex/common";
 import type { SortState } from "@/types";
 import type { ListColumn } from "./types";
+import { useT } from "./listLang";
 import { cn } from "@/lib/utils";
 
 export const PAGE_SIZES = ["10", "20", "50"];
@@ -69,6 +70,7 @@ export function DataTable<T extends { id: string }>({
   /** Tree view shows every row on one page: only the row count is rendered in the footer. */
   hidePager?: boolean;
 }) {
+  const { t } = useT();
   const pages = Math.max(1, Math.ceil(totalRows / pageSize));
   const ids = rows.map((r) => r.id);
   const allOn = !!selected && ids.length > 0 && ids.every((id) => selected.has(id));
@@ -162,7 +164,9 @@ export function DataTable<T extends { id: string }>({
                 );
               })}
               {actions && (
-                <TableHead className={cn(thClass, "w-16 text-right")}>Thao tác</TableHead>
+                <TableHead className={cn(thClass, "w-16 text-right")}>
+                  {t("Thao tác", "Actions")}
+                </TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -217,14 +221,17 @@ export function DataTable<T extends { id: string }>({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <span>
           {totalRows === 0
-            ? "Không có bản ghi"
+            ? t("Không có bản ghi", "No records")
             : hidePager
-              ? `${totalRows} bản ghi`
-              : `Hiển thị ${first}–${last} / ${totalRows} bản ghi`}
+              ? `${totalRows} ${t("bản ghi", "records")}`
+              : t(
+                  `Hiển thị ${first}–${last} / ${totalRows} bản ghi`,
+                  `Showing ${first}–${last} of ${totalRows} records`,
+                )}
         </span>
         {!hidePager && (
           <div className="flex items-center gap-2">
-            <span>Số dòng / trang</span>
+            <span>{t("Số dòng / trang", "Rows per page")}</span>
             <NativeSelect
               className="h-8 w-20"
               value={String(pageSize)}

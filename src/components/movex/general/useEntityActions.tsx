@@ -2,10 +2,15 @@ import { toast } from "sonner";
 import type { BaseRecord } from "@/types";
 import type { EntityCrud } from "@/services/crudService";
 import { useConfirm } from "./ConfirmDialog";
+import type { ListLang } from "./listLang";
 
 /** Shared CRUD action handling: confirm → business-rule check → act → toast. No silent failures. */
-export function useEntityActions<T extends BaseRecord>(crud: EntityCrud<T> | undefined) {
+export function useEntityActions<T extends BaseRecord>(
+  crud: EntityCrud<T> | undefined,
+  lang: ListLang = "vi",
+) {
   const confirm = useConfirm();
+  const t = (vi: string, en: string) => (lang === "en" ? en : vi);
 
   const setStatus = async (rows: T[], status: "Active" | "Inactive") => {
     if (!crud || rows.length === 0) return false;
@@ -18,8 +23,15 @@ export function useEntityActions<T extends BaseRecord>(crud: EntityCrud<T> | und
       title: `${verb} ${names}?`,
       description:
         status === "Inactive"
-          ? "Bản ghi Inactive vẫn giữ trong lịch sử và báo cáo nhưng không được chọn cho giao dịch mới. Có thể Activate lại sau."
-          : "Bản ghi sẽ được dùng lại cho giao dịch mới.",
+          ? t(
+              "Bản ghi Inactive vẫn giữ trong lịch sử và báo cáo nhưng không được chọn cho giao dịch mới. Có thể Activate lại sau.",
+              "Inactive records stay in history and reports but cannot be picked for new transactions. You can activate them again later.",
+            )
+          : t(
+              "Bản ghi sẽ được dùng lại cho giao dịch mới.",
+              "The record can be used for new transactions again.",
+            ),
+      cancelLabel: t("Huỷ", "Cancel"),
       confirmLabel: verb,
       tone: status === "Inactive" ? "danger" : "default",
     });
@@ -43,11 +55,13 @@ export function useEntityActions<T extends BaseRecord>(crud: EntityCrud<T> | und
     const check = crud.checkDelete(row.id);
     if (!check.canDelete) {
       const r = await confirm({
-        title: "Không thể xoá",
+        title: t("Không thể xoá", "Cannot delete"),
         description: check.reason,
         hideConfirm: true,
-        cancelLabel: "Đóng",
-        ...(check.canDeactivate ? { altLabel: "Deactivate thay thế" } : {}),
+        cancelLabel: t("Đóng", "Close"),
+        ...(check.canDeactivate
+          ? { altLabel: t("Deactivate thay thế", "Deactivate instead") }
+          : {}),
         tone: "danger",
       });
       if (r === "alt") {
@@ -59,7 +73,11 @@ export function useEntityActions<T extends BaseRecord>(crud: EntityCrud<T> | und
     }
     const r = await confirm({
       title: `Delete ${crud.entityType} ${crud.labelOf(row)}?`,
-      description: "Đây là soft delete: bản ghi bị ẩn khỏi danh sách nhưng vẫn được giữ để audit.",
+      description: t(
+        "Đây là soft delete: bản ghi bị ẩn khỏi danh sách nhưng vẫn được giữ để audit.",
+        "Soft delete: the record is hidden from the list but kept for audit.",
+      ),
+      cancelLabel: t("Huỷ", "Cancel"),
       confirmLabel: "Delete",
       tone: "danger",
     });

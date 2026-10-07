@@ -1,5 +1,6 @@
 // Interactive route map (Leaflet). Renders whatever geometry the RouteProvider returned — real
 // Vietmap geometry when a key is configured, mock geometry otherwise. Tiles: Esri.
+// Round trip: outbound = blue, return = red; `legView` picks which leg(s) are drawn.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import "leaflet/dist/leaflet.css";
 import type * as Leaflet from "leaflet";
@@ -15,17 +16,17 @@ export interface MapToll extends TollStation {
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
 const BASE_LAYERS = {
   terrain: {
-    label: "Địa hình",
+    label: "Terrain",
     url: `${ESRI}/World_Topo_Map/MapServer/tile/{z}/{y}/{x}`,
     attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, OpenStreetMap contributors",
   },
   street: {
-    label: "Đường phố",
+    label: "Street",
     url: `${ESRI}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`,
     attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, OpenStreetMap contributors",
   },
   satellite: {
-    label: "Vệ tinh",
+    label: "Satellite",
     url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
     attribution: "Tiles &copy; Esri — Maxar, Earthstar Geographics",
   },
@@ -42,6 +43,35 @@ const pinHtml = (label: string, color: string) =>
      <svg width="30" height="40" viewBox="0 0 30 40" style="filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/><circle cx="15" cy="15" r="10" fill="${color}" stroke="white" stroke-width="2"/></svg>
      <span style="position:absolute;top:7px;left:0;width:30px;text-align:center;color:white;font:700 13px Inter,sans-serif">${label}</span>
    </div>`;
+
+export type LegView = "both" | "outbound" | "return";
+
+const OUTBOUND_COLOR = "#2563eb";
+const RETURN_COLOR = "#dc2626";
+/** Display-only shift (px) used when outbound and return share one geometry. */
+const SHARED_OFFSET_PX = 3;
+
+const sameLine = (a: [number, number][], b: [number, number][]) =>
+  a.length === b.length && a.every((p, i) => p[0] === b[i]![0] && p[1] === b[i]![1]);
+
+/** Shift a line `px` screen pixels to the right of its direction of travel (never changes the data). */
+function offsetLine(
+  L: typeof Leaflet,
+  map: Leaflet.Map,
+  pts: [number, number][],
+  px: number,
+): Leaflet.LatLng[] {
+  const p = pts.map((x) => map.latLngToLayerPoint(x));
+  return p.map((pt, i) => {
+    const a = p[Math.max(0, i - 1)]!;
+    const b = p[Math.min(p.length - 1, i + 1)]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    // Right-hand normal in screen space (y grows downwards).
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    return map.layerPointToLatLng(L.point(pt.x + nx * px, pt.y + ny * px));
+  });
+}
 
 const dotHtml = (label: string, color: string) =>
   `<div style="width:24px;height:24px;border-radius:9999px;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.35);color:white;font:700 11px Inter,sans-serif;display:flex;align-items:center;justify-content:center">${label}</div>`;
@@ -63,6 +93,8 @@ export function RouteMapPanel({
   onSelectAlternative,
   onRouteDrag,
   onWaypointDrag,
+  legView = "both",
+  returnSameAsOutbound = false,
 }: {
   origin: RoutePoint;
   waypoints: RoutePoint[];
@@ -84,6 +116,10 @@ export function RouteMapPanel({
   onRouteDrag?: ((p: { lat: number; lng: number }) => void) | undefined;
   /** Drag an existing outbound waypoint (0-based index into `waypoints`) to a new position. */
   onWaypointDrag?: ((index: number, p: { lat: number; lng: number }) => void) | undefined;
+  /** Round trip: which leg(s) to draw. */
+  legView?: LegView;
+  /** Return = outbound reversed: in "both" the two lines are drawn slightly apart. */
+  returnSameAsOutbound?: boolean;
 }) {
   const selectRef = useRef(onSelectAlternative);
   selectRef.current = onSelectAlternative;
@@ -97,6 +133,8 @@ export function RouteMapPanel({
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const layerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const offsetLayerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const drawOffsetRef = useRef<(() => void) | null>(null);
   const tileRef = useRef<Leaflet.TileLayer | null>(null);
   const LRef = useRef<typeof Leaflet | null>(null);
   const boundsRef = useRef<Leaflet.LatLngBounds | null>(null);
@@ -119,7 +157,9 @@ export function RouteMapPanel({
           6,
         );
         L.control.zoom({ position: "topleft" }).addTo(map);
+        offsetLayerRef.current = L.layerGroup().addTo(map);
         layerRef.current = L.layerGroup().addTo(map);
+        map.on("zoomend", () => drawOffsetRef.current?.());
         mapRef.current = map;
         setReady(true);
       })
@@ -154,6 +194,8 @@ export function RouteMapPanel({
     returnGeometry?.length,
     roundTrip,
     tolls.map((t) => [t.lat, t.lng]),
+    legView,
+    returnSameAsOutbound,
     alternatives.map((a) => a.id),
     selectedAlternativeId,
   ]);
@@ -161,9 +203,23 @@ export function RouteMapPanel({
     const L = LRef.current,
       map = mapRef.current,
       layer = layerRef.current;
-    if (!ready || !L || !map || !layer) return;
+    const offsetLayer = offsetLayerRef.current;
+    if (!ready || !L || !map || !layer || !offsetLayer) return;
     layer.clearLayers();
+    offsetLayer.clearLayers();
+    drawOffsetRef.current = null;
     const all: [number, number][] = [];
+    const showOut = !roundTrip || legView !== "return";
+    const showRet = !!roundTrip && legView !== "outbound";
+    const retGeom = showRet && returnGeometry?.length ? returnGeometry : undefined;
+    const outGeom = showOut && outboundGeometry?.length ? outboundGeometry : undefined;
+    // Both legs on one geometry: draw each a few px to its right so neither hides the other.
+    const shared =
+      !!retGeom &&
+      !!outGeom &&
+      (returnSameAsOutbound ||
+        sameLine(outGeom, [...retGeom].reverse()) ||
+        sameLine(outGeom, retGeom));
     const marker = (
       p: RoutePoint,
       html: string,
@@ -187,30 +243,52 @@ export function RouteMapPanel({
       if (onDragEnd) m.on("dragend", () => onDragEnd(m.getLatLng()));
     };
 
-    for (const a of alternatives) {
+    for (const a of showOut ? alternatives : []) {
       if (a.id === selectedAlternativeId || !a.geometry.length) continue;
       L.polyline(a.geometry, { color: "#64748b", weight: 5, opacity: 0.45 })
-        .bindTooltip(`${a.label} — bấm để chọn`, { sticky: true })
+        .bindTooltip(`${a.label} — click to select`, { sticky: true })
         .on("click", () => selectRef.current?.(a.id))
         .addTo(layer);
       all.push(...a.geometry);
     }
-    if (roundTrip && returnGeometry?.length) {
-      L.polyline(returnGeometry, { color: "#16a34a", weight: 4, dashArray: "8 6" })
-        .bindTooltip("Chiều về")
+    // The drag hit area must stay above the (re)drawn offset lines.
+    let hitLine: Leaflet.Polyline | null = null;
+    if (shared) {
+      const draw = () => {
+        offsetLayer.clearLayers();
+        const out = offsetLine(L, map, outGeom!, SHARED_OFFSET_PX);
+        const ret = offsetLine(L, map, retGeom!, SHARED_OFFSET_PX);
+        L.polyline(out, { color: "#ffffff", weight: 7, opacity: 0.9 }).addTo(offsetLayer);
+        L.polyline(ret, { color: "#ffffff", weight: 7, opacity: 0.9 }).addTo(offsetLayer);
+        L.polyline(ret, { color: RETURN_COLOR, weight: 4 })
+          .bindTooltip("Return Trip")
+          .addTo(offsetLayer);
+        L.polyline(out, { color: OUTBOUND_COLOR, weight: 4 })
+          .bindTooltip("Outbound")
+          .addTo(offsetLayer);
+        hitLine?.bringToFront();
+      };
+      drawOffsetRef.current = draw;
+      draw();
+      all.push(...retGeom!);
+    } else if (retGeom) {
+      L.polyline(retGeom, { color: "#ffffff", weight: 8, opacity: 0.9 }).addTo(layer);
+      L.polyline(retGeom, { color: RETURN_COLOR, weight: 5 })
+        .bindTooltip("Return Trip")
         .addTo(layer);
-      all.push(...returnGeometry);
+      all.push(...retGeom);
     }
-    if (outboundGeometry?.length) {
-      L.polyline(outboundGeometry, { color: "#ffffff", weight: 8, opacity: 0.9 }).addTo(layer);
-      L.polyline(outboundGeometry, { color: "#2563eb", weight: 5 })
-        .bindTooltip("Chiều đi")
-        .addTo(layer);
+    if (outGeom) {
+      if (!shared) {
+        L.polyline(outGeom, { color: "#ffffff", weight: 8, opacity: 0.9 }).addTo(layer);
+        L.polyline(outGeom, { color: OUTBOUND_COLOR, weight: 5 })
+          .bindTooltip("Outbound")
+          .addTo(layer);
+      }
       // Wide transparent hit area: press and drag anywhere on the line to add a via point.
       if (routeDragRef.current) {
-        const hit = L.polyline(outboundGeometry, { color: "#000", weight: 18, opacity: 0 }).addTo(
-          layer,
-        );
+        const hit = L.polyline(outGeom, { color: "#000", weight: 18, opacity: 0 }).addTo(layer);
+        hitLine = hit;
         hit.on("mouseover", () => map.getContainer().style.setProperty("cursor", "grab"));
         hit.on("mouseout", () => map.getContainer().style.removeProperty("cursor"));
         hit.on("mousedown", (e: Leaflet.LeafletMouseEvent) => {
@@ -240,18 +318,19 @@ export function RouteMapPanel({
           map.on("mouseup", up);
         });
       }
-      all.push(...outboundGeometry);
-    } else {
+      all.push(...outGeom);
+    } else if (showOut && !outboundGeometry?.length) {
       const stops = [origin, ...waypoints, destination]
         .filter(valid)
         .map((p) => [p.lat, p.lng] as [number, number]);
       if (stops.length >= 2)
         L.polyline(stops, { color: "#94a3b8", weight: 3, dashArray: "4 8" })
-          .bindTooltip("Chưa tính lộ trình")
+          .bindTooltip("Route not calculated")
           .addTo(layer);
     }
     for (const t of tolls) {
       if (t.lat == null || t.lng == null) continue;
+      if (t.leg === "Outbound" ? !showOut : !showRet) continue;
       L.marker([t.lat, t.lng], {
         icon: L.divIcon({
           className: "",
@@ -261,15 +340,15 @@ export function RouteMapPanel({
         }),
       })
         .bindTooltip(
-          `<b>${esc(t.code ? `${t.code} · ` : "")}${esc(t.name)}</b><br/>${t.leg === "Outbound" ? "Chiều đi" : "Chiều về"} · ${t.vehicleTollGroup} · ${formatVnd(t.price)}${t.positionApproximate ? "<br/><i>vị trí ước lượng</i>" : ""}`,
+          `<b>${esc(t.code ? `${t.code} · ` : "")}${esc(t.name)}</b><br/>${t.leg === "Outbound" ? "Outbound" : "Return Trip"} · ${t.vehicleTollGroup} · ${formatVnd(t.price)}${t.positionApproximate ? "<br/><i>approximate position</i>" : ""}`,
           { direction: "top" },
         )
         .addTo(layer);
     }
-    waypoints.forEach((w, i) =>
+    (showOut ? waypoints : []).forEach((w, i) =>
       marker(
         w,
-        dotHtml(String(i + 1), "#2563eb"),
+        dotHtml(String(i + 1), OUTBOUND_COLOR),
         [24, 24],
         [12, 12],
         100,
@@ -281,9 +360,9 @@ export function RouteMapPanel({
           : undefined,
       ),
     );
-    if (roundTrip)
+    if (showRet)
       returnWaypoints.forEach((w, i) =>
-        marker(w, dotHtml(`R${i + 1}`, "#16a34a"), [24, 24], [12, 12], 100),
+        marker(w, dotHtml(`R${i + 1}`, RETURN_COLOR), [24, 24], [12, 12], 100),
       );
     marker(origin, pinHtml("A", "#16a34a"), [30, 40], [15, 40], 200);
     marker(destination, pinHtml("B", "#ef4444"), [30, 40], [15, 40], 200);
@@ -306,12 +385,12 @@ export function RouteMapPanel({
       {!ready && !failed && (
         <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Đang tải bản đồ…
+          Loading map…
         </div>
       )}
       {failed && (
         <div className="absolute inset-0 flex items-center justify-center text-sm text-destructive">
-          Không tải được bản đồ. Kiểm tra kết nối mạng.
+          Could not load the map. Check your network connection.
         </div>
       )}
 
@@ -320,8 +399,8 @@ export function RouteMapPanel({
           <button
             type="button"
             onClick={() => setLayersOpen((o) => !o)}
-            aria-label="Lớp bản đồ"
-            title="Lớp bản đồ"
+            aria-label="Map layers"
+            title="Map layers"
             className="flex h-10 w-10 items-center justify-center rounded-lg bg-card text-muted-foreground shadow-md hover:text-primary"
           >
             <Layers className="h-5 w-5" />

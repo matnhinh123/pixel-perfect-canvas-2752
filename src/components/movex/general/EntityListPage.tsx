@@ -53,6 +53,7 @@ import { DataTable } from "./DataTable";
 import { ImportDialog } from "./ImportDialog";
 import { useEntityActions } from "./useEntityActions";
 import type { ListColumn, QuickFilter } from "./types";
+import { ListLangProvider, type ListLang } from "./listLang";
 
 export interface ExtraRowAction<T> {
   label: string;
@@ -94,6 +95,8 @@ export interface EntityListPageProps<T extends BaseRecord> {
   tree?: { parentOf: (row: T) => string | null; column: string };
   /** Hide the Delete row action (master data that is deactivated rather than deleted). */
   allowDelete?: boolean;
+  /** UI language of the list chrome (toolbar, menus, pager). Vietnamese by default. */
+  lang?: ListLang;
 }
 
 function DisabledWithReason({ reason, children }: { reason: string; children: ReactNode }) {
@@ -126,7 +129,9 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState<false | "import" | "history">(false);
   const [auditRow, setAuditRow] = useState<T | null>(null);
-  const actions = useEntityActions(crud);
+  const lang = p.lang ?? "vi";
+  const t = (vi: string, en: string) => (lang === "en" ? en : vi);
+  const actions = useEntityActions(crud, lang);
   const viewKey = `list-view.${screen}`;
   const [view, setViewState] = useState<"tree" | "table">(() =>
     readJson<string>(viewKey, "tree") === "table" ? "table" : "tree",
@@ -265,7 +270,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                     {hasKids ? (
                       <button
                         type="button"
-                        aria-label={open ? "Thu gọn" : "Mở rộng"}
+                        aria-label={open ? t("Thu gọn", "Collapse") : t("Mở rộng", "Expand")}
                         disabled={forceOpen}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -291,7 +296,12 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
 
   const doExport = (rows: T[], scope: string) => {
     if (rows.length === 0) {
-      toast.error("Không có dữ liệu để export — danh sách hiện tại đang trống.");
+      toast.error(
+        t(
+          "Không có dữ liệu để export — danh sách hiện tại đang trống.",
+          "Nothing to export — the list is empty.",
+        ),
+      );
       return;
     }
     const cols = visibleCols;
@@ -302,14 +312,16 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
       headers: cols.map((c) => c.label),
       rows: rows.map((r) => cols.map((c) => (c.exportValue ?? c.value)(r) ?? "")),
     });
-    toast.success(`Đã export ${rows.length} dòng → ${file}`);
+    toast.success(
+      t(`Đã export ${rows.length} dòng → ${file}`, `Exported ${rows.length} rows → ${file}`),
+    );
   };
 
   const refresh = () => {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      toast.success("Đã làm mới danh sách");
+      toast.success(t("Đã làm mới danh sách", "List refreshed"));
     }, 450);
   };
 
@@ -318,7 +330,8 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     setQuick({});
     setAdvanced([]);
   };
-  const ro = p.readOnlyReason ?? "Không khả dụng cho danh sách này";
+  const ro =
+    p.readOnlyReason ?? t("Không khả dụng cho danh sách này", "Not available for this list");
 
   const importBtn = p.importConfig ? (
     <div className="flex">
@@ -339,11 +352,11 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => setImportOpen("import")}>
             <Upload className="h-4 w-4" />
-            Import từ Excel…
+            {t("Import từ Excel…", "Import from Excel…")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setImportOpen("history")}>
             <History className="h-4 w-4" />
-            Lịch sử import
+            {t("Lịch sử import", "Import history")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -368,7 +381,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          Excel (CSV) · {visibleCols.length} cột đang hiển thị
+          Excel (CSV) · {visibleCols.length} {t("cột đang hiển thị", "visible columns")}
         </DropdownMenuLabel>
         <DropdownMenuItem
           onClick={() =>
@@ -379,14 +392,14 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
           }
         >
           <Download className="h-4 w-4" />
-          Export theo view hiện tại ({filtered.length})
+          {t("Export theo view hiện tại", "Export current view")} ({filtered.length})
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={selectedRows.length === 0}
           onClick={() => doExport(applySort(selectedRows, sort, get), "selected rows")}
         >
           <CheckCircle2 className="h-4 w-4" />
-          Export dòng đã chọn ({selectedRows.length})
+          {t("Export dòng đã chọn", "Export selected rows")} ({selectedRows.length})
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -395,13 +408,13 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const addBtn = p.onAdd ? (
     <Button onClick={p.onAdd}>
       <Plus className="h-4 w-4" />
-      {p.addLabel ?? "Thêm mới"}
+      {p.addLabel ?? t("Thêm mới", "Add")}
     </Button>
   ) : (
     <DisabledWithReason reason={ro}>
       <Button disabled>
         <Plus className="h-4 w-4" />
-        {p.addLabel ?? "Thêm mới"}
+        {p.addLabel ?? t("Thêm mới", "Add")}
       </Button>
     </DisabledWithReason>
   );
@@ -429,7 +442,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
         {p.auditable !== false && crud && (
           <DropdownMenuItem onClick={() => setAuditRow(r)}>
             <History className="h-4 w-4" />
-            Lịch sử thay đổi
+            {t("Lịch sử thay đổi", "Change History")}
           </DropdownMenuItem>
         )}
         {p.extraRowActions?.map((a) => (
@@ -468,262 +481,281 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   );
 
   return (
-    <div>
-      {!p.embedded && (
-        <PageHeader
-          crumbs={[{ label: typeof p.title === "string" ? p.title : p.entityLabel }]}
-          title={p.title}
-          subtitle={p.subtitle}
-          actions={
-            <>
+    <ListLangProvider value={lang}>
+      <div>
+        {!p.embedded && (
+          <PageHeader
+            crumbs={[{ label: typeof p.title === "string" ? p.title : p.entityLabel }]}
+            title={p.title}
+            subtitle={p.subtitle}
+            actions={
+              <>
+                {importBtn}
+                {exportBtn}
+                {addBtn}
+              </>
+            }
+          />
+        )}
+        {p.above}
+        <Panel>
+          {p.embedded && (
+            <div className="mb-4 flex flex-wrap justify-end gap-2">
               {importBtn}
               {exportBtn}
               {addBtn}
-            </>
-          }
-        />
-      )}
-      {p.above}
-      <Panel>
-        {p.embedded && (
-          <div className="mb-4 flex flex-wrap justify-end gap-2">
-            {importBtn}
-            {exportBtn}
-            {addBtn}
-          </div>
-        )}
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <div className="relative w-72">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={p.searchPlaceholder}
-              className="pl-9 pr-8"
+            </div>
+          )}
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <div className="relative w-72">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={p.searchPlaceholder}
+                className="pl-9 pr-8"
+              />
+              {q && (
+                <button
+                  type="button"
+                  onClick={() => setQ("")}
+                  className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                  aria-label={t("Xoá tìm kiếm", "Clear search")}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {p.quickFilters?.map((qf) => (
+              <NativeSelect
+                key={qf.key}
+                value={quick[qf.key] ?? ""}
+                onChange={(v) => setQuick((s) => ({ ...s, [qf.key]: v }))}
+                options={["", ...qf.options.map((o) => o.label)]}
+                labels={{ "": qf.allLabel }}
+              />
+            ))}
+            <AdvancedFilter
+              screen={screen}
+              fields={filterFields}
+              value={advanced}
+              onApply={setAdvanced}
             />
-            {q && (
+            <div className="ml-auto flex items-center gap-2">
+              {treeOn && !forceOpen && parentIds.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCollapsed(collapsed.size ? new Set() : new Set(parentIds))}
+                >
+                  {collapsed.size
+                    ? t("Mở rộng tất cả", "Expand all")
+                    : t("Thu gọn tất cả", "Collapse all")}
+                </Button>
+              )}
+              {tree && (
+                <div
+                  className="flex rounded-md border p-0.5"
+                  role="group"
+                  aria-label={t("Kiểu hiển thị", "View")}
+                >
+                  {(
+                    [
+                      ["tree", "Tree View", ListTree],
+                      ["table", "Table View", Table2],
+                    ] as const
+                  ).map(([k, label, Icon]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-pressed={view === k}
+                      onClick={() => setView(k)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold",
+                        view === k
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <ColumnSettings
+                columns={columns}
+                pref={pref}
+                onChange={setPref}
+                onReset={() => {
+                  reset();
+                  toast.success(t("Đã khôi phục cột mặc định", "Columns reset to default"));
+                }}
+              />
+              <Button variant="outline" size="sm" onClick={refresh} aria-label="Refresh">
+                <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              </Button>
+            </div>
+          </div>
+
+          {(advanced.length > 0 || quickConditions.length > 0) && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+              {[...quickConditions, ...advanced].map((c) => (
+                <span
+                  key={c.id}
+                  className="rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground"
+                >
+                  {describeCondition(c, filterFields)}
+                </span>
+              ))}
               <button
                 type="button"
-                onClick={() => setQ("")}
-                className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
-                aria-label="Xoá tìm kiếm"
+                className="font-semibold text-primary hover:underline"
+                onClick={clearAll}
               >
-                <X className="h-4 w-4" />
+                {t("Xoá tất cả lọc", "Clear all filters")}
               </button>
-            )}
-          </div>
-          {p.quickFilters?.map((qf) => (
-            <NativeSelect
-              key={qf.key}
-              value={quick[qf.key] ?? ""}
-              onChange={(v) => setQuick((s) => ({ ...s, [qf.key]: v }))}
-              options={["", ...qf.options.map((o) => o.label)]}
-              labels={{ "": qf.allLabel }}
-            />
-          ))}
-          <AdvancedFilter
-            screen={screen}
-            fields={filterFields}
-            value={advanced}
-            onApply={setAdvanced}
-          />
-          <div className="ml-auto flex items-center gap-2">
-            {treeOn && !forceOpen && parentIds.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCollapsed(collapsed.size ? new Set() : new Set(parentIds))}
-              >
-                {collapsed.size ? "Mở rộng tất cả" : "Thu gọn tất cả"}
-              </Button>
-            )}
-            {tree && (
-              <div className="flex rounded-md border p-0.5" role="group" aria-label="Kiểu hiển thị">
-                {(
-                  [
-                    ["tree", "Tree View", ListTree],
-                    ["table", "Table View", Table2],
-                  ] as const
-                ).map(([k, label, Icon]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    aria-pressed={view === k}
-                    onClick={() => setView(k)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold",
-                      view === k
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-            <ColumnSettings
-              columns={columns}
-              pref={pref}
-              onChange={setPref}
-              onReset={() => {
-                reset();
-                toast.success("Đã khôi phục cột mặc định");
-              }}
-            />
-            <Button variant="outline" size="sm" onClick={refresh} aria-label="Refresh">
-              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            </Button>
-          </div>
-        </div>
+            </div>
+          )}
 
-        {(advanced.length > 0 || quickConditions.length > 0) && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-            {[...quickConditions, ...advanced].map((c) => (
-              <span
-                key={c.id}
-                className="rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground"
-              >
-                {describeCondition(c, filterFields)}
+          {selected.size > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-accent px-3 py-2 text-sm">
+              <span className="font-semibold text-accent-foreground">
+                {t("Đã chọn", "Selected")} {selected.size}
               </span>
-            ))}
-            <button
-              type="button"
-              className="font-semibold text-primary hover:underline"
-              onClick={clearAll}
-            >
-              Xoá tất cả lọc
-            </button>
-          </div>
-        )}
-
-        {selected.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-accent px-3 py-2 text-sm">
-            <span className="font-semibold text-accent-foreground">Đã chọn {selected.size}</span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => doExport(applySort(selectedRows, sort, get), "selected rows")}
-            >
-              <Download className="h-4 w-4" />
-              Export đã chọn
-            </Button>
-            {crud && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void actions.setStatus(selectedRows, "Active")}
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Activate
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void actions.setStatus(selectedRows, "Inactive")}
-                >
-                  <XCircle className="h-4 w-4" />
-                  Deactivate
-                </Button>
-              </>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              className="ml-auto"
-              onClick={() => setSelected(new Set())}
-            >
-              Bỏ chọn
-            </Button>
-          </div>
-        )}
-
-        <DataTable
-          columns={tableCols}
-          rows={treeOn ? treeRows.map((x) => x.row) : pageRows}
-          totalRows={treeOn ? treeRows.length : filtered.length}
-          page={treeOn ? 1 : Math.min(page, pages)}
-          pageSize={treeOn ? Math.max(1, treeRows.length) : pageSize}
-          hidePager={treeOn}
-          onPage={setPage}
-          onPageSize={setPageSize}
-          sort={sort}
-          onSort={setSort}
-          widths={pref.widths}
-          onResize={(k, w) => setPref((x) => ({ ...x, widths: { ...x.widths, [k]: w } }))}
-          selected={selected}
-          onToggle={(id) =>
-            setSelected((s) => {
-              const n = new Set(s);
-              if (n.has(id)) n.delete(id);
-              else n.add(id);
-              return n;
-            })
-          }
-          onToggleAll={(ids, on) =>
-            setSelected((s) => {
-              const n = new Set(s);
-              ids.forEach((id) => (on ? n.add(id) : n.delete(id)));
-              return n;
-            })
-          }
-          {...(p.onView ? { onRowClick: p.onView } : {})}
-          {...(p.onView || p.onEdit || crud || p.extraRowActions?.length
-            ? { actions: rowMenu }
-            : {})}
-          loading={loading}
-          empty={
-            p.rows.length === 0 ? (
-              <EmptyState
-                title={`Chưa có dữ liệu ${p.entityLabel}`}
-                description={
-                  p.onAdd ? `Bấm "${p.addLabel ?? "Thêm mới"}" hoặc import từ Excel.` : undefined
-                }
-                action={
-                  p.onAdd ? (
-                    <Button size="sm" onClick={p.onAdd}>
-                      <Plus className="h-4 w-4" />
-                      {p.addLabel ?? "Thêm mới"}
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ) : (
-              <EmptyState
-                icon={<SearchX className="h-8 w-8" />}
-                title="Không có bản ghi phù hợp"
-                description="Thử từ khoá khác hoặc xoá bộ lọc."
-                action={
-                  <Button size="sm" variant="outline" onClick={clearAll}>
-                    Xoá bộ lọc
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => doExport(applySort(selectedRows, sort, get), "selected rows")}
+              >
+                <Download className="h-4 w-4" />
+                {t("Export đã chọn", "Export selected")}
+              </Button>
+              {crud && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void actions.setStatus(selectedRows, "Active")}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Activate
                   </Button>
-                }
-              />
-            )
-          }
-        />
-      </Panel>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void actions.setStatus(selectedRows, "Inactive")}
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Deactivate
+                  </Button>
+                </>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto"
+                onClick={() => setSelected(new Set())}
+              >
+                {t("Bỏ chọn", "Clear selection")}
+              </Button>
+            </div>
+          )}
 
-      {p.importConfig && importOpen && (
-        <ImportDialog
-          open
-          onOpenChange={(o) => !o && setImportOpen(false)}
-          config={p.importConfig}
-          entityLabel={p.entityLabel}
-          initialTab={importOpen}
-        />
-      )}
-      {crud && (
-        <AuditHistoryDrawer
-          open={!!auditRow}
-          onOpenChange={(o) => !o && setAuditRow(null)}
-          entityType={p.entityType}
-          entityId={auditRow?.id}
-          title={auditRow ? crud.labelOf(auditRow) : ""}
-        />
-      )}
-    </div>
+          <DataTable
+            columns={tableCols}
+            rows={treeOn ? treeRows.map((x) => x.row) : pageRows}
+            totalRows={treeOn ? treeRows.length : filtered.length}
+            page={treeOn ? 1 : Math.min(page, pages)}
+            pageSize={treeOn ? Math.max(1, treeRows.length) : pageSize}
+            hidePager={treeOn}
+            onPage={setPage}
+            onPageSize={setPageSize}
+            sort={sort}
+            onSort={setSort}
+            widths={pref.widths}
+            onResize={(k, w) => setPref((x) => ({ ...x, widths: { ...x.widths, [k]: w } }))}
+            selected={selected}
+            onToggle={(id) =>
+              setSelected((s) => {
+                const n = new Set(s);
+                if (n.has(id)) n.delete(id);
+                else n.add(id);
+                return n;
+              })
+            }
+            onToggleAll={(ids, on) =>
+              setSelected((s) => {
+                const n = new Set(s);
+                ids.forEach((id) => (on ? n.add(id) : n.delete(id)));
+                return n;
+              })
+            }
+            {...(p.onView ? { onRowClick: p.onView } : {})}
+            {...(p.onView || p.onEdit || crud || p.extraRowActions?.length
+              ? { actions: rowMenu }
+              : {})}
+            loading={loading}
+            empty={
+              p.rows.length === 0 ? (
+                <EmptyState
+                  title={t(`Chưa có dữ liệu ${p.entityLabel}`, `No ${p.entityLabel} yet`)}
+                  description={
+                    p.onAdd
+                      ? t(
+                          `Bấm "${p.addLabel ?? t("Thêm mới", "Add")}" hoặc import từ Excel.`,
+                          `Click "${p.addLabel ?? "Add"}" or import from Excel.`,
+                        )
+                      : undefined
+                  }
+                  action={
+                    p.onAdd ? (
+                      <Button size="sm" onClick={p.onAdd}>
+                        <Plus className="h-4 w-4" />
+                        {p.addLabel ?? t("Thêm mới", "Add")}
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                <EmptyState
+                  icon={<SearchX className="h-8 w-8" />}
+                  title={t("Không có bản ghi phù hợp", "No matching records")}
+                  description={t(
+                    "Thử từ khoá khác hoặc xoá bộ lọc.",
+                    "Try another keyword or clear the filters.",
+                  )}
+                  action={
+                    <Button size="sm" variant="outline" onClick={clearAll}>
+                      {t("Xoá bộ lọc", "Clear filters")}
+                    </Button>
+                  }
+                />
+              )
+            }
+          />
+        </Panel>
+
+        {p.importConfig && importOpen && (
+          <ImportDialog
+            open
+            onOpenChange={(o) => !o && setImportOpen(false)}
+            config={p.importConfig}
+            entityLabel={p.entityLabel}
+            initialTab={importOpen}
+          />
+        )}
+        {crud && (
+          <AuditHistoryDrawer
+            open={!!auditRow}
+            onOpenChange={(o) => !o && setAuditRow(null)}
+            entityType={p.entityType}
+            entityId={auditRow?.id}
+            title={auditRow ? crud.labelOf(auditRow) : ""}
+            {...(lang === "en" ? { english: true } : {})}
+          />
+        )}
+      </div>
+    </ListLangProvider>
   );
 }
