@@ -14,8 +14,18 @@ export interface MockTollGate {
   feeType: FeeType;
   lat: number;
   lng: number;
+  /** Toll fee per Toll Group 1..5 (VND by default). */
   prices: [number, number, number, number, number];
+  /** Location Master link (picked on the form); coordinates can come from it. */
+  locationId?: string;
+  /** The toll's id in the Vietmap API (route response `toll.id`) — the key Routing maps by. */
+  vietmapId?: string;
+  source?: TollStationSource;
+  remark?: string;
+  currency?: string;
 }
+
+export type TollStationSource = "Manual" | "Vietmap";
 
 export const MOCK_TOLL_GATES: MockTollGate[] = [
   {
@@ -197,9 +207,21 @@ export const PROVIDER_ONLY_GATES: { name: string; prices: MockTollGate["prices"]
 /** Toll Station master record (editable on the Toll Station screen, used by Routing). */
 export type TollGateRecord = MockTollGate & BaseRecord;
 
+/** Demo: a few stations already mapped to Vietmap toll ids. */
+const DEMO_VIETMAP_IDS: Record<string, string> = {
+  "T-XLHN": "vm-toll-100231",
+  "T-LP": "vm-toll-100458",
+  "T-DG": "vm-toll-100462",
+  "T-PT": "vm-toll-201177",
+};
+
 export const seedTollStations = (): TollGateRecord[] =>
   MOCK_TOLL_GATES.map((g) => ({
     ...g,
+    ...(DEMO_VIETMAP_IDS[g.id] ? { vietmapId: DEMO_VIETMAP_IDS[g.id] } : {}),
+    source: DEMO_VIETMAP_IDS[g.id] ? ("Vietmap" as const) : ("Manual" as const),
+    remark: "",
+    currency: "VND",
     status: "Active",
     createdAt: "2026-09-01T02:00:00.000Z",
     createdBy: "Nguyễn Minh Anh",

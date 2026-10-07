@@ -15,7 +15,6 @@ import { Route as CommonCodeRouteImport } from './routes/common-code'
 import { Route as CostGroupRouteImport } from './routes/cost-group'
 import { Route as ExchangeRateRouteImport } from './routes/exchange-rate'
 import { Route as PricingRouteImport } from './routes/pricing'
-import { Route as TollStationRouteImport } from './routes/toll-station'
 import { Route as VendorTariffRouteImport } from './routes/vendor-tariff'
 import { Route as BusinessPartnerIndexRouteImport } from './routes/business-partner.index'
 import { Route as BusinessPartnerIdRouteImport } from './routes/business-partner.$id'
@@ -27,6 +26,8 @@ import { Route as RoutingIndexRouteImport } from './routes/routing.index'
 import { Route as RoutingIdRouteImport } from './routes/routing.$id'
 import { Route as ServiceIndexRouteImport } from './routes/service.index'
 import { Route as ServiceIdRouteImport } from './routes/service.$id'
+import { Route as TollStationIndexRouteImport } from './routes/toll-station.index'
+import { Route as TollStationIdRouteImport } from './routes/toll-station.$id'
 import { Route as VehicleIndexRouteImport } from './routes/vehicle.index'
 import { Route as VehicleIdRouteImport } from './routes/vehicle.$id'
 import { Route as ApiVietmapSplatRouteImport } from './routes/api.vietmap.$'
@@ -59,11 +60,6 @@ const ExchangeRateRoute = ExchangeRateRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TollStationRoute = TollStationRouteImport.update({
-  id: '/toll-station',
-  path: '/toll-station',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VendorTariffRoute = VendorTariffRouteImport.update({
@@ -121,6 +117,16 @@ const ServiceIdRoute = ServiceIdRouteImport.update({
   path: '/service/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TollStationIndexRoute = TollStationIndexRouteImport.update({
+  id: '/toll-station/',
+  path: '/toll-station/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TollStationIdRoute = TollStationIdRouteImport.update({
+  id: '/toll-station/$id',
+  path: '/toll-station/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VehicleIndexRoute = VehicleIndexRouteImport.update({
   id: '/vehicle/',
   path: '/vehicle/',
@@ -144,19 +150,20 @@ export interface FileRoutesByFullPath {
   '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
-  '/toll-station': typeof TollStationRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
   '/cost/$id': typeof CostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
   '/cost/': typeof CostIndexRoute
   '/location/': typeof LocationIndexRoute
   '/routing/': typeof RoutingIndexRoute
   '/service/': typeof ServiceIndexRoute
+  '/toll-station/': typeof TollStationIndexRoute
   '/vehicle/': typeof VehicleIndexRoute
   '/api/vietmap/$': typeof ApiVietmapSplatRoute
 }
@@ -167,19 +174,20 @@ export interface FileRoutesByTo {
   '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
-  '/toll-station': typeof TollStationRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
   '/cost/$id': typeof CostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner': typeof BusinessPartnerIndexRoute
   '/cost': typeof CostIndexRoute
   '/location': typeof LocationIndexRoute
   '/routing': typeof RoutingIndexRoute
   '/service': typeof ServiceIndexRoute
+  '/toll-station': typeof TollStationIndexRoute
   '/vehicle': typeof VehicleIndexRoute
   '/api/vietmap/$': typeof ApiVietmapSplatRoute
 }
@@ -191,19 +199,20 @@ export interface FileRoutesById {
   '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
-  '/toll-station': typeof TollStationRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
   '/cost/$id': typeof CostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
   '/cost/': typeof CostIndexRoute
   '/location/': typeof LocationIndexRoute
   '/routing/': typeof RoutingIndexRoute
   '/service/': typeof ServiceIndexRoute
+  '/toll-station/': typeof TollStationIndexRoute
   '/vehicle/': typeof VehicleIndexRoute
   '/api/vietmap/$': typeof ApiVietmapSplatRoute
 }
@@ -216,19 +225,20 @@ export interface FileRouteTypes {
     | '/cost-group'
     | '/exchange-rate'
     | '/pricing'
-    | '/toll-station'
     | '/vendor-tariff'
     | '/business-partner/$id'
     | '/cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/service/$id'
+    | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner/'
     | '/cost/'
     | '/location/'
     | '/routing/'
     | '/service/'
+    | '/toll-station/'
     | '/vehicle/'
     | '/api/vietmap/$'
   fileRoutesByTo: FileRoutesByTo
@@ -239,19 +249,20 @@ export interface FileRouteTypes {
     | '/cost-group'
     | '/exchange-rate'
     | '/pricing'
-    | '/toll-station'
     | '/vendor-tariff'
     | '/business-partner/$id'
     | '/cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/service/$id'
+    | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner'
     | '/cost'
     | '/location'
     | '/routing'
     | '/service'
+    | '/toll-station'
     | '/vehicle'
     | '/api/vietmap/$'
   id:
@@ -262,19 +273,20 @@ export interface FileRouteTypes {
     | '/cost-group'
     | '/exchange-rate'
     | '/pricing'
-    | '/toll-station'
     | '/vendor-tariff'
     | '/business-partner/$id'
     | '/cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/service/$id'
+    | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner/'
     | '/cost/'
     | '/location/'
     | '/routing/'
     | '/service/'
+    | '/toll-station/'
     | '/vehicle/'
     | '/api/vietmap/$'
   fileRoutesById: FileRoutesById
@@ -286,19 +298,20 @@ export interface RootRouteChildren {
   CostGroupRoute: typeof CostGroupRoute
   ExchangeRateRoute: typeof ExchangeRateRoute
   PricingRoute: typeof PricingRoute
-  TollStationRoute: typeof TollStationRoute
   VendorTariffRoute: typeof VendorTariffRoute
   BusinessPartnerIdRoute: typeof BusinessPartnerIdRoute
   CostIdRoute: typeof CostIdRoute
   LocationIdRoute: typeof LocationIdRoute
   RoutingIdRoute: typeof RoutingIdRoute
   ServiceIdRoute: typeof ServiceIdRoute
+  TollStationIdRoute: typeof TollStationIdRoute
   VehicleIdRoute: typeof VehicleIdRoute
   BusinessPartnerIndexRoute: typeof BusinessPartnerIndexRoute
   CostIndexRoute: typeof CostIndexRoute
   LocationIndexRoute: typeof LocationIndexRoute
   RoutingIndexRoute: typeof RoutingIndexRoute
   ServiceIndexRoute: typeof ServiceIndexRoute
+  TollStationIndexRoute: typeof TollStationIndexRoute
   VehicleIndexRoute: typeof VehicleIndexRoute
   ApiVietmapSplatRoute: typeof ApiVietmapSplatRoute
 }
@@ -345,13 +358,6 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/toll-station': {
-      id: '/toll-station'
-      path: '/toll-station'
-      fullPath: '/toll-station'
-      preLoaderRoute: typeof TollStationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/vendor-tariff': {
@@ -431,6 +437,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/toll-station/': {
+      id: '/toll-station/'
+      path: '/toll-station'
+      fullPath: '/toll-station/'
+      preLoaderRoute: typeof TollStationIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/toll-station/$id': {
+      id: '/toll-station/$id'
+      path: '/toll-station/$id'
+      fullPath: '/toll-station/$id'
+      preLoaderRoute: typeof TollStationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vehicle/': {
       id: '/vehicle/'
       path: '/vehicle'
@@ -462,19 +482,20 @@ const rootRouteChildren: RootRouteChildren = {
   CostGroupRoute: CostGroupRoute,
   ExchangeRateRoute: ExchangeRateRoute,
   PricingRoute: PricingRoute,
-  TollStationRoute: TollStationRoute,
   VendorTariffRoute: VendorTariffRoute,
   BusinessPartnerIdRoute: BusinessPartnerIdRoute,
   CostIdRoute: CostIdRoute,
   LocationIdRoute: LocationIdRoute,
   RoutingIdRoute: RoutingIdRoute,
   ServiceIdRoute: ServiceIdRoute,
+  TollStationIdRoute: TollStationIdRoute,
   VehicleIdRoute: VehicleIdRoute,
   BusinessPartnerIndexRoute: BusinessPartnerIndexRoute,
   CostIndexRoute: CostIndexRoute,
   LocationIndexRoute: LocationIndexRoute,
   RoutingIndexRoute: RoutingIndexRoute,
   ServiceIndexRoute: ServiceIndexRoute,
+  TollStationIndexRoute: TollStationIndexRoute,
   VehicleIndexRoute: VehicleIndexRoute,
   ApiVietmapSplatRoute: ApiVietmapSplatRoute,
 }

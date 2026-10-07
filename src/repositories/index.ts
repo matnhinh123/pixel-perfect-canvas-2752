@@ -47,7 +47,8 @@ export const locationRepository = createCollection<LocationMasterRecord>(
 );
 /** Toll Station master; Routing matches gates on the route against it. */
 export const tollStationRepository = createCollection<TollGateRecord>(
-  "toll-stations",
+  // ".v2": Vietmap ID / Source / Location / Remark were added to the toll station model.
+  "toll-stations.v2",
   seedTollStations,
 );
 /** Vehicle master (one row per physical vehicle). */
