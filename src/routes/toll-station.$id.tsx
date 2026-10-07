@@ -237,7 +237,7 @@ function TollStationView({ station }: { station: TollGateRecord }) {
               <Tag tone={sourceOf(station)}>{sourceOf(station)}</Tag>
             </InfoRow>
             <div className="sm:col-span-2">
-              <InfoRow label="Remark">{station.remark}</InfoRow>
+              <InfoRow label="Description">{station.remark}</InfoRow>
             </div>
           </dl>
           {hasCoords && (
@@ -415,11 +415,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 options={["Active", "Inactive"]}
               />
             </Field>
-            <Field
-              label="Vietmap ID"
-              error={errors["vietmapId"]}
-              hint="Optional — the toll id returned by Vietmap, used to match this station."
-            >
+            <Field label="Vietmap ID" error={errors["vietmapId"]}>
               <Input
                 value={d.vietmapId ?? ""}
                 placeholder="e.g. vm-toll-100231"
@@ -427,7 +423,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 onChange={(e) => set("vietmapId", e.target.value)}
               />
             </Field>
-            <Field label="Source" hint="Vietmap when a Vietmap ID is set.">
+            <Field label="Source">
               <div className="flex h-9 items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 text-sm">
                 <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 {(d.vietmapId ?? "").trim() ? "Vietmap" : "Manual"}
@@ -451,7 +447,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 onChange={(e) => set("lng", num(e.target.value))}
               />
             </Field>
-            <Field label="Remark" className="sm:col-span-2 lg:col-span-3">
+            <Field label="Description" className="sm:col-span-2 lg:col-span-3">
               <Textarea
                 rows={2}
                 value={d.remark ?? ""}

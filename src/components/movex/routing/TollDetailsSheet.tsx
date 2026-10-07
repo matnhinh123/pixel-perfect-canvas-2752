@@ -62,7 +62,7 @@ export function TollDetailsSheet({
           {rows.length === 0 ? (
             <EmptyState
               title="No tolls"
-              description='Click "Recalculate Route" or "Add Toll" to list tolls.'
+              description='Click "Calculate Route" or "Add Toll" to list tolls.'
             />
           ) : (
             <>

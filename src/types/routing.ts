@@ -186,6 +186,8 @@ export interface RouteRecord extends BaseRecord {
   manualCosts: ManualCost[];
   /** User-adjusted total distance (km) per route type; wins over the calculated one, cleared on recalculation. */
   distanceOverrides?: Partial<Record<RouteType, number>>;
+  /** User-adjusted total estimated time (minutes) per route type; same rules as distanceOverrides. */
+  timeOverrides?: Partial<Record<RouteType, number>>;
   /** Default "Plain". */
   terrain?: Terrain;
 }

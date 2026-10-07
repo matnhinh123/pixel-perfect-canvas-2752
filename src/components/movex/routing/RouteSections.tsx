@@ -617,7 +617,7 @@ export function TollBreakdown({
                         ? "No manual costs yet."
                         : outbound
                           ? "No toll stations on this leg."
-                          : 'Click "Recalculate Route" to load toll stations.'}
+                          : 'Click "Calculate Route" to load toll stations.'}
                     </TableCell>
                   </TableRow>
                 ),

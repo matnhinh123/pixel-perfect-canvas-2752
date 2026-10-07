@@ -41,7 +41,7 @@ import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import { routeLegs, routeTotals } from "@/services/cost/costMath";
 import { locationRepository, routeRepository } from "@/repositories";
-import { formatDuration } from "@/lib/format";
+import { formatDuration, parseDurationText } from "@/lib/format";
 import {
   type RouteCalculation,
   type TollStation,
@@ -224,6 +224,43 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
     else if (Number.isFinite(km) && km >= 0) setDistance(Math.round(km * 10) / 10);
     setKmText(null);
   };
+  // Estimated time: same idea as distance — calculated, or typed by the user until the next recalculation.
+  const { timeOverrides: _tov, ...noTimeOverride } = r;
+  const calculatedMin = routeTotals(noTimeOverride).estimatedTimeMin;
+  const minOverride = r.timeOverrides?.[r.type];
+  const [timeText, setTimeText] = useState<string | null>(null);
+  const setEstimatedTime = (min: number | null) => {
+    const next = min === null || min === calculatedMin ? null : min;
+    if ((minOverride ?? null) === next) return;
+    setPending((q) => [
+      ...q,
+      {
+        action: "CHANGE_ESTIMATED_TIME",
+        field: "Estimated Time",
+        oldValue: formatDuration(totals.estimatedTimeMin),
+        newValue: formatDuration(next ?? calculatedMin),
+        note: next === null ? "Restored calculated time" : "Estimated time adjusted manually",
+      },
+    ]);
+    setR((p) => {
+      const rest = { ...p.timeOverrides };
+      if (next === null) delete rest[p.type];
+      else rest[p.type] = next;
+      const { timeOverrides: _t, ...others } = p;
+      return Object.keys(rest).length ? { ...others, timeOverrides: rest } : others;
+    });
+  };
+  const commitTime = () => {
+    if (timeText === null) return;
+    const v = timeText.trim();
+    if (v === "") setEstimatedTime(null);
+    else {
+      const min = parseDurationText(v);
+      if (min === null) toast.error('Thời gian không hợp lệ — nhập dạng "15h 48m", "15:48" hoặc số giờ.');
+      else setEstimatedTime(min);
+    }
+    setTimeText(null);
+  };
   const { outbound, ret } = routeLegs(r);
   const round = r.type === "Round Trip";
   /** Round trip = outbound + the same route driven back to the Departure (no recalculation needed). */
@@ -259,7 +296,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       const best = res.alternatives.find((a) => a.recommended) ?? res.alternatives[0]!;
       const bestId = altId(best, res.alternatives.indexOf(best));
       setR((p) => {
-        const { customReturn: _drop, distanceOverrides: _d, ...rest } = p;
+        const { customReturn: _drop, distanceOverrides: _d, timeOverrides: _t, ...rest } = p;
         return {
           ...rest,
           alternatives: res.alternatives,
@@ -422,7 +459,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const save = () => {
     setFormError(null);
     const e = validateRoute(r);
-    if (stale) e["calc"] = "Route needs recalculation — click Recalculate Route before saving.";
+    if (stale) e["calc"] = "Route needs recalculation — click Calculate Route before saving.";
     if (Object.keys(e).length) {
       setErrors(e);
       setFormError("Cannot save yet — please check:");
@@ -468,10 +505,10 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       size="lg"
       onClick={() => void calculate()}
       disabled={loading || !!inputError}
-      title={inputError ?? "Recalculate Route"}
+      title={inputError ?? "Calculate Route"}
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-      Recalculate Route
+      Calculate Route
     </Button>
   );
 
@@ -632,7 +669,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                     title={
                       totals.calculated
                         ? `Calculated: ${calculatedKm} km — type to adjust, clear to reset`
-                        : "Filled in by Recalculate Route; you can also type it."
+                        : "Filled in by Calculate Route; you can also type it."
                     }
                     onChange={(e) => setKmText(e.target.value)}
                     onBlur={commitKm}
@@ -662,12 +699,36 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 </label>
                 <Input
                   id="route-time"
-                  readOnly
                   className="h-8 w-28 shrink-0 bg-card font-semibold"
-                  value={totals.calculated ? formatDuration(totals.estimatedTimeMin) : ""}
+                  value={
+                    timeText ??
+                    (totals.calculated || minOverride !== undefined
+                      ? formatDuration(totals.estimatedTimeMin)
+                      : "")
+                  }
                   placeholder="—"
-                  title="Estimated driving time of the selected route"
+                  title={
+                    totals.calculated
+                      ? `Calculated: ${formatDuration(calculatedMin)} — type e.g. "15h 48m", "15:48" or hours; clear to reset`
+                      : 'Filled in by Calculate Route; you can also type it (e.g. "15h 48m").'
+                  }
+                  onChange={(e) => setTimeText(e.target.value)}
+                  onBlur={commitTime}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitTime();
+                    if (e.key === "Escape") setTimeText(null);
+                  }}
                 />
+                {minOverride !== undefined && totals.calculated && (
+                  <button
+                    type="button"
+                    title={`Back to the calculated ${formatDuration(calculatedMin)}`}
+                    className="shrink-0 text-xs font-medium text-primary hover:underline"
+                    onClick={() => setEstimatedTime(null)}
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
               <div className="flex justify-center px-2">
                 <Button

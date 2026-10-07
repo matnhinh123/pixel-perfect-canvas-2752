@@ -21,7 +21,7 @@ export function RouteAlternativeSelector({
     return (
       <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
         No route yet — choose Origin and Destination, then click{" "}
-        <span className="font-medium text-foreground">Recalculate Route</span>.
+        <span className="font-medium text-foreground">Calculate Route</span>.
       </p>
     );
   return (

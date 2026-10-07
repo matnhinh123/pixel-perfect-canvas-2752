@@ -34,7 +34,7 @@ export function TollStationTable({
         description={
           calculated
             ? "The selected route does not pass any toll."
-            : 'Click "Recalculate Route" to load tolls.'
+            : 'Click "Calculate Route" to load tolls.'
         }
       />
     );

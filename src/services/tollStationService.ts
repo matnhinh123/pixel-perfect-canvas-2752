@@ -137,7 +137,7 @@ const AUDIT_FIELDS: [keyof TollStationDraft, string][] = [
   ["locationId", "Location"],
   ["feeType", "Fee Type"],
   ["vietmapId", "Vietmap ID"],
-  ["remark", "Remark"],
+  ["remark", "Description"],
   ["lat", "Latitude"],
   ["lng", "Longitude"],
 ];

@@ -33,6 +33,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   ADD_WAYPOINT: "Added Waypoint",
   CHANGE_DEPARTURE_TIME: "Changed Departure Time",
   CHANGE_DISTANCE: "Changed Distance",
+  CHANGE_ESTIMATED_TIME: "Changed Estimated Time",
   SELECT_ALTERNATIVE: "Selected Alternative Route",
   UPDATE_STATUS: "Updated Status",
   ADD_MANUAL_COST: "Added Manual Toll",
