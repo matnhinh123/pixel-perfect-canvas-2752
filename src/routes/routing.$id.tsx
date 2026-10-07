@@ -582,58 +582,6 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                     aria-invalid={!!errors["name"] || undefined}
                   />
                 </Field>
-                <Field
-                  label="Distance (km)"
-                  hint={
-                    totals.calculated ? (
-                      <>
-                        {kmOverride !== undefined && (
-                          <>
-                            Calculated {calculatedKm} km ·{" "}
-                            <button
-                              type="button"
-                              className="font-medium text-primary hover:underline"
-                              onClick={() => setDistance(null)}
-                            >
-                              Reset
-                            </button>
-                          </>
-                        )}
-                      </>
-                    ) : (
-                      "Filled in by Recalculate Route; you can also type it."
-                    )
-                  }
-                >
-                  <Input
-                    className="h-10"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    value={
-                      kmText ??
-                      (totals.calculated || kmOverride !== undefined
-                        ? String(totals.distanceKm)
-                        : "")
-                    }
-                    placeholder="e.g. 967.2"
-                    onChange={(e) => setKmText(e.target.value)}
-                    onBlur={commitKm}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitKm();
-                      if (e.key === "Escape") setKmText(null);
-                    }}
-                  />
-                </Field>
-                <Field label="Estimated Time">
-                  <Input
-                    className="h-10"
-                    readOnly
-                    value={totals.calculated ? formatDuration(totals.estimatedTimeMin) : ""}
-                    placeholder="Filled in by Recalculate Route"
-                    title="Estimated driving time of the selected route"
-                  />
-                </Field>
                 <Field label="Terrain">
                   <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
                     {(
@@ -671,17 +619,77 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 </Field>
               </div>
             </div>
-            <div className="flex items-center justify-between border-y bg-muted/40 px-4 py-2">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y bg-muted/40 px-4 py-2">
               <span className="text-sm font-semibold">Route Detail</span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 border-primary/40 text-primary"
-                onClick={addStop}
-              >
-                <Plus className="h-4 w-4" />
-                Add
-              </Button>
+              <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <label htmlFor="route-distance" className="text-muted-foreground">
+                    Distance
+                  </label>
+                  <span className="relative">
+                    <Input
+                      id="route-distance"
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      className="h-8 w-32 bg-card pr-9 text-right font-semibold"
+                      value={
+                        kmText ??
+                        (totals.calculated || kmOverride !== undefined
+                          ? String(totals.distanceKm)
+                          : "")
+                      }
+                      placeholder="—"
+                      title={
+                        totals.calculated
+                          ? `Calculated: ${calculatedKm} km — type to adjust, clear to reset`
+                          : "Filled in by Recalculate Route; you can also type it."
+                      }
+                      onChange={(e) => setKmText(e.target.value)}
+                      onBlur={commitKm}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitKm();
+                        if (e.key === "Escape") setKmText(null);
+                      }}
+                    />
+                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                      km
+                    </span>
+                  </span>
+                  {kmOverride !== undefined && totals.calculated && (
+                    <button
+                      type="button"
+                      title={`Back to the calculated ${calculatedKm} km`}
+                      className="text-xs font-medium text-primary hover:underline"
+                      onClick={() => setDistance(null)}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <label htmlFor="route-time" className="text-muted-foreground">
+                    Estimated Time
+                  </label>
+                  <Input
+                    id="route-time"
+                    readOnly
+                    className="h-8 w-28 bg-card text-right font-semibold"
+                    value={totals.calculated ? formatDuration(totals.estimatedTimeMin) : ""}
+                    placeholder="—"
+                    title="Estimated driving time of the selected route"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/40 text-primary"
+                  onClick={addStop}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              </div>
             </div>
             <StopList
               seq={seq}
