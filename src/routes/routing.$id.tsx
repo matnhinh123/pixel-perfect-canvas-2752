@@ -256,8 +256,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
     if (v === "") setEstimatedTime(null);
     else {
       const min = parseDurationText(v);
-      if (min === null)
-        toast.error('Thời gian không hợp lệ — nhập dạng "15h 48m", "15:48" hoặc số giờ.');
+      if (min === null) toast.error('Thời gian không hợp lệ — nhập dạng "15h 48m", "15:48" hoặc số giờ.');
       else setEstimatedTime(min);
     }
     setTimeText(null);
@@ -562,314 +561,318 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       <FormErrorBanner message={formError} errors={errors} />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[6fr_4fr]">
-        <Panel title="Route Information" className="min-w-0" bodyClassName="p-0">
-          <div className="p-4">
-            <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-              <Field label="Route Code" required error={errors["code"]}>
-                <Input
-                  className="h-10"
-                  value={r.code}
-                  onChange={(e) => set("code", e.target.value.toUpperCase())}
-                  placeholder="e.g. RT-HCM-DN"
-                  aria-invalid={!!errors["code"] || undefined}
-                />
-              </Field>
-              <Field label="Route Name" required error={errors["name"]}>
-                <Input
-                  className="h-10"
-                  value={r.name}
-                  onChange={(e) => set("name", e.target.value)}
-                  placeholder="e.g. HCM → Da Nang"
-                  aria-invalid={!!errors["name"] || undefined}
-                />
-              </Field>
-              <Field label="Route Type">
-                <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
-                  {(
-                    [
-                      ["Single Trip", "Single Trip"],
-                      ["Round Trip", "Round Trip"],
-                    ] as [RouteType, string][]
-                  ).map(([v, label]) => (
-                    <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
-                      <input
-                        type="radio"
-                        name="routeType"
-                        checked={r.type === v}
-                        onChange={() => changeRouteType(v)}
-                        className="h-4 w-4 accent-[var(--primary)]"
-                      />
-                      <span className={cn(r.type === v && "text-primary")}>{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Terrain">
-                <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
-                  {(
-                    [
-                      ["Plain", "Plain"],
-                      ["Highland", "Highland"],
-                    ] as [Terrain, string][]
-                  ).map(([v, label]) => (
-                    <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
-                      <input
-                        type="radio"
-                        name="terrain"
-                        checked={(r.terrain ?? "Plain") === v}
-                        onChange={() => set("terrain", v)}
-                        className="h-4 w-4 accent-[var(--primary)]"
-                      />
-                      <span className={cn((r.terrain ?? "Plain") === v && "text-primary")}>
-                        {label}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Notes" className="col-span-2">
-                <Textarea
-                  rows={2}
-                  maxLength={500}
-                  value={r.description ?? ""}
-                  onChange={(e) => set("description", e.target.value)}
-                  placeholder="e.g. Cargo route from Ho Chi Minh City to Da Nang"
-                />
-                <span className="self-end text-xs text-muted-foreground">
-                  {(r.description ?? "").length}/500
-                </span>
-              </Field>
-            </div>
-          </div>
-        </Panel>
-
-        <Panel
-          title="Route Map"
-          bodyClassName="flex flex-col gap-3 p-4"
-          actions={
-            <VehicleClassPicker
-              profile={r.vehicleProfile}
-              vehicleClass={vehicleClass}
-              disabled={loading}
-              onChange={changeVehicle}
-            />
-          }
-        >
-          <RouteAlternativeSelector
-            alternatives={r.alternatives}
-            selectedId={r.selectedRouteId}
-            onSelect={selectAlternative}
-            disabled={loading}
-          />
-          {stale && (
-            <div className="flex items-center gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
-              <AlertTriangle className="h-4 w-4" />
-              Route needs recalculation — inputs changed since the last calculation.
-            </div>
-          )}
-          {calcState === "error" && calcError && (
-            <div className="flex items-center justify-between gap-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-destructive">
-              <span className="flex items-center gap-2">
-                <XCircle className="h-4 w-4" />
-                {calcError}
-              </span>
-              <Button size="sm" variant="outline" className="h-7" onClick={() => void calculate()}>
-                Retry
-              </Button>
-            </div>
-          )}
-          <div className="relative">
-            <RouteMapPanel
-              onRouteDrag={loading || !r.outbound ? undefined : addViaPoint}
-              onWaypointDrag={loading || !r.outbound ? undefined : moveWaypoint}
-              origin={r.origin}
-              waypoints={r.waypoints}
-              destination={r.destination}
-              outboundGeometry={r.outbound?.geometry}
-              tolls={mapTolls}
-              providerLabel={
-                r.outbound
-                  ? r.outbound.provider === "vietmap"
-                    ? "Vietmap Route v4"
-                    : r.outbound.provider === "valhalla"
-                      ? "OSM/Valhalla · truck roads"
-                      : "Mock route data"
-                  : "Route not calculated"
-              }
-              height={240}
-              alternatives={r.alternatives.map((a, i) => ({
-                id: altId(a, i),
-                label: altTitle(a, i),
-                geometry: a.geometry,
-              }))}
-              selectedAlternativeId={r.selectedRouteId}
-              onSelectAlternative={selectAlternative}
-            />
-            {loading && (
-              <div className="absolute inset-0 z-[500] flex items-center justify-center rounded-lg bg-card/60 text-sm font-medium">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary" />
-                Calculating route…
+        {/* ---------- LEFT ---------- */}
+        <div className="flex min-w-0 flex-col gap-5">
+          <Panel title="Route Information" bodyClassName="p-0">
+            <div className="p-4">
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+                <Field label="Route Code" required error={errors["code"]}>
+                  <Input
+                    className="h-10"
+                    value={r.code}
+                    onChange={(e) => set("code", e.target.value.toUpperCase())}
+                    placeholder="e.g. RT-HCM-DN"
+                    aria-invalid={!!errors["code"] || undefined}
+                  />
+                </Field>
+                <Field label="Route Name" required error={errors["name"]}>
+                  <Input
+                    className="h-10"
+                    value={r.name}
+                    onChange={(e) => set("name", e.target.value)}
+                    placeholder="e.g. HCM → Da Nang"
+                    aria-invalid={!!errors["name"] || undefined}
+                  />
+                </Field>
+                <Field label="Route Type">
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
+                    {(
+                      [
+                        ["Single Trip", "Single Trip"],
+                        ["Round Trip", "Round Trip"],
+                      ] as [RouteType, string][]
+                    ).map(([v, label]) => (
+                      <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
+                        <input
+                          type="radio"
+                          name="routeType"
+                          checked={r.type === v}
+                          onChange={() => changeRouteType(v)}
+                          className="h-4 w-4 accent-[var(--primary)]"
+                        />
+                        <span className={cn(r.type === v && "text-primary")}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </Field>
+                <Field label="Terrain">
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
+                    {(
+                      [
+                        ["Plain", "Plain"],
+                        ["Highland", "Highland"],
+                      ] as [Terrain, string][]
+                    ).map(([v, label]) => (
+                      <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
+                        <input
+                          type="radio"
+                          name="terrain"
+                          checked={(r.terrain ?? "Plain") === v}
+                          onChange={() => set("terrain", v)}
+                          className="h-4 w-4 accent-[var(--primary)]"
+                        />
+                        <span className={cn((r.terrain ?? "Plain") === v && "text-primary")}>
+                          {label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </Field>
+                <Field label="Notes" className="col-span-2">
+                  <Textarea
+                    rows={2}
+                    maxLength={500}
+                    value={r.description ?? ""}
+                    onChange={(e) => set("description", e.target.value)}
+                    placeholder="e.g. Cargo route from Ho Chi Minh City to Da Nang"
+                  />
+                  <span className="self-end text-xs text-muted-foreground">
+                    {(r.description ?? "").length}/500
+                  </span>
+                </Field>
               </div>
-            )}
-          </div>
-        </Panel>
-      </div>
-
-      <Panel
-        title="Route Detail"
-        className="mt-5 min-w-0"
-        bodyClassName="p-0"
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 border-primary/40 px-2.5 text-primary"
-            onClick={addStop}
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </Button>
-        }
-      >
-        {/* Same columns as the stop list: Distance over Location Code, time over Location. */}
-        <div
-          className="grid items-center border-y bg-muted/40 py-2 text-sm"
-          style={{ gridTemplateColumns: STOP_COLUMNS.map(([, w]) => w).join(" ") }}
-        >
-          <span className="col-span-2 px-4 font-semibold">Route total</span>
-          <div className="flex min-w-0 items-center gap-2 px-2">
-            <label htmlFor="route-distance" className="shrink-0 text-muted-foreground">
-              Distance
-            </label>
-            <span className="relative w-28 shrink-0">
-              <Input
-                id="route-distance"
-                type="number"
-                min={0}
-                step={0.1}
-                className="h-8 w-full bg-card pr-9 text-right font-semibold"
-                value={
-                  kmText ??
-                  (totals.calculated || kmOverride !== undefined ? String(totals.distanceKm) : "")
-                }
-                placeholder="—"
-                title={
-                  totals.calculated
-                    ? `Calculated: ${calculatedKm} km — type to adjust, clear to reset`
-                    : "Filled in by Calculate Route; you can also type it."
-                }
-                onChange={(e) => setKmText(e.target.value)}
-                onBlur={commitKm}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitKm();
-                  if (e.key === "Escape") setKmText(null);
-                }}
-              />
-              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                km
-              </span>
-            </span>
-            {kmOverride !== undefined && totals.calculated && (
-              <button
-                type="button"
-                title={`Back to the calculated ${calculatedKm} km`}
-                className="shrink-0 text-xs font-medium text-primary hover:underline"
-                onClick={() => setDistance(null)}
-              >
-                Reset
-              </button>
-            )}
-          </div>
-          <div className="flex min-w-0 items-center gap-2 px-2">
-            <label htmlFor="route-time" className="shrink-0 text-muted-foreground">
-              Estimated Time
-            </label>
-            <Input
-              id="route-time"
-              className="h-8 w-28 shrink-0 bg-card font-semibold"
-              value={
-                timeText ??
-                (totals.calculated || minOverride !== undefined
-                  ? formatDuration(totals.estimatedTimeMin)
-                  : "")
-              }
-              placeholder="—"
-              title={
-                totals.calculated
-                  ? `Calculated: ${formatDuration(calculatedMin)} — type e.g. "15h 48m", "15:48" or hours; clear to reset`
-                  : 'Filled in by Calculate Route; you can also type it (e.g. "15h 48m").'
-              }
-              onChange={(e) => setTimeText(e.target.value)}
-              onBlur={commitTime}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitTime();
-                if (e.key === "Escape") setTimeText(null);
+            </div>
+            {/* Same columns as the stop list: Distance over Location Code, time over Location. */}
+            <div
+              className="grid items-center border-y bg-muted/40 py-2 text-sm"
+              style={{ gridTemplateColumns: STOP_COLUMNS.map(([, w]) => w).join(" ") }}
+            >
+              <span className="col-span-2 px-4 font-semibold">Route Detail</span>
+              <div className="flex min-w-0 items-center gap-2 px-2">
+                <label htmlFor="route-distance" className="shrink-0 text-muted-foreground">
+                  Distance
+                </label>
+                <span className="relative w-28 shrink-0">
+                  <Input
+                    id="route-distance"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className="h-8 w-full bg-card pr-9 text-right font-semibold"
+                    value={
+                      kmText ??
+                      (totals.calculated || kmOverride !== undefined
+                        ? String(totals.distanceKm)
+                        : "")
+                    }
+                    placeholder="—"
+                    title={
+                      totals.calculated
+                        ? `Calculated: ${calculatedKm} km — type to adjust, clear to reset`
+                        : "Filled in by Calculate Route; you can also type it."
+                    }
+                    onChange={(e) => setKmText(e.target.value)}
+                    onBlur={commitKm}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitKm();
+                      if (e.key === "Escape") setKmText(null);
+                    }}
+                  />
+                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    km
+                  </span>
+                </span>
+                {kmOverride !== undefined && totals.calculated && (
+                  <button
+                    type="button"
+                    title={`Back to the calculated ${calculatedKm} km`}
+                    className="shrink-0 text-xs font-medium text-primary hover:underline"
+                    onClick={() => setDistance(null)}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="flex min-w-0 items-center gap-2 px-2">
+                <label htmlFor="route-time" className="shrink-0 text-muted-foreground">
+                  Estimated Time
+                </label>
+                <Input
+                  id="route-time"
+                  className="h-8 w-28 shrink-0 bg-card font-semibold"
+                  value={
+                    timeText ??
+                    (totals.calculated || minOverride !== undefined
+                      ? formatDuration(totals.estimatedTimeMin)
+                      : "")
+                  }
+                  placeholder="—"
+                  title={
+                    totals.calculated
+                      ? `Calculated: ${formatDuration(calculatedMin)} — type e.g. "15h 48m", "15:48" or hours; clear to reset`
+                      : 'Filled in by Calculate Route; you can also type it (e.g. "15h 48m").'
+                  }
+                  onChange={(e) => setTimeText(e.target.value)}
+                  onBlur={commitTime}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitTime();
+                    if (e.key === "Escape") setTimeText(null);
+                  }}
+                />
+                {minOverride !== undefined && totals.calculated && (
+                  <button
+                    type="button"
+                    title={`Back to the calculated ${formatDuration(calculatedMin)}`}
+                    className="shrink-0 text-xs font-medium text-primary hover:underline"
+                    onClick={() => setEstimatedTime(null)}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="flex justify-center px-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/40 px-2.5 text-primary"
+                  onClick={addStop}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              </div>
+            </div>
+            <StopList
+              seq={seq}
+              onChange={setSequence}
+              locations={locations}
+              returnPoint={round ? r.origin : undefined}
+              errors={{
+                origin: errors["origin"],
+                destination: errors["destination"],
+                waypoints: errors["waypoints"],
               }}
             />
-            {minOverride !== undefined && totals.calculated && (
-              <button
-                type="button"
-                title={`Back to the calculated ${formatDuration(calculatedMin)}`}
-                className="shrink-0 text-xs font-medium text-primary hover:underline"
-                onClick={() => setEstimatedTime(null)}
-              >
-                Reset
-              </button>
-            )}
-          </div>
-          <div />
+          </Panel>
         </div>
-        <StopList
-          seq={seq}
-          onChange={setSequence}
-          locations={locations}
-          returnPoint={round ? r.origin : undefined}
-          errors={{
-            origin: errors["origin"],
-            destination: errors["destination"],
-            waypoints: errors["waypoints"],
-          }}
-        />
-      </Panel>
 
-      <Panel
-        className="mt-5 min-w-0"
-        title={`Toll Stations${r.outbound ? ` (${selectedName.replace(" (Recommended)", "")})` : ""}`}
-        bodyClassName="p-0"
-        actions={
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 border-primary/40 text-primary"
-              disabled={!r.outbound || loading}
-              title={r.outbound ? "Add Toll" : "Calculate the route first"}
-              onClick={() => setAddTollOpen(true)}
-            >
-              <Plus className="h-4 w-4" />
-              Add Toll
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 border-primary/40 text-primary"
-              onClick={() => setTollDetailsOpen(true)}
-            >
-              <List className="h-4 w-4" />
-              View Details
-            </Button>
-          </div>
-        }
-      >
-        {totals.calculated && (
-          <div className="flex flex-wrap gap-x-8 gap-y-1 border-b bg-muted/40 px-4 py-2 text-sm">
-            <span>
-              Tolls: <b className="text-base">{tollRows.length}</b>
-            </span>
-          </div>
-        )}
-        <TollStationTable rows={tollRows} showLeg={round} calculated={totals.calculated} />
-      </Panel>
+        {/* ---------- RIGHT ---------- */}
+        <div className="flex min-w-0 flex-col gap-5">
+          <Panel
+            title="Route Map"
+            bodyClassName="flex flex-col gap-3 p-4"
+            actions={
+              <VehicleClassPicker
+                profile={r.vehicleProfile}
+                vehicleClass={vehicleClass}
+                disabled={loading}
+                onChange={changeVehicle}
+              />
+            }
+          >
+            <RouteAlternativeSelector
+              alternatives={r.alternatives}
+              selectedId={r.selectedRouteId}
+              onSelect={selectAlternative}
+              disabled={loading}
+            />
+            {stale && (
+              <div className="flex items-center gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
+                <AlertTriangle className="h-4 w-4" />
+                Route needs recalculation — inputs changed since the last calculation.
+              </div>
+            )}
+            {calcState === "error" && calcError && (
+              <div className="flex items-center justify-between gap-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-destructive">
+                <span className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4" />
+                  {calcError}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7"
+                  onClick={() => void calculate()}
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
+            <div className="relative">
+              <RouteMapPanel
+                onRouteDrag={loading || !r.outbound ? undefined : addViaPoint}
+                onWaypointDrag={loading || !r.outbound ? undefined : moveWaypoint}
+                origin={r.origin}
+                waypoints={r.waypoints}
+                destination={r.destination}
+                outboundGeometry={r.outbound?.geometry}
+                tolls={mapTolls}
+                providerLabel={
+                  r.outbound
+                    ? r.outbound.provider === "vietmap"
+                      ? "Vietmap Route v4"
+                      : r.outbound.provider === "valhalla"
+                        ? "OSM/Valhalla · truck roads"
+                        : "Mock route data"
+                    : "Route not calculated"
+                }
+                height={240}
+                alternatives={r.alternatives.map((a, i) => ({
+                  id: altId(a, i),
+                  label: altTitle(a, i),
+                  geometry: a.geometry,
+                }))}
+                selectedAlternativeId={r.selectedRouteId}
+                onSelectAlternative={selectAlternative}
+              />
+              {loading && (
+                <div className="absolute inset-0 z-[500] flex items-center justify-center rounded-lg bg-card/60 text-sm font-medium">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary" />
+                  Calculating route…
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          <Panel
+            title={`Toll Stations${r.outbound ? ` (${selectedName.replace(" (Recommended)", "")})` : ""}`}
+            bodyClassName="p-0"
+            actions={
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/40 text-primary"
+                  disabled={!r.outbound || loading}
+                  title={r.outbound ? "Add Toll" : "Calculate the route first"}
+                  onClick={() => setAddTollOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Toll
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-primary/40 text-primary"
+                  onClick={() => setTollDetailsOpen(true)}
+                >
+                  <List className="h-4 w-4" />
+                  View Details
+                </Button>
+              </div>
+            }
+          >
+            {totals.calculated && (
+              <div className="flex flex-wrap gap-x-8 gap-y-1 border-b bg-muted/40 px-4 py-2 text-sm">
+                <span>
+                  Tolls: <b className="text-base">{tollRows.length}</b>
+                </span>
+              </div>
+            )}
+            <TollStationTable rows={tollRows} showLeg={round} calculated={totals.calculated} />
+          </Panel>
+        </div>
+      </div>
 
       <TollDetailsSheet
         open={tollDetailsOpen}

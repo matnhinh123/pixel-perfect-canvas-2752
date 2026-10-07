@@ -220,9 +220,9 @@ function TollStationView({ station }: { station: TollGateRecord }) {
           </>
         }
       />
-      <div className="flex max-w-5xl flex-col gap-5">
+      <div className="flex flex-col gap-5">
         <Panel title="General">
-          <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-3">
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-3">
             <InfoRow label="Location">
               {locationLabel(
                 station,
@@ -230,21 +230,18 @@ function TollStationView({ station }: { station: TollGateRecord }) {
               )}
             </InfoRow>
             <InfoRow label="Fee Type">{feeTypeName(station.feeType)}</InfoRow>
-            <InfoRow label="Vietmap ID">
-              {station.vietmapId ? <span className="font-mono">{station.vietmapId}</span> : null}
-            </InfoRow>
             <InfoRow label="Source">
               <Tag tone={sourceOf(station)}>{sourceOf(station)}</Tag>
             </InfoRow>
-            <div className="sm:col-span-2">
+            <InfoRow label="Vietmap ID">
+              {station.vietmapId ? <span className="font-mono">{station.vietmapId}</span> : null}
+            </InfoRow>
+            <InfoRow label="Latitude">{hasCoords ? station.lat : null}</InfoRow>
+            <InfoRow label="Longitude">{hasCoords ? station.lng : null}</InfoRow>
+            <div className="sm:col-span-3">
               <InfoRow label="Description">{station.remark}</InfoRow>
             </div>
           </dl>
-          {hasCoords && (
-            <p className="mt-4 text-xs text-muted-foreground">
-              Coordinates: {station.lat}, {station.lng}
-            </p>
-          )}
         </Panel>
         <Panel title="Toll Rates" bodyClassName="p-0">
           <RatesTable prices={station.prices} currency={station.currency ?? "VND"} />
@@ -355,9 +352,9 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
       />
       <FormErrorBanner message={formError} errors={errors} />
 
-      <div className="flex max-w-5xl flex-col gap-5">
+      <div className="flex flex-col gap-5">
         <Panel title="General">
-          <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-3">
             <Field label="Toll Station Code" required error={errors["code"]}>
               <Input
                 value={d.code}
@@ -366,16 +363,18 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 onChange={(e) => set("code", e.target.value.toUpperCase())}
               />
             </Field>
-            <Field
-              label="Toll Station Name"
-              required
-              error={errors["name"]}
-              className="lg:col-span-2"
-            >
+            <Field label="Toll Station Name" required error={errors["name"]}>
               <Input
                 value={d.name}
                 aria-invalid={!!errors["name"] || undefined}
                 onChange={(e) => set("name", e.target.value)}
+              />
+            </Field>
+            <Field label="Fee Type" required>
+              <NativeSelect
+                value={feeTypeName(d.feeType)}
+                onChange={(v) => set("feeType", feeTypeFromLabel(v, d.feeType))}
+                options={FEE_TYPE_OPTIONS}
               />
             </Field>
             <Field label="Location" hint="Search by location code or name.">
@@ -401,34 +400,6 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 }
               />
             </Field>
-            <Field label="Fee Type" required>
-              <NativeSelect
-                value={feeTypeName(d.feeType)}
-                onChange={(v) => set("feeType", feeTypeFromLabel(v, d.feeType))}
-                options={FEE_TYPE_OPTIONS}
-              />
-            </Field>
-            <Field label="Status" required>
-              <NativeSelect
-                value={status}
-                onChange={(v) => setStatus(v as Status)}
-                options={["Active", "Inactive"]}
-              />
-            </Field>
-            <Field label="Vietmap ID" error={errors["vietmapId"]}>
-              <Input
-                value={d.vietmapId ?? ""}
-                placeholder="e.g. vm-toll-100231"
-                aria-invalid={!!errors["vietmapId"] || undefined}
-                onChange={(e) => set("vietmapId", e.target.value)}
-              />
-            </Field>
-            <Field label="Source">
-              <div className="flex h-9 items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 text-sm">
-                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                {(d.vietmapId ?? "").trim() ? "Vietmap" : "Manual"}
-              </div>
-            </Field>
             <Field label="Latitude" error={errors["lat"]}>
               <Input
                 type="number"
@@ -447,7 +418,28 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 onChange={(e) => set("lng", num(e.target.value))}
               />
             </Field>
-            <Field label="Description" className="sm:col-span-2 lg:col-span-3">
+            <Field label="Vietmap ID" error={errors["vietmapId"]}>
+              <Input
+                value={d.vietmapId ?? ""}
+                placeholder="e.g. vm-toll-100231"
+                aria-invalid={!!errors["vietmapId"] || undefined}
+                onChange={(e) => set("vietmapId", e.target.value)}
+              />
+            </Field>
+            <Field label="Source">
+              <div className="flex h-9 items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 text-sm">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                {(d.vietmapId ?? "").trim() ? "Vietmap" : "Manual"}
+              </div>
+            </Field>
+            <Field label="Status" required>
+              <NativeSelect
+                value={status}
+                onChange={(v) => setStatus(v as Status)}
+                options={["Active", "Inactive"]}
+              />
+            </Field>
+            <Field label="Description" className="sm:col-span-3">
               <Textarea
                 rows={2}
                 value={d.remark ?? ""}
