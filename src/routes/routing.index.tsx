@@ -98,14 +98,6 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
         ),
     },
     {
-      key: "type",
-      label: t("Loại route", "Route type"),
-      type: "enum",
-      options: ["Single Trip", "Round Trip"],
-      value: (r) => r.type,
-      render: (r) => <Tag>{r.type}</Tag>,
-    },
-    {
       key: "vehicleProfile",
       label: t("Phương tiện", "Vehicle"),
       type: "enum",
@@ -174,14 +166,6 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
 const quickFiltersFor = (t: T): QuickFilter[] => {
   const PROFILE_LABEL = profileLabels(t);
   return [
-    {
-      key: "type",
-      allLabel: t("Tất cả loại route", "All route types"),
-      options: ["Single Trip", "Round Trip"].map((v) => ({
-        label: v,
-        conditions: [{ field: "type", operator: "eq", value: v }],
-      })),
-    },
     {
       key: "vehicle",
       allLabel: t("Tất cả phương tiện", "All vehicles"),

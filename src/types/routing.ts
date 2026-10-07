@@ -37,6 +37,8 @@ export interface RoutePoint extends GeoPoint {
   locationId?: string;
   /** Free text shown in the stop list ("Địa chỉ / Ghi chú"). */
   note?: string;
+  /** User label for the Stop Type column (e.g. "Pickup"); default label when unset. */
+  stopType?: string;
 }
 
 /** Vehicle master record. Group / weight / routing profile / toll class all derive from it. */
@@ -171,6 +173,9 @@ export interface RouteRecord extends BaseRecord {
   outbound: RouteCalculation | null;
   returnMode: "auto" | "custom";
   returnWaypoints: RoutePoint[];
+  /** Custom return route only: start / end when they differ from the outbound destination / origin. */
+  returnStart?: RoutePoint;
+  returnEnd?: RoutePoint;
   returnLeg: RouteCalculation | null;
   /** Used only when returnMode === "custom": manual figures that win over the calculated return leg. */
   customReturn?: CustomReturnOverride;

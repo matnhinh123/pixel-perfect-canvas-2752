@@ -38,6 +38,8 @@ type CalcInput = Pick<
   | "waypoints"
   | "returnMode"
   | "returnWaypoints"
+  | "returnStart"
+  | "returnEnd"
   | "vehicleId"
   | "vehicleProfile"
   | "capacityKg"
@@ -98,6 +100,11 @@ const applyTerrain = (c: RouteCalculation, terrain?: RouteRecord["terrain"]): Ro
       }
     : c;
 
+/** Custom return route as one sequence: start (default B) → return stops → end (default A). */
+export const returnSequence = (
+  r: Pick<RouteRecord, "origin" | "destination" | "returnWaypoints" | "returnStart" | "returnEnd">,
+): RoutePoint[] => [r.returnStart ?? r.destination, ...r.returnWaypoints, r.returnEnd ?? r.origin];
+
 /** Return leg of "Same route reversed": the outbound leg B → A — identical distance, time and tolls. */
 export function reverseLeg(c: RouteCalculation): RouteCalculation {
   const { id: _id, label: _label, recommended: _rec, ...leg } = c;
@@ -139,7 +146,14 @@ export const routingService = {
         ? applyTerrain(
             reconcileCalc(
               await provider.calculateRoute(
-                toRequest([r.destination, ...r.returnWaypoints.filter(hasCoords), r.origin], r),
+                toRequest(
+                  [
+                    r.returnStart && hasCoords(r.returnStart) ? r.returnStart : r.destination,
+                    ...r.returnWaypoints.filter(hasCoords),
+                    r.returnEnd && hasCoords(r.returnEnd) ? r.returnEnd : r.origin,
+                  ],
+                  r,
+                ),
               ),
             ),
             r.terrain,

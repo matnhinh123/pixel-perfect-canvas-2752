@@ -32,6 +32,7 @@ import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { setLang, useT } from "@/lib/i18n";
 import { useConfirm } from "./general/ConfirmDialog";
+import { migrateRoutesToSingleTrip } from "@/services/routeService";
 
 interface NavItem {
   to: string;
@@ -288,6 +289,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => setCollapsed(readJson<boolean>(COLLAPSE_KEY, false)), []);
+  useEffect(() => migrateRoutesToSingleTrip(), []);
   const toggle = () =>
     setCollapsed((c) => {
       writeJson(COLLAPSE_KEY, !c);

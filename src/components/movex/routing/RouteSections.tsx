@@ -82,6 +82,21 @@ const emptyStop = (note?: string): RoutePoint => ({
   ...(note ? { note } : {}),
 });
 
+/** Stop type of a row: Pickup / Delivery (first row defaults to Pickup, the others to Delivery). */
+export const STOP_TYPES = ["Pickup", "Delivery"] as const;
+export const stopTypeOf = (p: RoutePoint, index: number) =>
+  p.stopType === "Pickup" || p.stopType === "Delivery"
+    ? p.stopType
+    : index === 0
+      ? "Pickup"
+      : "Delivery";
+
+/** What a row keeps when its location changes: note and the chosen Type. */
+const extras = (p: RoutePoint) => ({
+  ...(p.note ? { note: p.note } : {}),
+  ...(p.stopType !== undefined ? { stopType: p.stopType } : {}),
+});
+
 /**
  * The sequence [origin, ...waypoints, destination] edited in place. Every row uses the same
  * LocationAutocomplete. Waypoints can be reordered (drag handle or the row menu) and deleted;
@@ -94,7 +109,6 @@ export function StopList({
   locations,
   errors,
   lockEndpoints,
-  labels,
 }: {
   seq: RoutePoint[];
   onChange: (seq: RoutePoint[]) => void;
@@ -105,7 +119,6 @@ export function StopList({
     waypoints?: string | undefined;
   };
   lockEndpoints?: boolean;
-  labels?: { origin: string; destination: string };
 }) {
   const [armed, setArmed] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -134,7 +147,7 @@ export function StopList({
           {(
             [
               ["No.", "10%"],
-              ["Stop Type", "18%"],
+              ["Type", "18%"],
               ["Location Code", "24%"],
               ["Location", "38%"],
               ["Actions", "10%"],
@@ -198,12 +211,13 @@ export function StopList({
                   {i + 1}
                 </span>
               </TableCell>
-              <TableCell className="truncate">
-                {kind === "origin"
-                  ? (labels?.origin ?? "Departure")
-                  : kind === "destination"
-                    ? (labels?.destination ?? "Destination")
-                    : "Stop"}
+              <TableCell className="py-1.5">
+                <NativeSelect
+                  value={stopTypeOf(p, i)}
+                  onChange={(v) => update(i, { ...p, stopType: v })}
+                  options={STOP_TYPES}
+                  className="h-8 w-full"
+                />
               </TableCell>
               <TableCell className="py-1.5">
                 {locked ? (
@@ -216,7 +230,7 @@ export function StopList({
                     field="code"
                     locations={locations}
                     value={p.locationId ?? null}
-                    onChange={(l) => update(i, l ? toPoint(l, p.note) : emptyStop(p.note))}
+                    onChange={(l) => update(i, { ...(l ? toPoint(l) : emptyStop()), ...extras(p) })}
                     invalid={invalid}
                     placeholder="Code…"
                   />
@@ -238,15 +252,11 @@ export function StopList({
                         locations={locations}
                         value={p.locationId ?? null}
                         {...(p.locationId ? {} : { fallbackLabel: p.name })}
-                        onChange={(l) => update(i, l ? toPoint(l, p.note) : emptyStop(p.note))}
-                        invalid={invalid}
-                        placeholder={
-                          kind === "origin"
-                            ? "Search departure…"
-                            : kind === "destination"
-                              ? "Search destination…"
-                              : "Search stop…"
+                        onChange={(l) =>
+                          update(i, { ...(l ? toPoint(l) : emptyStop()), ...extras(p) })
                         }
+                        invalid={invalid}
+                        placeholder="Search location…"
                       />
                     )}
                   </span>
@@ -287,13 +297,13 @@ export function StopList({
                             onSelect={() => onChange(seq.filter((_, j) => j !== i))}
                           >
                             <Trash2 className="h-4 w-4" />
-                            Remove stop
+                            Remove
                           </DropdownMenuItem>
                         </>
                       ) : (
                         <DropdownMenuItem
                           disabled={!p.name}
-                          onSelect={() => update(i, emptyStop(p.note))}
+                          onSelect={() => update(i, { ...emptyStop(), ...extras(p) })}
                         >
                           <X className="h-4 w-4" />
                           Clear location
@@ -342,7 +352,7 @@ const addStopButton = (onClick: () => void) => (
     onClick={onClick}
   >
     <Plus className="h-4 w-4" />
-    Add Stop
+    Add
   </Button>
 );
 
@@ -353,8 +363,8 @@ export function RoundTripStops({
   errors,
   mode,
   onModeChange,
-  returnWaypoints,
-  onReturnWaypointsChange,
+  returnSeq,
+  onReturnSeqChange,
   locations,
 }: {
   seq: RoutePoint[];
@@ -367,13 +377,13 @@ export function RoundTripStops({
   };
   mode: "auto" | "custom";
   onModeChange: (m: "auto" | "custom") => void;
-  returnWaypoints: RoutePoint[];
-  onReturnWaypointsChange: (w: RoutePoint[]) => void;
+  /** Custom return route: start (B by default) → return stops → end (A by default). */
+  returnSeq: RoutePoint[];
+  onReturnSeqChange: (seq: RoutePoint[]) => void;
   locations: LocationRecord[];
 }) {
   const origin = seq[0]!;
   const destination = seq[seq.length - 1]!;
-  const custom = [destination, ...returnWaypoints, origin];
   return (
     <div className="divide-y">
       <TripSection title="Outbound" tone="Outbound" action={addStopButton(onAddStop)}>
@@ -389,7 +399,13 @@ export function RoundTripStops({
         tone="Return"
         action={
           mode === "custom"
-            ? addStopButton(() => onReturnWaypointsChange([...returnWaypoints, emptyStop()]))
+            ? addStopButton(() =>
+                onReturnSeqChange([
+                  ...returnSeq.slice(0, -1),
+                  emptyStop(),
+                  returnSeq[returnSeq.length - 1]!,
+                ]),
+              )
             : undefined
         }
       >
@@ -426,13 +442,7 @@ export function RoundTripStops({
             <span className="text-xs text-muted-foreground">Same route as outbound, reversed.</span>
           </div>
         ) : (
-          <StopList
-            seq={custom}
-            onChange={(next) => onReturnWaypointsChange(next.slice(1, -1))}
-            locations={locations}
-            lockEndpoints
-            labels={{ origin: "Departure (B)", destination: "Destination (A)" }}
-          />
+          <StopList seq={returnSeq} onChange={onReturnSeqChange} locations={locations} />
         )}
       </TripSection>
     </div>

@@ -11,9 +11,14 @@ const routesUsing = (id: string) =>
     .filter(
       (r) =>
         !r.deleted &&
-        [r.origin, ...r.waypoints, r.destination, ...r.returnWaypoints].some(
-          (p) => p.locationId === id,
-        ),
+        [
+          r.origin,
+          ...r.waypoints,
+          r.destination,
+          ...r.returnWaypoints,
+          ...(r.returnStart ? [r.returnStart] : []),
+          ...(r.returnEnd ? [r.returnEnd] : []),
+        ].some((p) => p.locationId === id),
     ).length;
 
 export const locationCrud = makeCrud<LocationMasterRecord>({

@@ -231,6 +231,13 @@ export const routeService = {
   },
 };
 
+/** Route Type was removed from the UI: older Round Trip records become Single Trip (run once on load). */
+export function migrateRoutesToSingleTrip() {
+  for (const r of routeRepository.all())
+    if (r.type === "Round Trip")
+      routeRepository.update(r.id, (p) => ({ ...p, type: "Single Trip" }));
+}
+
 // ---------- Import config ----------
 export const routeImportConfig: ImportEntityConfig = {
   entityType: "Route",
@@ -239,7 +246,6 @@ export const routeImportConfig: ImportEntityConfig = {
   columns: [
     { key: "code", header: "Route Code", required: true, example: "RT-HCM-BD-02" },
     { key: "name", header: "Route Name", required: true, example: "HCM → Bình Dương (ca đêm)" },
-    { key: "type", header: "Route Type", required: true, example: "Single Trip" },
     { key: "origin", header: "Origin", required: true, example: "Kho Quận 7" },
     { key: "destination", header: "Destination", required: true, example: "KCN VSIP I" },
     { key: "vehicleProfile", header: "Vehicle Profile", required: true, example: "Truck" },
@@ -263,8 +269,6 @@ export const routeImportConfig: ImportEntityConfig = {
   },
   rowCheck: (r) => {
     const e: { field: string; error: string }[] = [];
-    if (!["Single Trip", "Round Trip"].includes(r["type"] ?? ""))
-      e.push({ field: "type", error: "Must be Single Trip or Round Trip" });
     if (!VEHICLE_PROFILES.includes((r["vehicleProfile"] ?? "") as VehicleProfile))
       e.push({ field: "vehicleProfile", error: "Unknown vehicle profile" });
     if (
@@ -295,7 +299,7 @@ export const routeImportConfig: ImportEntityConfig = {
         code: r["code"]!.toUpperCase(),
         name: r["name"]!,
         description: "",
-        type: r["type"] as RouteRecord["type"],
+        type: "Single Trip",
         origin: { name: o.name, address: o.address, lat: o.lat, lng: o.lng, locationId: o.id },
         destination: { name: d.name, address: d.address, lat: d.lat, lng: d.lng, locationId: d.id },
         vehicleProfile: r["vehicleProfile"] as RouteRecord["vehicleProfile"],
@@ -326,7 +330,6 @@ export const routeImportConfig: ImportEntityConfig = {
       rows.push([
         `RT${String(i + 1).padStart(3, "0")}`,
         `${o.name} → ${d.name}`,
-        i % 3 === 0 ? "Round Trip" : "Single Trip",
         o.name,
         d.name,
         container ? "Container" : "Truck",
@@ -335,7 +338,7 @@ export const routeImportConfig: ImportEntityConfig = {
       ]);
     }
     rows[1]![0] = "RT001"; // row 3 → duplicate of row 2
-    rows[6]![3] = "ABC"; // row 8 → unknown location
+    rows[6]![2] = "ABC"; // row 8 → unknown location
     return [header, ...rows];
   },
 };

@@ -15,15 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, Field, Panel, StatusBadge, Tag } from "@/components/movex/common";
-import { RouteMapPanel, type LegView, type MapToll } from "@/components/movex/RouteMapPanel";
+import { RouteMapPanel, type MapToll } from "@/components/movex/RouteMapPanel";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
   FormPageHeader,
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
-import { RoundTripStops, StopList } from "@/components/movex/routing/RouteSections";
-import { DistanceEdit } from "@/components/movex/routing/DistanceEdit";
+import { StopList } from "@/components/movex/routing/RouteSections";
 import {
   altTitle,
   RouteAlternativeSelector,
@@ -40,7 +39,12 @@ import {
   validateRoute,
   type RouteAuditAction,
 } from "@/services/routeService";
-import { reverseLeg, routingService, validateRouteInput } from "@/services/routing/routingService";
+import {
+  returnSequence,
+  reverseLeg,
+  routingService,
+  validateRouteInput,
+} from "@/services/routing/routingService";
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import { routeLegs, routeTotals } from "@/services/cost/costMath";
@@ -104,6 +108,8 @@ const normalize = (r: RouteRecord): RouteRecord => ({
   ...r,
   // Routes are only Active / Inactive; legacy "Draft" records count as Inactive.
   status: r.status === "Active" ? "Active" : "Inactive",
+  // Route Type was removed from the UI: every route is a single trip.
+  type: "Single Trip",
   alternatives: r.alternatives ?? (r.outbound ? [r.outbound] : []),
   selectedRouteId: r.selectedRouteId ?? r.outbound?.id ?? null,
   // Same route reversed = the outbound leg driven back (records saved before were re-routed B → A).
@@ -120,7 +126,7 @@ const calcSig = (r: RouteRecord) =>
     r.departureTime,
     r.avoidFerry,
     [r.origin, ...r.waypoints, r.destination].map((p) => [p.lat, p.lng]),
-    r.returnWaypoints.map((p) => [p.lat, p.lng]),
+    returnSequence(r).map((p) => [p.lat, p.lng]),
   ]);
 
 const PROFILE_LABEL: Record<VehicleProfile, string> = {
@@ -152,7 +158,6 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const locationsAll = useCollection(locationRepository);
   const [addTollOpen, setAddTollOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [legView, setLegView] = useState<LegView>("both");
   /** Editor actions (recalculate, pick alternative) written to the audit trail on Save. */
   const [pending, setPending] = useState<RouteAuditAction[]>([]);
 
@@ -176,7 +181,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   };
   const seq = [r.origin, ...r.waypoints, r.destination];
   const usedLocationIds = new Set(
-    [...seq, ...r.returnWaypoints].map((p) => p.locationId).filter(Boolean),
+    [...seq, ...returnSequence(r)].map((p) => p.locationId).filter(Boolean),
   );
   const locations = locationsAll.filter(
     (l) => !l.deleted && (l.status === "Active" || usedLocationIds.has(l.id)),
@@ -203,6 +208,40 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   }, [generatedCode]);
 
   const totals = routeTotals(r);
+  // Distance: calculated from the route, or typed by the user (kept until the next recalculation).
+  const { distanceOverrides: _ov, ...noOverride } = r;
+  const calculatedKm = routeTotals(noOverride).distanceKm;
+  const kmOverride = r.distanceOverrides?.[r.type];
+  const [kmText, setKmText] = useState<string | null>(null);
+  const setDistance = (km: number | null) => {
+    const next = km === null || km === calculatedKm ? null : km;
+    if ((kmOverride ?? null) === next) return;
+    setPending((q) => [
+      ...q,
+      {
+        action: "CHANGE_DISTANCE",
+        field: "Distance",
+        oldValue: `${totals.distanceKm} km`,
+        newValue: `${next ?? calculatedKm} km`,
+        note: next === null ? "Restored calculated distance" : "Distance adjusted manually",
+      },
+    ]);
+    setR((p) => {
+      const rest = { ...p.distanceOverrides };
+      if (next === null) delete rest[p.type];
+      else rest[p.type] = next;
+      const { distanceOverrides: _d, ...others } = p;
+      return Object.keys(rest).length ? { ...others, distanceOverrides: rest } : others;
+    });
+  };
+  const commitKm = () => {
+    if (kmText === null) return;
+    const v = kmText.trim();
+    const km = Number(v);
+    if (v === "") setDistance(null);
+    else if (Number.isFinite(km) && km >= 0) setDistance(Math.round(km * 10) / 10);
+    setKmText(null);
+  };
   const { outbound, ret } = routeLegs(r);
   const round = r.type === "Round Trip";
   const stale = !!r.outbound && lastSig !== calcSig(r);
@@ -254,41 +293,6 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       setCalcError(msg);
       toast.error(msg);
     }
-  };
-
-  /** Figures shown after each route type: Single = outbound only, Round = outbound + return. */
-  const tripFigures = (type: RouteType) => {
-    const rec = { ...r, type };
-    const t = routeTotals(rec);
-    const ok = !!routeLegs(rec).outbound && (type === "Single Trip" || !!routeLegs(rec).ret);
-    return {
-      ok,
-      km: t.distanceKm,
-      minutes: t.estimatedTimeMin,
-      adjusted: r.distanceOverrides?.[type] !== undefined,
-    };
-  };
-
-  const changeDistance = (type: RouteType, km: number | null) => {
-    const { distanceOverrides: _o, ...base } = r;
-    const calculated = routeTotals({ ...base, type }).distanceKm;
-    setPending((q) => [
-      ...q,
-      {
-        action: "CHANGE_DISTANCE",
-        field: `Distance (${type})`,
-        oldValue: `${tripFigures(type).km} km`,
-        newValue: `${km ?? calculated} km`,
-        note: km === null ? "Restored calculated distance" : "Distance adjusted manually",
-      },
-    ]);
-    setR((p) => {
-      const rest = { ...p.distanceOverrides };
-      if (km === null) delete rest[type];
-      else rest[type] = km;
-      const { distanceOverrides: _d, ...others } = p;
-      return Object.keys(rest).length ? { ...others, distanceOverrides: rest } : others;
-    });
   };
 
   /** Google-Maps-style travel mode: switch the routing profile and re-route when the inputs are complete. */
@@ -578,42 +582,57 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                     aria-invalid={!!errors["name"] || undefined}
                   />
                 </Field>
-                <Field label="Route Type" required>
-                  <div className="flex flex-col gap-2 pt-2" role="radiogroup">
-                    {(
-                      [
-                        ["Single Trip", "Single-trip"],
-                        ["Round Trip", "Round-trip"],
-                      ] as [RouteType, string][]
-                    ).map(([v, en]) => {
-                      const f = tripFigures(v);
-                      return (
-                        <div key={v} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <label className="flex cursor-pointer items-center gap-2 text-[15px]">
-                            <input
-                              type="radio"
-                              name="routeType"
-                              checked={r.type === v}
-                              onChange={() => set("type", v)}
-                              className="h-4 w-4 accent-[var(--primary)]"
-                            />
-                            <span className={cn(r.type === v && "text-primary")}>{en}</span>
-                          </label>
-                          {f.ok && (
-                            <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <span>—</span>
-                              <DistanceEdit
-                                km={f.km}
-                                adjusted={f.adjusted}
-                                onChange={(km) => changeDistance(v, km)}
-                              />
-                              <span>· {formatDuration(f.minutes)}</span>
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                <Field
+                  label="Distance (km)"
+                  hint={
+                    totals.calculated ? (
+                      <>
+                        {kmOverride !== undefined && (
+                          <>
+                            Calculated {calculatedKm} km ·{" "}
+                            <button
+                              type="button"
+                              className="font-medium text-primary hover:underline"
+                              onClick={() => setDistance(null)}
+                            >
+                              Reset
+                            </button>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      "Filled in by Recalculate Route; you can also type it."
+                    )
+                  }
+                >
+                  <Input
+                    className="h-10"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={
+                      kmText ??
+                      (totals.calculated || kmOverride !== undefined
+                        ? String(totals.distanceKm)
+                        : "")
+                    }
+                    placeholder="e.g. 967.2"
+                    onChange={(e) => setKmText(e.target.value)}
+                    onBlur={commitKm}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitKm();
+                      if (e.key === "Escape") setKmText(null);
+                    }}
+                  />
+                </Field>
+                <Field label="Travel Time">
+                  <Input
+                    className="h-10"
+                    readOnly
+                    value={totals.calculated ? formatDuration(totals.estimatedTimeMin) : ""}
+                    placeholder="Filled in by Recalculate Route"
+                    title="Estimated driving time of the selected route"
+                  />
                 </Field>
                 <Field label="Terrain">
                   <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
@@ -654,46 +673,26 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
             </div>
             <div className="flex items-center justify-between border-y bg-muted/40 px-4 py-2">
               <span className="text-sm font-semibold">Route Detail</span>
-              {!round && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 border-primary/40 text-primary"
-                  onClick={addStop}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Stop
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 border-primary/40 text-primary"
+                onClick={addStop}
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </Button>
             </div>
-            {round ? (
-              <RoundTripStops
-                seq={seq}
-                onSeqChange={setSequence}
-                onAddStop={addStop}
-                errors={{
-                  origin: errors["origin"],
-                  destination: errors["destination"],
-                  waypoints: errors["waypoints"],
-                }}
-                mode={r.returnMode}
-                onModeChange={(m) => set("returnMode", m)}
-                returnWaypoints={r.returnWaypoints}
-                onReturnWaypointsChange={(w) => set("returnWaypoints", w)}
-                locations={locations}
-              />
-            ) : (
-              <StopList
-                seq={seq}
-                onChange={setSequence}
-                locations={locations}
-                errors={{
-                  origin: errors["origin"],
-                  destination: errors["destination"],
-                  waypoints: errors["waypoints"],
-                }}
-              />
-            )}
+            <StopList
+              seq={seq}
+              onChange={setSequence}
+              locations={locations}
+              errors={{
+                origin: errors["origin"],
+                destination: errors["destination"],
+                waypoints: errors["waypoints"],
+              }}
+            />
           </Panel>
         </div>
 
@@ -760,35 +759,6 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 </Button>
               </div>
             )}
-            {round && (
-              <div
-                className="flex w-fit items-center gap-0.5 rounded-md bg-muted p-0.5"
-                aria-label="Map view"
-              >
-                {(
-                  [
-                    ["both", "Both"],
-                    ["outbound", "Outbound"],
-                    ["return", "Return"],
-                  ] as [LegView, string][]
-                ).map(([v, label]) => (
-                  <button
-                    key={v}
-                    type="button"
-                    aria-pressed={legView === v}
-                    onClick={() => setLegView(v)}
-                    className={cn(
-                      "rounded px-3 py-1 text-xs font-medium transition-colors",
-                      legView === v
-                        ? "bg-card text-primary shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="relative">
               <RouteMapPanel
                 onRouteDrag={loading || !r.outbound ? undefined : addViaPoint}
@@ -797,19 +767,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 waypoints={r.waypoints}
                 destination={r.destination}
                 outboundGeometry={r.outbound?.geometry}
-                returnGeometry={
-                  !round
-                    ? undefined
-                    : r.returnMode === "auto"
-                      ? // Same route reversed: the outbound line, driven the other way.
-                        r.outbound?.geometry && [...r.outbound.geometry].reverse()
-                      : r.returnLeg?.geometry
-                }
-                returnSameAsOutbound={round && r.returnMode === "auto"}
-                legView={round ? legView : "outbound"}
-                returnWaypoints={round && r.returnMode === "custom" ? r.returnWaypoints : []}
                 tolls={mapTolls}
-                roundTrip={round}
                 providerLabel={
                   r.outbound
                     ? r.outbound.provider === "vietmap"
