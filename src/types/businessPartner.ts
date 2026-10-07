@@ -100,8 +100,6 @@ export interface BpVendorProfile extends BpRoleProfile {
 }
 
 export interface BusinessPartnerRecord extends BaseRecord {
-  /** System-generated, immutable once issued ("BP Identity Number"). */
-  bpNumber: string;
   /** User-entered, unique, uppercase search keyword (was "Short Name"). */
   bpCode: string;
   legalType: string;

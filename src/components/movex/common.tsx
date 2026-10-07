@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Home } from "lucide-react";
+import { ArrowLeft, Home, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
@@ -158,8 +159,11 @@ export function Field({
   required,
   error,
   hint,
+  info,
 }: {
   label: string;
+  /** Help text shown in a tooltip behind an (i) icon next to the label. */
+  info?: ReactNode;
   children: ReactNode;
   className?: string | undefined;
   required?: boolean;
@@ -171,6 +175,14 @@ export function Field({
       <span className="text-sm font-semibold text-foreground">
         {label}
         {required && <span className="ml-0.5 text-destructive">*</span>}
+        {info && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="ml-1.5 inline h-3.5 w-3.5 cursor-help align-[-2px] text-muted-foreground" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{info}</TooltipContent>
+          </Tooltip>
+        )}
       </span>
       {children}
       {error ? (

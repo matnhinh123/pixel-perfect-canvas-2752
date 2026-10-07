@@ -1,4 +1,4 @@
-// Business Partner master: BP Identity Number generation, validation, save + role rules.
+// Business Partner master: validation, save + role rules. BP Code is the identifier.
 import { businessPartnerRepository, uid } from "@/repositories";
 import type {
   BpBankAccount,
@@ -17,37 +17,10 @@ import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudSer
 export const bpCrud = makeCrud<BusinessPartnerRecord>({
   entityType: "Business Partner",
   repo: businessPartnerRepository,
-  labelOf: (b) => b.bpNumber,
+  labelOf: (b) => b.bpCode,
   // Transactions (WO / invoices) will register here once they exist; for now nothing references a BP.
   references: () => null,
 });
-
-// ---------------------------------------------------------------- BP Identity Number
-
-/** BP0 = several roles, BP1 = Vendor, BP2 = Customer, BP3 = Employee. */
-export const roleDigit = (roles: readonly BpRole[]): "0" | "1" | "2" | "3" => {
-  if (roles.length !== 1) return "0";
-  return roles[0] === "Vendor" ? "1" : roles[0] === "Customer" ? "2" : "3";
-};
-
-const BP_NUMBER = /^BP([0-3])(\d{2})(\d{4})$/;
-
-/**
- * BP{role}{YY}{seq4}. One running sequence per year shared by BP0 / BP1 / BP2; Employee-only (BP3) is
- * counted separately. Deleted records still hold their number, so a number is never reused.
- */
-export function nextBpNumber(roles: readonly BpRole[], now = new Date()): string {
-  const digit = roleDigit(roles);
-  const yy = String(now.getFullYear() % 100).padStart(2, "0");
-  const employeeOnly = digit === "3";
-  let max = 0;
-  for (const r of businessPartnerRepository.all()) {
-    const m = BP_NUMBER.exec(r.bpNumber);
-    if (!m || m[2] !== yy || (m[1] === "3") !== employeeOnly) continue;
-    max = Math.max(max, Number(m[3]));
-  }
-  return `BP${digit}${yy}${String(max + 1).padStart(4, "0")}`;
-}
 
 // ---------------------------------------------------------------- BP Code convention
 
@@ -160,8 +133,8 @@ export const blankDocument = (): BpDocument => ({
 
 export type BusinessPartnerDraft = Omit<
   BusinessPartnerRecord,
-  "id" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "deleted" | "bpNumber"
-> & { id?: string; bpNumber?: string };
+  "id" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "deleted"
+> & { id?: string };
 
 export const newBusinessPartnerDraft = (): BusinessPartnerDraft => ({
   status: "Active",
@@ -437,7 +410,6 @@ export const businessPartnerService = {
       const rec: BusinessPartnerRecord = {
         ...clean,
         id: uid("BP-"),
-        bpNumber: nextBpNumber(clean.roles),
         ...stampCreate(),
       };
       businessPartnerRepository.insert(rec);
@@ -445,21 +417,21 @@ export const businessPartnerService = {
         ...base,
         action: "CREATE",
         entityId: rec.id,
-        entityLabel: rec.bpNumber,
+        entityLabel: rec.bpCode,
         note: `Roles: ${rec.roles.join(", ")}`,
       });
       return rec;
     }
 
-    // The BP Identity Number is issued once. Editing roles / fields only changes this master record;
-    // already-posted records keep what they captured.
-    const next = stampUpdate({ ...existing, ...clean, bpNumber: existing.bpNumber });
+    // Editing roles / fields only changes this master record; already-posted records keep what they
+    // captured.
+    const next = stampUpdate({ ...existing, ...clean });
     businessPartnerRepository.update(existing.id, () => next);
     const diffs = SCALARS.filter(([k]) => existing[k] !== next[k]).map(([k, label]) => ({
       ...base,
       action: "UPDATE" as const,
       entityId: next.id,
-      entityLabel: next.bpNumber,
+      entityLabel: next.bpCode,
       field: label,
       oldValue: String(existing[k] ?? ""),
       newValue: String(next[k] ?? ""),
@@ -469,7 +441,7 @@ export const businessPartnerService = {
         ...base,
         action: "UPDATE",
         entityId: next.id,
-        entityLabel: next.bpNumber,
+        entityLabel: next.bpCode,
         field: "Role",
         oldValue: existing.roles.join(", "),
         newValue: next.roles.join(", "),
@@ -482,7 +454,7 @@ export const businessPartnerService = {
         ...base,
         action: "UPDATE",
         entityId: next.id,
-        entityLabel: next.bpNumber,
+        entityLabel: next.bpCode,
         field: "Tabs (Documents / Customer / Vendor)",
         oldValue: "",
         newValue: "Updated",

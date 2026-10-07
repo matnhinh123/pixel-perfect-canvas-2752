@@ -140,14 +140,7 @@ const contact = (
 type Seed = Partial<BusinessPartnerRecord> &
   Pick<
     BusinessPartnerRecord,
-    | "id"
-    | "bpNumber"
-    | "bpCode"
-    | "taxCode"
-    | "invoiceSerial"
-    | "localName"
-    | "englishName"
-    | "email"
+    "id" | "bpCode" | "taxCode" | "invoiceSerial" | "localName" | "englishName" | "email"
   >;
 
 const bp = (s: Seed, at = SEED_TIME): BusinessPartnerRecord => ({
@@ -179,7 +172,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-1",
-      bpNumber: "BPA-2026-00001",
       bpCode: "MSGFREIGHT",
       taxCode: "0318629475",
       invoiceSerial: "C25MSG",
@@ -208,7 +200,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-2",
-      bpNumber: "BPA-2026-00002",
       bpCode: "NPA",
       taxCode: "0319054826",
       invoiceSerial: "C25NPA",
@@ -235,7 +226,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-3",
-      bpNumber: "BPA-2026-00003",
       bpCode: "HPLAL",
       taxCode: "0109982743",
       invoiceSerial: "C25HPL",
@@ -250,7 +240,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-4",
-      bpNumber: "BPA-2026-00004",
       bpCode: "DONGMINH",
       taxCode: "0318846207",
       invoiceSerial: "C25DMT",
@@ -265,7 +254,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-5",
-      bpNumber: "BP0260002",
       bpCode: "DEMO01",
       taxCode: "0315471258",
       invoiceSerial: "C26/DEM",
@@ -279,7 +267,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-6",
-      bpNumber: "BP0260007",
       bpCode: "QTL",
       taxCode: "0316497684",
       invoiceSerial: "C26TRK",

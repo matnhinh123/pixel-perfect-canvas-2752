@@ -7,9 +7,11 @@ import type { LocationMasterRecord } from "@/mock-data/locations";
 export const allLocations = (): LocationMasterRecord[] =>
   locationRepository.all().filter((l) => !l.deleted);
 
-/** Locations that can be picked for new stops. */
+/** Locations that can be picked for new stops: active, and with coordinates (Routing needs them). */
 export const activeLocations = (): LocationMasterRecord[] =>
-  allLocations().filter((l) => l.status === "Active");
+  allLocations().filter(
+    (l) => l.status === "Active" && Number.isFinite(l.lat) && Number.isFinite(l.lng),
+  );
 
 /** Match by code, name or id (case-insensitive) — used by route import. */
 export const findLocationByName = (name: string) => {

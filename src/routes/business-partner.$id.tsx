@@ -17,6 +17,7 @@ import {
   FormPageHeader,
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
+import { FormGroup, ReadOnlyScope, S3, S6 } from "@/components/movex/general/FormParts";
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { CustomerTab, DocumentsTab, VendorTab } from "@/components/movex/businessPartner/BpTabs";
 import { useCollection } from "@/hooks/use-store";
@@ -27,7 +28,6 @@ import {
   businessPartnerService,
   draftOf,
   newBusinessPartnerDraft,
-  nextBpNumber,
   sanitizeBpCode,
   type BusinessPartnerDraft,
 } from "@/services/businessPartnerService";
@@ -89,61 +89,6 @@ function BusinessPartnerPage() {
       source={source}
       readOnly={!!source && mode !== "edit"}
     />
-  );
-}
-
-/** 12-column form grid: S3 = a quarter of the row (short fields), S6 = half (names, addresses). */
-const S3 = "sm:col-span-3 lg:col-span-3";
-const S6 = "sm:col-span-6 lg:col-span-6";
-
-function Group({
-  title,
-  required,
-  children,
-}: {
-  title: string;
-  required?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <section>
-      <h3 className="mb-3 flex items-center gap-3 text-sm font-semibold text-card-title">
-        <span>
-          {title}
-          {required && <span className="ml-0.5 text-destructive">*</span>}
-        </span>
-        <span className="h-px flex-1 bg-border" />
-      </h3>
-      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-6 lg:grid-cols-12">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-/** Everything inside is natively disabled in view mode and restyled to read like plain text. */
-function ReadOnlyScope({
-  readOnly,
-  className,
-  children,
-}: {
-  readOnly: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <fieldset
-      disabled={readOnly}
-      className={cn(
-        "group min-w-0",
-        "[&_input:disabled]:bg-muted/40 [&_input:disabled]:text-foreground [&_input:disabled]:opacity-100 [&_input:disabled]:placeholder:text-transparent",
-        "[&_textarea:disabled]:bg-muted/40 [&_textarea:disabled]:text-foreground [&_textarea:disabled]:opacity-100 [&_textarea:disabled]:placeholder:text-transparent",
-        "[&_select:disabled]:appearance-none [&_select:disabled]:bg-muted/40 [&_select:disabled]:text-foreground [&_select:disabled]:opacity-100",
-        className,
-      )}
-    >
-      {children}
-    </fieldset>
   );
 }
 
@@ -213,7 +158,6 @@ function BpForm({
       ? "documents"
       : tab;
 
-  const preview = d.roles.length ? nextBpNumber(d.roles) : "";
   const rolesChanged = !!source && source.roles.join() !== BP_ROLES.filter(hasRole).join();
 
   const back = () =>
@@ -231,8 +175,8 @@ function BpForm({
       const r = await confirm({
         title: t("Thay đổi vai trò?", "Change roles?"),
         description: t(
-          "Vai trò quyết định hoá đơn đầu ra/đầu vào và công nợ 131/331. Thay đổi chỉ áp dụng cho nghiệp vụ phát sinh sau này; các record/hoá đơn đã xử lý và BP Identity Number không bị ảnh hưởng.",
-          "Roles drive outgoing/incoming invoices and the 131/331 ledgers. The change only applies to future transactions; records/invoices already processed and the BP Identity Number are not affected.",
+          "Vai trò quyết định hoá đơn đầu ra/đầu vào và công nợ 131/331. Thay đổi chỉ áp dụng cho nghiệp vụ phát sinh sau này; các record/hoá đơn đã xử lý không bị ảnh hưởng.",
+          "Roles drive outgoing/incoming invoices and the 131/331 ledgers. The change only applies to future transactions; records/invoices already processed are not affected.",
         ),
         confirmLabel: t("Lưu thay đổi", "Save changes"),
       });
@@ -243,8 +187,8 @@ function BpForm({
       guard.allowNext();
       toast.success(
         isNew
-          ? t(`Đã tạo ${saved.bpNumber}`, `${saved.bpNumber} created`)
-          : t(`Đã lưu ${saved.bpNumber}`, `${saved.bpNumber} saved`),
+          ? t(`Đã tạo ${saved.bpCode}`, `${saved.bpCode} created`)
+          : t(`Đã lưu ${saved.bpCode}`, `${saved.bpCode} saved`),
       );
       void navigate({
         to: "/business-partner/$id",
@@ -270,7 +214,7 @@ function BpForm({
       <FormPageHeader
         crumbs={[
           { label: "Business Partners", to: "/business-partner" },
-          ...(source ? [{ label: source.bpNumber }] : []),
+          ...(source ? [{ label: source.bpCode }] : []),
           {
             label: isNew ? "Add New" : readOnly ? t("Chi tiết", "Detail") : t("Chỉnh sửa", "Edit"),
           },
@@ -282,7 +226,7 @@ function BpForm({
               ? source.englishName
               : t(`Chỉnh sửa: ${source.englishName}`, `Edit: ${source.englishName}`)
         }
-        subtitle={source ? source.bpNumber : undefined}
+        subtitle={source ? source.bpCode : undefined}
         badge={source ? <StatusBadge status={source.status} /> : undefined}
         dirty={dirty}
         readOnly={readOnly}
@@ -317,7 +261,7 @@ function BpForm({
       {/* View mode: everything inside is disabled natively and restyled to read like plain text. */}
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
         <Panel title="General Information" bodyClassName="space-y-6">
-          <Group title="Role" required>
+          <FormGroup title="Role" required>
             <div className="col-span-full flex flex-wrap gap-3">
               {(
                 [
@@ -355,18 +299,9 @@ function BpForm({
                 )}
               </p>
             )}
-          </Group>
+          </FormGroup>
 
-          <Group title={t("Định danh", "Identification")}>
-            <Field label="BP Identity Number" className={S3}>
-              <Input
-                readOnly
-                disabled
-                className="font-semibold"
-                value={source?.bpNumber ?? preview}
-                placeholder={t("Tự sinh khi lưu", "Generated on save")}
-              />
-            </Field>
+          <FormGroup title={t("Định danh", "Identification")}>
             <Field
               label="BP Code"
               required
@@ -407,6 +342,12 @@ function BpForm({
                 className="w-full"
               />
             </Field>
+            <Field label="In-house Partner" className={S3}>
+              <div className="flex h-9 items-center gap-2">
+                <Switch checked={d.inHouse} onCheckedChange={(v) => patch({ inHouse: v })} />
+                <span className="text-sm">{d.inHouse ? "Yes" : "No"}</span>
+              </div>
+            </Field>
             <Field label="Tax Code" required error={errors["taxCode"]} className={S3}>
               <Input placeholder="Enter Tax Code" {...text("taxCode")} />
             </Field>
@@ -416,15 +357,9 @@ function BpForm({
             <Field label="Invoice Serial" className={S3}>
               <Input placeholder="Enter Invoice Serial" {...text("invoiceSerial")} />
             </Field>
-            <Field label="In-house Partner" className={S3}>
-              <div className="flex h-9 items-center gap-2">
-                <Switch checked={d.inHouse} onCheckedChange={(v) => patch({ inHouse: v })} />
-                <span className="text-sm">{d.inHouse ? "Yes" : "No"}</span>
-              </div>
-            </Field>
-          </Group>
+          </FormGroup>
 
-          <Group title={t("Tên & địa chỉ", "Name & Address")}>
+          <FormGroup title={t("Tên & địa chỉ", "Name & Address")}>
             <Field label="Local Name" required error={errors["localName"]} className={S6}>
               <Textarea rows={2} placeholder="Enter Local Name" {...text("localName")} />
             </Field>
@@ -449,9 +384,9 @@ function BpForm({
             <Field label="Fax" className={S3}>
               <Input placeholder="Enter Fax" {...text("fax")} />
             </Field>
-          </Group>
+          </FormGroup>
 
-          <Group title={t("Liên hệ & mặc định", "Contact & Defaults")}>
+          <FormGroup title={t("Liên hệ & mặc định", "Contact & Defaults")}>
             <Field label="Email" error={errors["email"]} className={S3}>
               <Input placeholder="Enter Email" {...text("email")} />
             </Field>
@@ -466,9 +401,9 @@ function BpForm({
             <Field label="Def Currency" required error={errors["currency"]} className={S3}>
               <NativeSelect {...select("currency", CURRENCIES, "Select Currency")} />
             </Field>
-          </Group>
+          </FormGroup>
 
-          <Group title={t("Phân loại", "Classification")}>
+          <FormGroup title={t("Phân loại", "Classification")}>
             <Field
               label="Business Category"
               required
@@ -491,7 +426,7 @@ function BpForm({
                 )}
               />
             </Field>
-          </Group>
+          </FormGroup>
         </Panel>
       </ReadOnlyScope>
 
@@ -520,57 +455,6 @@ function BpForm({
         </ReadOnlyScope>
       </Tabs>
 
-      <Panel title={t("Quy ước (Convention)", "Convention")} className="mt-4">
-        <div className="grid gap-4 text-sm md:grid-cols-2">
-          <div>
-            <div className="mb-1 font-semibold">BP Identity Number</div>
-            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-              <li>
-                {t(
-                  "Hệ thống tự sinh: BP + [vai trò] + [YY] + [4 số tuần tự], ví dụ BP0260008.",
-                  "System-generated: BP + [role] + [YY] + [4-digit sequence], e.g. BP0260008.",
-                )}
-              </li>
-              <li>
-                BP0 = {t("nhiều vai trò", "multiple roles")} · BP1 = Vendor · BP2 = Customer · BP3 =
-                Employee
-              </li>
-              <li>
-                {t(
-                  "Số tuần tự dùng chung toàn hệ thống (không tính Employee); Employee có bộ đếm riêng.",
-                  "One shared running sequence for the whole system (Employee excluded); Employee has its own.",
-                )}
-              </li>
-              <li>
-                {t(
-                  "Mã đã cấp không đổi khi sửa vai trò hay thông tin.",
-                  "An issued number never changes when roles or details are edited.",
-                )}
-              </li>
-            </ul>
-          </div>
-          <div>
-            <div className="mb-1 font-semibold">BP Code</div>
-            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-              <li>{t("Tự động viết HOA toàn bộ.", "Automatically UPPERCASE.")}</li>
-              <li>
-                {t(
-                  "Chỉ cho phép A→Z, 0→9 và các dấu: chấm (.), gạch ngang (-), gạch dưới (_). Không cho phép ký tự khác.",
-                  "Only A→Z, 0→9 and: dot (.), hyphen (-), underscore (_). No other characters.",
-                )}
-              </li>
-              <li>{t("Tối đa 50 ký tự.", "Maximum 50 characters.")}</li>
-              <li>
-                {t(
-                  "Duy nhất, dùng làm từ khoá tìm kiếm và hiển thị.",
-                  "Unique; used as the search keyword and display name.",
-                )}
-              </li>
-            </ul>
-          </div>
-        </div>
-      </Panel>
-
       {!readOnly && (
         <div className="sticky bottom-0 z-20 -mx-7 mt-4 flex items-center justify-end gap-2 border-t bg-card/95 px-7 py-3 backdrop-blur">
           {dirty && (
@@ -595,7 +479,7 @@ function BpForm({
           onOpenChange={setHistoryOpen}
           entityType="Business Partner"
           entityId={source.id}
-          title={source.bpNumber}
+          title={source.bpCode}
         />
       )}
     </div>

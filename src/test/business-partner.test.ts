@@ -1,30 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  nextBpNumber,
-  roleDigit,
   sanitizeBpCode,
   validateBusinessPartner,
   newBusinessPartnerDraft,
   woAccessState,
 } from "@/services/businessPartnerService";
-
-describe("BP Identity Number", () => {
-  it("maps roles to the BP0..BP3 digit", () => {
-    expect(roleDigit(["Customer", "Vendor"])).toBe("0");
-    expect(roleDigit(["Vendor"])).toBe("1");
-    expect(roleDigit(["Customer"])).toBe("2");
-    expect(roleDigit(["Employee"])).toBe("3");
-  });
-
-  it("continues the shared sequence (seed max is BP0260007) and counts Employee separately", () => {
-    const now = new Date("2026-09-01T00:00:00");
-    expect(nextBpNumber(["Customer"], now)).toBe("BP2260008");
-    expect(nextBpNumber(["Customer", "Vendor"], now)).toBe("BP0260008");
-    expect(nextBpNumber(["Employee"], now)).toBe("BP3260001");
-    // A new year restarts the sequence.
-    expect(nextBpNumber(["Vendor"], new Date("2027-01-02T00:00:00"))).toBe("BP1270001");
-  });
-});
 
 describe("BP Code convention", () => {
   it("uppercases, strips disallowed characters and caps at 50", () => {

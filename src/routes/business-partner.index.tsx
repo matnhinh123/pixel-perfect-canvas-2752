@@ -24,15 +24,15 @@ export const Route = createFileRoute("/business-partner/")({
 type Row = BusinessPartnerRecord;
 type T = (vi: string, en: string) => string;
 
-const columnsFor = (t: T): ListColumn<Row>[] => [
+const allColumns = (t: T): ListColumn<Row>[] => [
   {
-    key: "bpNumber",
+    key: "bpCode",
     width: 150,
-    label: "BP Identity Number",
+    label: "BP Code",
     type: "text",
     pinned: true,
-    value: (r) => r.bpNumber,
-    render: (r) => <span className="font-semibold text-primary">{r.bpNumber}</span>,
+    value: (r) => r.bpCode,
+    render: (r) => <span className="font-semibold text-primary">{r.bpCode}</span>,
   },
   {
     key: "legalType",
@@ -67,7 +67,6 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
     type: "text",
     value: (r) => r.englishName,
   },
-  { key: "bpCode", width: 120, label: "BP Code", type: "text", value: (r) => r.bpCode },
   { key: "email", width: 190, truncate: true, label: "Email", type: "text", value: (r) => r.email },
   {
     key: "roles",
@@ -223,6 +222,28 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
 ];
 
+/** Default left-to-right order: identity, names, role and status first so they stay on screen. */
+const COLUMN_ORDER = [
+  "bpCode",
+  "localName",
+  "englishName",
+  "roles",
+  "status",
+  "legalType",
+  "taxCode",
+];
+const columnsFor = (t: T): ListColumn<Row>[] => {
+  const cols = allColumns(t);
+  const rank = (k: string) => {
+    const i = COLUMN_ORDER.indexOf(k);
+    return i < 0 ? COLUMN_ORDER.length : i;
+  };
+  return cols
+    .map((c, i) => ({ c, i }))
+    .sort((x, y) => rank(x.c.key) - rank(y.c.key) || x.i - y.i)
+    .map((x) => x.c);
+};
+
 function BusinessPartnerList() {
   const { t, lang } = useT();
   const navigate = useNavigate();
@@ -243,7 +264,7 @@ function BusinessPartnerList() {
       rows={rows}
       columns={columns}
       searchPlaceholder={t("Tìm BP Code, tên, mã số thuế...", "Search BP Code, name, tax code...")}
-      searchValues={(r) => [r.bpNumber, r.bpCode, r.localName, r.englishName, r.taxCode, r.email]}
+      searchValues={(r) => [r.bpCode, r.localName, r.englishName, r.taxCode, r.email]}
       quickFilters={[
         {
           key: "status",

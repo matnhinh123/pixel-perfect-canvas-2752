@@ -10,6 +10,7 @@ import type {
   RouteRecord,
   ServiceAssignment,
   ServiceRecord,
+  VehicleMasterRecord,
   TenantTemplateConfig,
 } from "@/types";
 import {
@@ -23,6 +24,7 @@ import {
 } from "@/mock-data/seed";
 import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
+import { seedVehicleMasters } from "@/mock-data/vehicleMaster";
 import { seedBusinessPartners } from "@/mock-data/businessPartners";
 import { seedLocations, type LocationMasterRecord } from "@/mock-data/locations";
 import { createCollection, readJson, subscribeKey, writeJson } from "./storage";
@@ -47,6 +49,11 @@ export const locationRepository = createCollection<LocationMasterRecord>(
 export const tollStationRepository = createCollection<TollGateRecord>(
   "toll-stations",
   seedTollStations,
+);
+/** Vehicle master (one row per physical vehicle). */
+export const vehicleMasterRepository = createCollection<VehicleMasterRecord>(
+  "vehicle-masters",
+  seedVehicleMasters,
 );
 /** Business Partner master (customers, vendors, employees). */
 export const businessPartnerRepository = createCollection<BusinessPartnerRecord>(

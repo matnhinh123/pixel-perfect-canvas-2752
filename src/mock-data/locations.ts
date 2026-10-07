@@ -1,4 +1,5 @@
 import type { BaseRecord, LocationRecord } from "@/types";
+import { guessLocationType } from "./locationCatalog";
 
 const loc = (
   id: string,
@@ -204,14 +205,35 @@ export const findLocationByName = (name: string) => {
 };
 
 /** Location master record (editable on the Location screen; used by Routing stop pickers). */
-export type LocationMasterRecord = LocationRecord & BaseRecord;
+export type LocationMasterRecord = LocationRecord &
+  BaseRecord & {
+    // Source Master fields. Optional: rows saved before these existed simply lack them.
+    country?: string;
+    locationType?: string;
+    locationSubType?: string;
+    serviceMode?: string;
+    unLocode?: string;
+    iataCode?: string;
+    externalCode?: string;
+    operatorName?: string;
+    customsControlled?: boolean;
+    bonded?: boolean;
+    remark?: string;
+  };
 
 export const seedLocations = (): LocationMasterRecord[] =>
-  LOCATIONS.map((l) => ({
-    ...l,
-    status: "Active",
-    createdAt: "2026-09-01T02:00:00.000Z",
-    createdBy: "Nguyễn Minh Anh",
-    updatedAt: "2026-09-01T02:00:00.000Z",
-    updatedBy: "Nguyễn Minh Anh",
-  }));
+  LOCATIONS.map((l) => {
+    const g = guessLocationType(l.name);
+    return {
+      ...l,
+      country: "Vietnam",
+      locationType: g.type,
+      locationSubType: g.sub,
+      serviceMode: g.mode,
+      status: "Active",
+      createdAt: "2026-09-01T02:00:00.000Z",
+      createdBy: "Nguyễn Minh Anh",
+      updatedAt: "2026-09-01T02:00:00.000Z",
+      updatedBy: "Nguyễn Minh Anh",
+    };
+  });

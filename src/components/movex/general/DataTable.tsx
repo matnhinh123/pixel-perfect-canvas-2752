@@ -129,7 +129,7 @@ export function DataTable<T extends { id: string }>({
                 return (
                   <TableHead
                     key={c.key}
-                    className={cn(thClass, "group relative select-none whitespace-nowrap")}
+                    className={cn(thClass, "group relative select-none", !w && "whitespace-nowrap")}
                     style={w ? { width: w, minWidth: w } : undefined}
                   >
                     {sortable ? (
