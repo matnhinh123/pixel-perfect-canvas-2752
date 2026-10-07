@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuditLogRouteImport } from './routes/audit-log'
-import { Route as BusinessPartnerRouteImport } from './routes/business-partner'
 import { Route as CommonCodeRouteImport } from './routes/common-code'
 import { Route as CostGroupRouteImport } from './routes/cost-group'
 import { Route as ExchangeRateRouteImport } from './routes/exchange-rate'
@@ -20,6 +19,8 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as TollStationRouteImport } from './routes/toll-station'
 import { Route as VehicleRouteImport } from './routes/vehicle'
 import { Route as VendorTariffRouteImport } from './routes/vendor-tariff'
+import { Route as BusinessPartnerIndexRouteImport } from './routes/business-partner.index'
+import { Route as BusinessPartnerIdRouteImport } from './routes/business-partner.$id'
 import { Route as CostIndexRouteImport } from './routes/cost.index'
 import { Route as CostIdRouteImport } from './routes/cost.$id'
 import { Route as RoutingIndexRouteImport } from './routes/routing.index'
@@ -36,11 +37,6 @@ const IndexRoute = IndexRouteImport.update({
 const AuditLogRoute = AuditLogRouteImport.update({
   id: '/audit-log',
   path: '/audit-log',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BusinessPartnerRoute = BusinessPartnerRouteImport.update({
-  id: '/business-partner',
-  path: '/business-partner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CommonCodeRoute = CommonCodeRouteImport.update({
@@ -83,6 +79,16 @@ const VendorTariffRoute = VendorTariffRouteImport.update({
   path: '/vendor-tariff',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BusinessPartnerIndexRoute = BusinessPartnerIndexRouteImport.update({
+  id: '/business-partner/',
+  path: '/business-partner/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessPartnerIdRoute = BusinessPartnerIdRouteImport.update({
+  id: '/business-partner/$id',
+  path: '/business-partner/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CostIndexRoute = CostIndexRouteImport.update({
   id: '/cost/',
   path: '/cost/',
@@ -122,7 +128,6 @@ const ApiVietmapSplatRoute = ApiVietmapSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/business-partner': typeof BusinessPartnerRoute
   '/common-code': typeof CommonCodeRoute
   '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
@@ -131,9 +136,11 @@ export interface FileRoutesByFullPath {
   '/toll-station': typeof TollStationRoute
   '/vehicle': typeof VehicleRoute
   '/vendor-tariff': typeof VendorTariffRoute
+  '/business-partner/$id': typeof BusinessPartnerIdRoute
   '/cost/$id': typeof CostIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/business-partner/': typeof BusinessPartnerIndexRoute
   '/cost/': typeof CostIndexRoute
   '/routing/': typeof RoutingIndexRoute
   '/service/': typeof ServiceIndexRoute
@@ -142,7 +149,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/business-partner': typeof BusinessPartnerRoute
   '/common-code': typeof CommonCodeRoute
   '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
@@ -151,9 +157,11 @@ export interface FileRoutesByTo {
   '/toll-station': typeof TollStationRoute
   '/vehicle': typeof VehicleRoute
   '/vendor-tariff': typeof VendorTariffRoute
+  '/business-partner/$id': typeof BusinessPartnerIdRoute
   '/cost/$id': typeof CostIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/business-partner': typeof BusinessPartnerIndexRoute
   '/cost': typeof CostIndexRoute
   '/routing': typeof RoutingIndexRoute
   '/service': typeof ServiceIndexRoute
@@ -163,7 +171,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/business-partner': typeof BusinessPartnerRoute
   '/common-code': typeof CommonCodeRoute
   '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
@@ -172,9 +179,11 @@ export interface FileRoutesById {
   '/toll-station': typeof TollStationRoute
   '/vehicle': typeof VehicleRoute
   '/vendor-tariff': typeof VendorTariffRoute
+  '/business-partner/$id': typeof BusinessPartnerIdRoute
   '/cost/$id': typeof CostIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/business-partner/': typeof BusinessPartnerIndexRoute
   '/cost/': typeof CostIndexRoute
   '/routing/': typeof RoutingIndexRoute
   '/service/': typeof ServiceIndexRoute
@@ -185,7 +194,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/audit-log'
-    | '/business-partner'
     | '/common-code'
     | '/cost-group'
     | '/exchange-rate'
@@ -194,9 +202,11 @@ export interface FileRouteTypes {
     | '/toll-station'
     | '/vehicle'
     | '/vendor-tariff'
+    | '/business-partner/$id'
     | '/cost/$id'
     | '/routing/$id'
     | '/service/$id'
+    | '/business-partner/'
     | '/cost/'
     | '/routing/'
     | '/service/'
@@ -205,7 +215,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/audit-log'
-    | '/business-partner'
     | '/common-code'
     | '/cost-group'
     | '/exchange-rate'
@@ -214,9 +223,11 @@ export interface FileRouteTypes {
     | '/toll-station'
     | '/vehicle'
     | '/vendor-tariff'
+    | '/business-partner/$id'
     | '/cost/$id'
     | '/routing/$id'
     | '/service/$id'
+    | '/business-partner'
     | '/cost'
     | '/routing'
     | '/service'
@@ -225,7 +236,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/audit-log'
-    | '/business-partner'
     | '/common-code'
     | '/cost-group'
     | '/exchange-rate'
@@ -234,9 +244,11 @@ export interface FileRouteTypes {
     | '/toll-station'
     | '/vehicle'
     | '/vendor-tariff'
+    | '/business-partner/$id'
     | '/cost/$id'
     | '/routing/$id'
     | '/service/$id'
+    | '/business-partner/'
     | '/cost/'
     | '/routing/'
     | '/service/'
@@ -246,7 +258,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuditLogRoute: typeof AuditLogRoute
-  BusinessPartnerRoute: typeof BusinessPartnerRoute
   CommonCodeRoute: typeof CommonCodeRoute
   CostGroupRoute: typeof CostGroupRoute
   ExchangeRateRoute: typeof ExchangeRateRoute
@@ -255,9 +266,11 @@ export interface RootRouteChildren {
   TollStationRoute: typeof TollStationRoute
   VehicleRoute: typeof VehicleRoute
   VendorTariffRoute: typeof VendorTariffRoute
+  BusinessPartnerIdRoute: typeof BusinessPartnerIdRoute
   CostIdRoute: typeof CostIdRoute
   RoutingIdRoute: typeof RoutingIdRoute
   ServiceIdRoute: typeof ServiceIdRoute
+  BusinessPartnerIndexRoute: typeof BusinessPartnerIndexRoute
   CostIndexRoute: typeof CostIndexRoute
   RoutingIndexRoute: typeof RoutingIndexRoute
   ServiceIndexRoute: typeof ServiceIndexRoute
@@ -278,13 +291,6 @@ declare module '@tanstack/react-router' {
       path: '/audit-log'
       fullPath: '/audit-log'
       preLoaderRoute: typeof AuditLogRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/business-partner': {
-      id: '/business-partner'
-      path: '/business-partner'
-      fullPath: '/business-partner'
-      preLoaderRoute: typeof BusinessPartnerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/common-code': {
@@ -343,6 +349,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VendorTariffRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/business-partner/': {
+      id: '/business-partner/'
+      path: '/business-partner'
+      fullPath: '/business-partner/'
+      preLoaderRoute: typeof BusinessPartnerIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/business-partner/$id': {
+      id: '/business-partner/$id'
+      path: '/business-partner/$id'
+      fullPath: '/business-partner/$id'
+      preLoaderRoute: typeof BusinessPartnerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cost/': {
       id: '/cost/'
       path: '/cost'
@@ -398,7 +418,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditLogRoute: AuditLogRoute,
-  BusinessPartnerRoute: BusinessPartnerRoute,
   CommonCodeRoute: CommonCodeRoute,
   CostGroupRoute: CostGroupRoute,
   ExchangeRateRoute: ExchangeRateRoute,
@@ -407,9 +426,11 @@ const rootRouteChildren: RootRouteChildren = {
   TollStationRoute: TollStationRoute,
   VehicleRoute: VehicleRoute,
   VendorTariffRoute: VendorTariffRoute,
+  BusinessPartnerIdRoute: BusinessPartnerIdRoute,
   CostIdRoute: CostIdRoute,
   RoutingIdRoute: RoutingIdRoute,
   ServiceIdRoute: ServiceIdRoute,
+  BusinessPartnerIndexRoute: BusinessPartnerIndexRoute,
   CostIndexRoute: CostIndexRoute,
   RoutingIndexRoute: RoutingIndexRoute,
   ServiceIndexRoute: ServiceIndexRoute,

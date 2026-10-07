@@ -2,6 +2,7 @@
 // client later; services and UI keep working against the same surface.
 import type {
   AuditEvent,
+  BusinessPartnerRecord,
   CostGroupRecord,
   CostItemRecord,
   CostRecord,
@@ -22,6 +23,7 @@ import {
 } from "@/mock-data/seed";
 import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
+import { seedBusinessPartners } from "@/mock-data/businessPartners";
 import { seedLocations, type LocationMasterRecord } from "@/mock-data/locations";
 import { createCollection, readJson, subscribeKey, writeJson } from "./storage";
 
@@ -45,6 +47,11 @@ export const locationRepository = createCollection<LocationMasterRecord>(
 export const tollStationRepository = createCollection<TollGateRecord>(
   "toll-stations",
   seedTollStations,
+);
+/** Business Partner master (customers, vendors, employees). */
+export const businessPartnerRepository = createCollection<BusinessPartnerRecord>(
+  "business-partners",
+  seedBusinessPartners,
 );
 export const importHistoryRepository = createCollection<ImportBatch>(
   "import-history",

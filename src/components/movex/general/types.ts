@@ -13,6 +13,8 @@ export interface ListColumn<T> extends FieldMeta {
   sortable?: boolean;
   filterable?: boolean;
   className?: string;
+  /** Long text: clipped to the column width with "…" and the full value in a tooltip. */
+  truncate?: boolean;
   /** Pinned columns cannot be hidden (e.g. the code column). */
   pinned?: boolean;
 }

@@ -164,7 +164,7 @@ export function DataTable<T extends { id: string }>({
                 );
               })}
               {actions && (
-                <TableHead className={cn(thClass, "w-16 text-right")}>
+                <TableHead className={cn(thClass, "sticky right-0 z-10 w-16 bg-muted text-right")}>
                   {t("Thao tác", "Actions")}
                 </TableHead>
               )}
@@ -195,16 +195,36 @@ export function DataTable<T extends { id: string }>({
                         />
                       </TableCell>
                     )}
-                    {columns.map((c) => (
-                      <TableCell
-                        key={c.key}
-                        className={cn(c.className, c.pinned && "whitespace-nowrap")}
-                      >
-                        {c.render ? c.render(r) : String(c.value(r) ?? "—")}
-                      </TableCell>
-                    ))}
+                    {columns.map((c) => {
+                      const content = c.render ? c.render(r) : String(c.value(r) ?? "—");
+                      const w = widths[c.key] ?? c.width;
+                      return (
+                        <TableCell
+                          key={c.key}
+                          className={cn(
+                            c.className,
+                            (c.pinned || c.truncate) && "whitespace-nowrap",
+                          )}
+                        >
+                          {c.truncate && w ? (
+                            <span
+                              className="block truncate"
+                              style={{ maxWidth: Math.max(40, w - 32) }}
+                              title={String(c.value(r) ?? "")}
+                            >
+                              {content}
+                            </span>
+                          ) : (
+                            content
+                          )}
+                        </TableCell>
+                      );
+                    })}
                     {actions && (
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <TableCell
+                        className="sticky right-0 bg-card text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {actions(r)}
                       </TableCell>
                     )}

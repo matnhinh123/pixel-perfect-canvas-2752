@@ -3,3 +3,4 @@ export * from "./routing";
 export * from "./service";
 export * from "./cost";
 export * from "./costMaster";
+export * from "./businessPartner";

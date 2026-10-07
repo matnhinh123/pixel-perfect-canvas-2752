@@ -96,8 +96,35 @@ export interface EntityListPageProps<T extends BaseRecord> {
   tree?: { parentOf: (row: T) => string | null; column: string };
   /** Hide the Delete row action (master data that is deactivated rather than deleted). */
   allowDelete?: boolean;
+  /**
+   * Adds the "Creation Date" toolbar: Today / This Week / This Month chips and a from–to range.
+   * Returns the ISO timestamp the filter is applied to.
+   */
+  creationDate?: (row: T) => string;
   /** UI language of the list chrome (toolbar, menus, pager). Vietnamese by default. */
   lang?: ListLang;
+}
+
+/** [start, end) in epoch ms for the Creation Date toolbar; null = no date filter. */
+function creationRange(
+  preset: "today" | "week" | "month" | null,
+  from: string,
+  to: string,
+): [number, number] | null {
+  const day = (ymd: string) => new Date(`${ymd}T00:00:00`).getTime();
+  if (preset) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (preset === "week") start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // Monday
+    if (preset === "month") start.setDate(1);
+    const end = new Date(start);
+    if (preset === "today") end.setDate(end.getDate() + 1);
+    else if (preset === "week") end.setDate(end.getDate() + 7);
+    else end.setMonth(end.getMonth() + 1);
+    return [start.getTime(), end.getTime()];
+  }
+  if (!from && !to) return null;
+  return [from ? day(from) : -Infinity, to ? day(to) + 86_400_000 : Infinity];
 }
 
 function DisabledWithReason({ reason, children }: { reason: string; children: ReactNode }) {
@@ -123,6 +150,9 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const [q, setQ] = useState(p.initialSearch ?? "");
   const [quick, setQuick] = useState<Record<string, string>>({});
   const [advanced, setAdvanced] = useState<FilterCondition[]>([]);
+  const [datePreset, setDatePreset] = useState<"today" | "week" | "month" | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -171,8 +201,16 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const filtered = useMemo(() => {
     const searched = applySearch(p.rows, q, p.searchValues);
     const conds = [...quickConditions, ...advanced];
-    return applySort(applyConditions(searched, conds, filterFields, get), sort, get);
-  }, [p.rows, q, quickConditions, advanced, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+    const range = creationRange(datePreset, dateFrom, dateTo);
+    const inRange =
+      range && p.creationDate
+        ? searched.filter((r) => {
+            const at = new Date(p.creationDate!(r)).getTime();
+            return at >= range[0] && at < range[1];
+          })
+        : searched;
+    return applySort(applyConditions(inRange, conds, filterFields, get), sort, get);
+  }, [p.rows, q, quickConditions, advanced, sort, datePreset, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
@@ -180,7 +218,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   }, [page, pages]);
   useEffect(() => {
     setPage(1);
-  }, [q, quick, advanced, pageSize]);
+  }, [q, quick, advanced, pageSize, datePreset, dateFrom, dateTo]);
   // Drop selections that disappeared (e.g. after delete / rollback).
   useEffect(() => {
     const ids = new Set(p.rows.map((r) => r.id));
@@ -294,7 +332,9 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             },
       );
   const selectedRows = p.rows.filter((r) => selected.has(r.id));
-  const filtersActive = q.trim() !== "" || quickConditions.length > 0 || advanced.length > 0;
+  const dateActive = datePreset !== null || dateFrom !== "" || dateTo !== "";
+  const filtersActive =
+    q.trim() !== "" || quickConditions.length > 0 || advanced.length > 0 || dateActive;
 
   const doExport = (rows: T[], scope: string) => {
     if (rows.length === 0) {
@@ -331,6 +371,9 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     setQ("");
     setQuick({});
     setAdvanced([]);
+    setDatePreset(null);
+    setDateFrom("");
+    setDateTo("");
   };
   const ro =
     p.readOnlyReason ?? t("Không khả dụng cho danh sách này", "Not available for this list");
@@ -537,6 +580,62 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 labels={{ "": qf.allLabel }}
               />
             ))}
+            {p.creationDate && (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold text-muted-foreground">
+                  {t("Ngày tạo", "Creation Date")}:
+                </span>
+                {(
+                  [
+                    ["today", t("Hôm nay", "Today")],
+                    ["week", t("Tuần này", "This Week")],
+                    ["month", t("Tháng này", "This Month")],
+                  ] as const
+                ).map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={datePreset === k}
+                    onClick={() => {
+                      setDatePreset(datePreset === k ? null : k);
+                      setDateFrom("");
+                      setDateTo("");
+                    }}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-sm font-semibold",
+                      datePreset === k
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-primary/50 text-primary hover:bg-accent",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <Input
+                  type="date"
+                  aria-label={t("Từ ngày", "From date")}
+                  className="h-9 w-40"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setDatePreset(null);
+                  }}
+                />
+                <span className="text-muted-foreground">→</span>
+                <Input
+                  type="date"
+                  aria-label={t("Đến ngày", "To date")}
+                  className="h-9 w-40"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setDatePreset(null);
+                  }}
+                />
+              </div>
+            )}
             <AdvancedFilter
               screen={screen}
               fields={filterFields}
