@@ -20,13 +20,7 @@ import { ReadOnlyScope } from "@/components/movex/general/FormParts";
 
 /** A third of the 12-column row (3 fields per row on wide screens, 2 on medium). */
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
-import {
-  ContactsTab,
-  CustomerTab,
-  DocumentsTab,
-  SalesAssignmentTab,
-  VendorTab,
-} from "@/components/movex/businessPartner/BpTabs";
+import { CustomerTab, DocumentsTab, VendorTab } from "@/components/movex/businessPartner/BpTabs";
 import { MultiSelect } from "@/components/movex/businessPartner/MultiSelect";
 import { useCollection } from "@/hooks/use-store";
 import { businessPartnerRepository } from "@/repositories";
@@ -38,7 +32,10 @@ import {
   newBusinessPartnerDraft,
   normalizeBusinessPartner,
   sanitizeBpCode,
+  lookupTaxPayer,
   taxCodeKey,
+  taxIdLabel,
+  taxIdRequired,
   toEnglishAddress,
   type BusinessPartnerDraft,
 } from "@/services/businessPartnerService";
@@ -58,12 +55,10 @@ import { cn } from "@/lib/utils";
 import { BP_ROLES, type BpRole, type BusinessPartnerRecord } from "@/types";
 
 type Mode = "view" | "edit";
-type Tab = "contacts" | "sales" | "documents" | "customer" | "vendor";
+type Tab = "documents" | "customer" | "vendor";
 
 /** Error key of a profile/role table → the tab that shows it. */
 const TAB_OF_ERROR: [string, Tab][] = [
-  ["contacts", "contacts"],
-  ["salesAssignments", "sales"],
   ["documents", "documents"],
   ["licenseAdjustments", "documents"],
   ["customer.", "customer"],
@@ -126,7 +121,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
   const [d, setD] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("contacts");
+  const [tab, setTab] = useState<Tab>("documents");
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const dirty = !readOnly && JSON.stringify(d) !== JSON.stringify(initial);
@@ -175,7 +170,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
     patch({ roles: on ? [...d.roles, r] : d.roles.filter((x) => x !== r) });
   const visibleTab: Tab =
     (tab === "customer" && !hasRole("Customer")) || (tab === "vendor" && !hasRole("Vendor"))
-      ? "contacts"
+      ? "documents"
       : tab;
   /** Default currency always belongs to the partner's currencies: picking it adds it there. */
   const setDefaultCurrency = (currency: string) => {
@@ -191,8 +186,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
 
   const rolesChanged = !!source && source.roles.join() !== BP_ROLES.filter(hasRole).join();
 
-  /** Individual → Citizen ID; otherwise Tax Code / Identity Number. */
-  const taxLabel = d.legalType === "Individual" ? "Citizen ID" : "Tax Code / Identity Number";
+  const taxLabel = taxIdLabel(d.legalType);
   /** English Address follows the Local Address (transliterated) until the user edits it. */
   const setLocalAddress = (v: string) => {
     setD((x) => ({
@@ -205,20 +199,28 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
     }));
     clearErr(["localAddress", "englishAddress"]);
   };
-  /** Company tax code check (demo: format + not used by another partner; no tax-authority lookup). */
-  const verifyTaxCode = () => {
-    const key = taxCodeKey(d.taxCode);
-    if (!/^\d{10}(-?\d{3})?$/.test(key)) {
-      toast.error("Tax Code should be 10 digits, or 10 + 3 digits for a branch.");
+  /** Company "Get Info": tax-authority lookup by MST (mock registry in the demo) fills name and address. */
+  const getTaxInfo = () => {
+    const res = lookupTaxPayer(d.taxCode);
+    if ("error" in res) {
+      toast.error(res.error);
       return;
     }
+    const key = taxCodeKey(d.taxCode);
     const dup = businessPartnerRepository
       .all()
       .find(
         (b) => !b.deleted && b.id !== source?.id && taxCodeKey(String(b.taxCode ?? "")) === key,
       );
-    if (dup) toast.error(`Tax Code is already used by ${dup.bpCode}.`);
-    else toast.success("Tax Code format is valid and not used by another partner.");
+    if (dup) {
+      toast.error(
+        t(`MST đã được dùng cho ${dup.bpCode}.`, `Tax Code is already used by ${dup.bpCode}.`),
+      );
+      return;
+    }
+    const { localName, englishName, localAddress } = res.info;
+    patch({ localName, englishName, localAddress, englishAddress: toEnglishAddress(localAddress) });
+    toast.success(t("Đã lấy thông tin doanh nghiệp.", "Company information retrieved."));
   };
 
   const back = () => void navigate({ to: "/business-partner" });
@@ -353,7 +355,14 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
             </Field>
 
             <Field label="Legal Type" required error={errors["legalType"]}>
-              <NativeSelect {...select("legalType", LEGAL_TYPES, "Select Legal Type")} />
+              <NativeSelect
+                {...select("legalType", LEGAL_TYPES, "Select Legal Type")}
+                onChange={(v) => {
+                  // The ID field's meaning (and whether it is required) follows the Legal Type.
+                  patch({ legalType: v as BusinessPartnerDraft["legalType"] });
+                  clearErr(["taxCode"]);
+                }}
+              />
             </Field>
             <Field
               label="BP Code"
@@ -383,17 +392,22 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                 </Tooltip>
               </div>
             </Field>
-            <Field label={taxLabel} required error={errors["taxCode"]} className="sm:col-span-2">
+            <Field
+              label={taxLabel}
+              required={taxIdRequired(d.legalType)}
+              error={errors["taxCode"]}
+              className="sm:col-span-2"
+            >
               <div className="flex gap-2">
-                <Input placeholder="Enter Tax Code" {...text("taxCode")} />
+                <Input placeholder={`Enter ${taxLabel}`} {...text("taxCode")} />
                 {d.legalType === "Company" && !readOnly && (
                   <Button
                     type="button"
                     variant="outline"
                     className="h-9 shrink-0 px-2.5"
-                    onClick={verifyTaxCode}
+                    onClick={getTaxInfo}
                   >
-                    Verify
+                    Get Info
                   </Button>
                 )}
               </div>
@@ -506,8 +520,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
         <TabsList className="h-auto w-full justify-start rounded-t-xl bg-card-header p-0">
           {(
             [
-              ["contacts", "Contacts", true],
-              ["sales", "Sales Assignment", true],
               ["documents", "Documents & License", true],
               ["customer", "Customer", hasRole("Customer")],
               ["vendor", "Vendor", hasRole("Vendor")],
@@ -522,10 +534,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
         </TabsList>
         <ReadOnlyScope readOnly={readOnly}>
           <div className="rounded-b-xl border border-t-0 bg-card p-4">
-            {visibleTab === "contacts" && <ContactsTab d={d} set={patchTables} errors={errors} />}
-            {visibleTab === "sales" && (
-              <SalesAssignmentTab d={d} set={patchTables} errors={errors} />
-            )}
             {visibleTab === "documents" && <DocumentsTab d={d} set={patchTables} errors={errors} />}
             {visibleTab === "customer" && <CustomerTab d={d} set={patchTables} errors={errors} />}
             {visibleTab === "vendor" && <VendorTab d={d} set={patchTables} errors={errors} />}

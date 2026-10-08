@@ -13,7 +13,7 @@ import type {
   BusinessPartnerRecord,
 } from "@/types";
 import { EMPLOYEES, departmentName } from "@/mock-data/staff";
-import { LEGAL_TYPES, TENANT_DEFAULT_CURRENCY } from "@/mock-data/businessPartners";
+import { LEGAL_TYPES, TAX_REGISTRY, TENANT_DEFAULT_CURRENCY } from "@/mock-data/businessPartners";
 import { tr } from "@/lib/i18n";
 import { auditService } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -67,6 +67,39 @@ export function toEnglishAddress(local: string): string {
 }
 
 export const taxCodeKey = (v: string) => v.replace(/\s+/g, "").toUpperCase();
+
+/** Company → Tax Code (MST, required); Individual → Identity Number (CCCD, required); Representative → optional. */
+export const taxIdLabel = (legalType: string) =>
+  legalType === "Company"
+    ? "Tax Code"
+    : legalType === "Individual"
+      ? "Identity Number"
+      : "Tax Code / Identity Number";
+export const taxIdRequired = (legalType: string) =>
+  legalType === "Company" || legalType === "Individual";
+const MST = /^\d{10}(-?\d{3})?$/;
+const CCCD = /^\d{12}$/;
+
+/** "Get Info" for a Company (demo: looks the MST up in a mock tax registry instead of the tax API). */
+export function lookupTaxPayer(taxCode: string) {
+  const key = taxCodeKey(taxCode);
+  if (!MST.test(key))
+    return {
+      error: tr(
+        "Mã số thuế gồm 10 số, hoặc 10 + 3 số với chi nhánh.",
+        "Tax Code should be 10 digits, or 10 + 3 digits for a branch.",
+      ),
+    } as const;
+  const hit = TAX_REGISTRY[key.replace("-", "")];
+  return hit
+    ? ({ info: hit } as const)
+    : ({
+        error: tr(
+          `Không tìm thấy thông tin cho MST ${key}.`,
+          `No company found for Tax Code ${key}.`,
+        ),
+      } as const);
+}
 
 // ---------------------------------------------------------------- WO access rule (Credit Term)
 
@@ -129,11 +162,18 @@ export const blankSalesman = (): BpSalesman => ({
 });
 export const blankContact = (): BpContact => ({
   rid: newRowId(),
+  serviceCode: "",
+  serviceName: "",
+  gender: "",
   fullName: "",
-  position: "",
-  phone: "",
+  identityNo: "",
+  telephone: "",
+  mobilePhone: "",
+  contactRole: "",
   email: "",
+  address: "",
   primaryContact: false,
+  status: "Active",
 });
 export const blankBank = (): BpBankAccount => ({
   rid: newRowId(),
@@ -199,17 +239,19 @@ export const newBusinessPartnerDraft = (): BusinessPartnerDraft => ({
   creditLimitCurrency: "",
   note: "",
   roles: [],
-  contacts: [blankContact()],
-  salesAssignments: [blankSalesman()],
   licenseAdjustments: [blankLicense()],
   documents: [blankDocument()],
   customer: {
     creditTerms: [blankCredit()],
+    contacts: [blankContact()],
     banks: [blankBank()],
+    salesmen: [blankSalesman()],
   },
   vendor: {
     paymentTerms: [blankPayment()],
+    contacts: [blankContact()],
     banks: [blankBank()],
+    salesmen: [blankSalesman()],
   },
 });
 
@@ -232,16 +274,23 @@ const normLegalType = (v: unknown): BpLegalType | "" => {
   return (LEGAL_TYPES as readonly string[]).includes(s) ? (s as BpLegalType) : "";
 };
 
-/** Old per-role contacts → profile contact. */
+/** Contact saved by any earlier version → current Contact Info row. */
 const oldContact = (c: Loose): BpContact => ({
   rid: str(c["rid"]) || newRowId(),
+  serviceCode: str(c["serviceCode"]),
+  serviceName: str(c["serviceName"]),
+  gender: str(c["gender"]),
   fullName: str(c["fullName"]),
-  position: str(c["position"]) || str(c["contactRole"]),
-  phone: str(c["phone"]) || str(c["mobile"]) || str(c["telephone"]),
+  identityNo: str(c["identityNo"]),
+  telephone: str(c["telephone"]),
+  mobilePhone: str(c["mobilePhone"]) || str(c["mobile"]) || str(c["phone"]),
+  contactRole: str(c["contactRole"]) || str(c["position"]),
   email: str(c["email"]),
+  address: str(c["address"]),
   primaryContact: c["primaryContact"] === true,
+  status: c["status"] === "Inactive" ? "Inactive" : "Active",
 });
-/** Old per-role salesman (hard-coded list) → profile sales assignment. */
+/** Salesman saved by any earlier version (incl. the old hard-coded list) → current row. */
 const oldSalesman = (s: Loose): BpSalesman => {
   const name = str(s["staffName"]) || str(s["salesName"]);
   const e = EMPLOYEES.find((x) => x.id === str(s["staffId"]) || x.name === name);
@@ -258,8 +307,8 @@ const oldSalesman = (s: Loose): BpSalesman => {
 
 /**
  * Brings a record saved by an earlier version of the app to the current shape: Legal Type
- * "Government" → "Company", single Business Category → list, per-role contacts / salesmen moved to
- * the profile, new profile fields defaulted. Records already in the current shape pass unchanged.
+ * "Government" → "Company", single Business Category → list, shared contacts / salesmen moved into
+ * each role, new profile fields defaulted. Records already in the current shape pass unchanged.
  */
 export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPartnerRecord {
   const r = raw as unknown as Loose;
@@ -267,27 +316,35 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
   const vend = (r["vendor"] ?? {}) as Loose;
   const currency = str(r["currency"]);
 
-  const contacts = Array.isArray(r["contacts"])
-    ? arr(r["contacts"]).map(oldContact)
-    : [...arr(cust["contacts"]), ...arr(vend["contacts"])]
-        .map(oldContact)
-        .filter(
-          (c, i, all) =>
-            all.findIndex((x) => x.fullName === c.fullName && x.phone === c.phone) === i,
-        );
-  const salesAssignments = Array.isArray(r["salesAssignments"])
-    ? arr(r["salesAssignments"]).map(oldSalesman)
-    : [...arr(cust["salesmen"]), ...arr(vend["salesmen"])]
-        .map(oldSalesman)
-        .filter(
-          (s, i, all) =>
-            all.findIndex((x) => x.staffName === s.staffName && x.serviceCode === s.serviceCode) ===
-            i,
-        );
+  const roles = (Array.isArray(raw.roles) ? raw.roles : []).filter(
+    (x): x is BpRole => x === "Customer" || x === "Vendor",
+  );
+  // Contacts / salesmen live in each role tab. The previous version kept one shared list on the
+  // profile: it is copied to every role the partner has (Customer if none).
+  const shared = (key: string) => (Array.isArray(r[key]) ? arr(r[key]) : null);
+  const sharedContacts = shared("contacts");
+  const sharedSales = shared("salesAssignments");
+  const forRole = (role: BpRole) =>
+    roles.includes(role) || (role === "Customer" && roles.length === 0);
+  const perRole = (p: Loose, role: BpRole) => ({
+    contacts: (Array.isArray(p["contacts"])
+      ? arr(p["contacts"])
+      : forRole(role)
+        ? (sharedContacts ?? [])
+        : []
+    ).map(oldContact),
+    salesmen: (Array.isArray(p["salesmen"])
+      ? arr(p["salesmen"])
+      : forRole(role)
+        ? (sharedSales ?? [])
+        : []
+    ).map(oldSalesman),
+  });
   const currencies = uniq([...strList(r["currencies"]), ...(currency ? [currency] : [])]);
 
+  const { contacts: _contacts, salesAssignments: _sales, ...rest } = r;
   return {
-    ...raw,
+    ...(rest as unknown as BusinessPartnerRecord),
     legalType: normLegalType(r["legalType"]),
     businessCategory: strList(r["businessCategory"]),
     currencies,
@@ -297,20 +354,18 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
     creditLimit: str(r["creditLimit"]),
     creditLimitCurrency: str(r["creditLimitCurrency"]) || currency,
     note: str(r["note"]),
-    roles: (Array.isArray(raw.roles) ? raw.roles : []).filter(
-      (x): x is BpRole => x === "Customer" || x === "Vendor",
-    ),
-    contacts,
-    salesAssignments,
+    roles,
     licenseAdjustments: arr(r["licenseAdjustments"]) as unknown as BpLicenseAdjustment[],
     documents: arr(r["documents"]) as unknown as BpDocument[],
     customer: {
       creditTerms: arr(cust["creditTerms"]) as unknown as BpCreditTerm[],
       banks: arr(cust["banks"]) as unknown as BpBankAccount[],
+      ...perRole(cust, "Customer"),
     },
     vendor: {
       paymentTerms: arr(vend["paymentTerms"]) as unknown as BpPaymentTerm[],
       banks: arr(vend["banks"]) as unknown as BpBankAccount[],
+      ...perRole(vend, "Vendor"),
     },
   };
 }
@@ -319,14 +374,15 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
 export const draftOf = (r: BusinessPartnerRecord): BusinessPartnerDraft => {
   const d = structuredClone(normalizeBusinessPartner(r)) as BusinessPartnerDraft;
   const fill = <T>(rows: T[], blank: () => T) => (rows.length ? rows : [blank()]);
-  d.contacts = fill(d.contacts, blankContact);
-  d.salesAssignments = fill(d.salesAssignments, blankSalesman);
   d.licenseAdjustments = fill(d.licenseAdjustments, blankLicense);
   d.documents = fill(d.documents, blankDocument);
   d.customer.creditTerms = fill(d.customer.creditTerms, blankCredit);
-  d.customer.banks = fill(d.customer.banks, blankBank);
+  for (const p of [d.customer, d.vendor]) {
+    p.contacts = fill(p.contacts, blankContact);
+    p.banks = fill(p.banks, blankBank);
+    p.salesmen = fill(p.salesmen, blankSalesman);
+  }
   d.vendor.paymentTerms = fill(d.vendor.paymentTerms, blankPayment);
-  d.vendor.banks = fill(d.vendor.banks, blankBank);
   return d;
 };
 
@@ -368,7 +424,6 @@ export function validateBusinessPartner(
     if (empty) e[k] = tr(`Nhập ${vi}.`, `${en} is required.`);
   };
   req("legalType", "Legal Type", "Legal Type");
-  req("taxCode", "Tax Code", "Tax Code");
   req("localName", "Local Name", "Local Name");
   req("englishName", "English Name", "English Name");
   req("localAddress", "Local Address", "Local Address");
@@ -392,16 +447,28 @@ export function validateBusinessPartner(
   )
     e["bpCode"] = tr(`BP Code ${code} đã tồn tại.`, `BP Code ${code} already exists.`);
 
-  // Tax code (MST) is unique per tenant among non-deleted partners.
+  // Company: MST required (10 or 10+3 digits); Individual: CCCD required (12 digits);
+  // Representative: neither. Whatever is entered is unique per tenant among non-deleted partners.
   const tax = taxCodeKey(d.taxCode);
-  if (tax) {
+  const idLabel = taxIdLabel(d.legalType);
+  if (!tax) {
+    if (taxIdRequired(d.legalType))
+      e["taxCode"] = tr(`Nhập ${idLabel}.`, `${idLabel} is required.`);
+  } else if (d.legalType === "Company" && !MST.test(tax))
+    e["taxCode"] = tr(
+      "Mã số thuế gồm 10 số, hoặc 10 + 3 số với chi nhánh.",
+      "Tax Code should be 10 digits, or 10 + 3 digits for a branch.",
+    );
+  else if (d.legalType === "Individual" && !CCCD.test(tax))
+    e["taxCode"] = tr("Số CCCD gồm 12 số.", "Identity Number (CCCD) should be 12 digits.");
+  else {
     const dup = businessPartnerRepository
       .all()
       .find((b) => !b.deleted && b.id !== id && taxCodeKey(str(b.taxCode)) === tax);
     if (dup)
       e["taxCode"] = tr(
-        `Mã số thuế ${d.taxCode.trim()} đã được dùng cho ${dup.bpCode}.`,
-        `Tax Code ${d.taxCode.trim()} is already used by ${dup.bpCode}.`,
+        `${idLabel} ${d.taxCode.trim()} đã được dùng cho ${dup.bpCode}.`,
+        `${idLabel} ${d.taxCode.trim()} is already used by ${dup.bpCode}.`,
       );
   }
 
@@ -440,28 +507,17 @@ export function validateBusinessPartner(
       ["changeContent", "Change Content"],
     ]),
   );
-  set(
-    "contacts",
-    checkRows(d.contacts, blankContact, [["fullName", "Name"]], (r) =>
-      r.email && !EMAIL.test(r.email) ? tr("Email không hợp lệ.", "Invalid email.") : null,
-    ) ??
-      (pruned(d.contacts, blankContact).filter((c) => c.primaryContact).length > 1
-        ? tr("Chỉ được một liên hệ chính.", "Only one contact can be Primary.")
-        : null),
-  );
-  set(
-    "salesAssignments",
-    checkRows(d.salesAssignments, blankSalesman, [["staffName", "Staff"]], (r, live) =>
-      live.some((x) => x !== r && x.staffName === r.staffName && x.serviceCode === r.serviceCode)
-        ? tr(
-            "Nhân viên đã được phân công (cùng dịch vụ).",
-            "This staff is already assigned (same service).",
-          )
-        : null,
-    ),
-  );
-
-  const banks = (p: "customer" | "vendor") =>
+  /** Contact Info, Bank and Sales Assignment tables of one role tab. */
+  const banks = (p: "customer" | "vendor") => {
+    set(
+      `${p}.contacts`,
+      checkRows(d[p].contacts, blankContact, [["fullName", "Full Name"]], (r) =>
+        r.email && !EMAIL.test(r.email) ? tr("Email không hợp lệ.", "Invalid email.") : null,
+      ) ??
+        (pruned(d[p].contacts, blankContact).filter((c) => c.primaryContact).length > 1
+          ? tr("Chỉ được một liên hệ chính.", "Only one contact can be Primary.")
+          : null),
+    );
     set(
       `${p}.banks`,
       checkRows(d[p].banks, blankBank, [
@@ -471,6 +527,18 @@ export function validateBusinessPartner(
         ["accountNo", "Account No."],
       ]),
     );
+    set(
+      `${p}.salesmen`,
+      checkRows(d[p].salesmen, blankSalesman, [["staffName", "Staff"]], (r, live) =>
+        live.some((x) => x !== r && x.staffName === r.staffName && x.serviceCode === r.serviceCode)
+          ? tr(
+              "Nhân viên đã được phân công (cùng dịch vụ).",
+              "This staff is already assigned (same service).",
+            )
+          : null,
+      ),
+    );
+  };
   if (d.roles.includes("Customer")) {
     set(
       "customer.creditTerms",
@@ -595,19 +663,21 @@ export const businessPartnerService = {
       creditLimit: isCustomer ? d.creditLimit.trim() : "",
       creditLimitCurrency: isCustomer && d.creditLimit.trim() ? d.creditLimitCurrency : "",
       roles: roleOrder.filter((r) => d.roles.includes(r)),
-      contacts: pruned(d.contacts, blankContact),
-      salesAssignments: pruned(d.salesAssignments, blankSalesman),
       licenseAdjustments: pruned(d.licenseAdjustments, blankLicense).sort((a, b) =>
         b.adjustmentDate.localeCompare(a.adjustmentDate),
       ),
       documents: pruned(d.documents, blankDocument),
       customer: {
         creditTerms: pruned(d.customer.creditTerms, blankCredit),
+        contacts: pruned(d.customer.contacts, blankContact),
         banks: pruned(d.customer.banks, blankBank),
+        salesmen: pruned(d.customer.salesmen, blankSalesman),
       },
       vendor: {
         paymentTerms: pruned(d.vendor.paymentTerms, blankPayment),
+        contacts: pruned(d.vendor.contacts, blankContact),
         banks: pruned(d.vendor.banks, blankBank),
+        salesmen: pruned(d.vendor.salesmen, blankSalesman),
       },
     };
     const stored = id ? businessPartnerRepository.get(id) : undefined;
@@ -655,21 +725,14 @@ export const businessPartnerService = {
         newValue: next.roles.join(", "),
       });
     const tables = (r: BusinessPartnerRecord) =>
-      JSON.stringify([
-        r.contacts,
-        r.salesAssignments,
-        r.licenseAdjustments,
-        r.documents,
-        r.customer,
-        r.vendor,
-      ]);
+      JSON.stringify([r.licenseAdjustments, r.documents, r.customer, r.vendor]);
     if (tables(existing) !== tables(next))
       diffs.push({
         ...base,
         action: "UPDATE",
         entityId: next.id,
         entityLabel: next.bpCode,
-        field: "Tables (Contacts / Sales / License / Documents / Customer / Vendor)",
+        field: "Tables (Documents / License / Customer / Vendor)",
         oldValue: "",
         newValue: "Updated",
       });

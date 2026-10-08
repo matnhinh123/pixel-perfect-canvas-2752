@@ -60,6 +60,8 @@ export const CREDIT_TERMS = [
 ] as const;
 export const WO_ACCESS_POLICIES = ["Temporary Allow", "Approval Required"] as const;
 export const APPROVERS = ["Finance Manager", "Chief Accountant", "Finance Director"];
+export const GENDERS = ["Mr.", "Ms.", "Mrs."];
+/** Contact Role options. */
 export const CONTACT_POSITIONS = [
   "Director",
   "Operations Contact",
@@ -124,18 +126,50 @@ const sales = (rid: string, staffId: string, serviceCode = "", serviceName = "")
 };
 const contact = (rid: string, p: Partial<BpContact> & Pick<BpContact, "fullName">): BpContact => ({
   rid,
-  position: "",
-  phone: "",
+  serviceCode: "",
+  serviceName: "",
+  gender: "",
+  identityNo: "",
+  telephone: "",
+  mobilePhone: "",
+  contactRole: "",
   email: "",
+  address: "",
   primaryContact: false,
+  status: "Active",
   ...p,
 });
 
-type Seed = Partial<BusinessPartnerRecord> &
+/** Mock of the tax authority lookup behind "Get Info" (Company only): MST → registered name/address. */
+export const TAX_REGISTRY: Record<
+  string,
+  { localName: string; englishName: string; localAddress: string }
+> = {
+  "0312345678": {
+    localName: "Công ty TNHH Điện tử Sao Việt",
+    englishName: "Sao Viet Electronics Co., Ltd",
+    localAddress: "Lô C5, KCN Tân Thuận, Quận 7, TP. Hồ Chí Minh",
+  },
+  "0301234567": {
+    localName: "Công ty Cổ phần Vận tải Biển Phương Nam",
+    englishName: "Phuong Nam Shipping Joint Stock Company",
+    localAddress: "12 Tôn Đức Thắng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+  },
+  "0105678901": {
+    localName: "Công ty TNHH Thương mại Hà Thành",
+    englishName: "Ha Thanh Trading Company Limited",
+    localAddress: "88 Láng Hạ, Quận Đống Đa, Hà Nội",
+  },
+};
+
+type Seed = Partial<Omit<BusinessPartnerRecord, "customer" | "vendor">> &
   Pick<
     BusinessPartnerRecord,
     "id" | "bpCode" | "taxCode" | "invoiceSerial" | "localName" | "englishName" | "email"
-  >;
+  > & {
+    customer?: Partial<BusinessPartnerRecord["customer"]>;
+    vendor?: Partial<BusinessPartnerRecord["vendor"]>;
+  };
 
 const bp = (s: Seed, at = SEED_TIME): BusinessPartnerRecord => ({
   status: "Active",
@@ -162,14 +196,12 @@ const bp = (s: Seed, at = SEED_TIME): BusinessPartnerRecord => ({
   creditLimitCurrency: "VND",
   note: "",
   roles: ["Customer"],
-  contacts: [],
-  salesAssignments: [],
   licenseAdjustments: [],
   documents: [],
-  customer: { creditTerms: [], banks: [] },
-  vendor: { paymentTerms: [], banks: [] },
   ...meta(at),
   ...s,
+  customer: { creditTerms: [], contacts: [], banks: [], salesmen: [], ...s.customer },
+  vendor: { paymentTerms: [], contacts: [], banks: [], salesmen: [], ...s.vendor },
 });
 
 export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
@@ -185,19 +217,24 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
       localAddress: "45 Nguyễn Thị Minh Khai, Quận 1, TP.HCM",
       roles: ["Customer"],
       creditLimit: "500000000",
-      contacts: [
-        contact("k1", {
-          fullName: "Lê Minh Tuấn",
-          position: "Operations Contact",
-          phone: "0938 345 678",
-          email: "tuan.le@example.com",
-          primaryContact: true,
-        }),
-      ],
-      salesAssignments: [sales("s1", "E-006", "FRT-SEA", "Sea Freight")],
       customer: {
         creditTerms: [credit("c1", { serviceCode: "FRT-SEA", serviceName: "Sea Freight" })],
-        banks: [],
+        contacts: [
+          contact("k1", {
+            serviceCode: "FRT-SEA",
+            serviceName: "Sea Freight",
+            gender: "Mr.",
+            fullName: "Lê Minh Tuấn",
+            identityNo: "079088009876",
+            telephone: "028 3822 4569",
+            mobilePhone: "0938 345 678",
+            contactRole: "Documentation Contact",
+            email: "tuan.le@example.com",
+            address: "25 Nguyễn Công Trứ, TP.HCM",
+            primaryContact: true,
+          }),
+        ],
+        salesmen: [sales("s1", "E-006", "FRT-SEA", "Sea Freight")],
       },
     },
     "2026-05-04T03:00:00.000Z",
@@ -293,23 +330,35 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
       businessCategory: ["Logistics", "Customs Broker"],
       creditLimit: "750000000",
       note: "Key account — trucking and customs.",
-      contacts: [
-        contact("k1", {
-          fullName: "Nguyễn Văn Hùng",
-          position: "Operations Contact",
-          phone: "0909 123 456",
-          email: "hung.nguyen@example.com",
-          primaryContact: true,
-        }),
-        contact("k2", {
-          fullName: "Trần Thị Lan",
-          position: "Customs Contact",
-          phone: "0918 234 567",
-          email: "lan.tran@example.com",
-        }),
-      ],
-      salesAssignments: [sales("s1", "E-006", "TRK-IN", "Inland Trucking"), sales("s2", "E-001")],
       customer: {
+        contacts: [
+          contact("k1", {
+            serviceCode: "TRK-IN",
+            serviceName: "Inland Trucking",
+            gender: "Mr.",
+            fullName: "Nguyễn Văn Hùng",
+            identityNo: "079085001234",
+            telephone: "028 3822 4567",
+            mobilePhone: "0909 123 456",
+            contactRole: "Operations Contact",
+            email: "hung.nguyen@example.com",
+            address: "12 Nguyễn Thị Minh Khai, TP.HCM",
+            primaryContact: true,
+          }),
+          contact("k2", {
+            serviceCode: "CUS-IM",
+            serviceName: "Import Customs",
+            gender: "Ms.",
+            fullName: "Trần Thị Lan",
+            identityNo: "079190006789",
+            telephone: "028 3822 4568",
+            mobilePhone: "0918 234 567",
+            contactRole: "Customs Contact",
+            email: "lan.tran@example.com",
+            address: "18 Tôn Đức Thắng, TP.HCM",
+          }),
+        ],
+        salesmen: [sales("s1", "E-006", "TRK-IN", "Inland Trucking"), sales("s2", "E-001")],
         creditTerms: [
           credit("c1", {
             serviceCode: "TRK-IN",
@@ -373,7 +422,18 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             currency: "USD",
           }),
         ],
+        contacts: [
+          contact("k1", {
+            gender: "Ms.",
+            fullName: "Phạm Thu Hà",
+            mobilePhone: "0903 456 789",
+            contactRole: "Accounting Contact",
+            email: "ha.pham@example.com",
+            primaryContact: true,
+          }),
+        ],
         banks: [],
+        salesmen: [sales("s1", "E-001", "TRK-IN", "Inland Trucking")],
       },
     },
     "2026-07-20T03:00:00.000Z",

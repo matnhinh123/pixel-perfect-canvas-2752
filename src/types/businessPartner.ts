@@ -59,7 +59,7 @@ export interface BpPaymentTerm extends Row {
   status: "Active" | "Inactive";
 }
 
-/** Sales Assignment (profile level): staff from the staff master; the service is optional. */
+/** Sales Assignment of one role: staff from the staff master; the service is optional. */
 export interface BpSalesman extends Row {
   staffId: string;
   staffName: string;
@@ -69,13 +69,21 @@ export interface BpSalesman extends Row {
   remark: string;
 }
 
-/** Contact person of the partner (profile level). */
+/** Contact person of one role (Customer or Vendor); the service is optional. */
 export interface BpContact extends Row {
+  serviceCode: string;
+  serviceName: string;
+  gender: string;
   fullName: string;
-  position: string;
-  phone: string;
+  identityNo: string;
+  telephone: string;
+  mobilePhone: string;
+  contactRole: string;
   email: string;
+  address: string;
+  /** One primary contact per role. */
   primaryContact: boolean;
+  status: "Active" | "Inactive";
 }
 
 export interface BpBankAccount extends Row {
@@ -95,7 +103,9 @@ export interface BpBankAccount extends Row {
  * Each role keeps its own bank accounts; Customer and Vendor never share one.
  */
 export interface BpRoleProfile {
+  contacts: BpContact[];
   banks: BpBankAccount[];
+  salesmen: BpSalesman[];
 }
 export interface BpCustomerProfile extends BpRoleProfile {
   creditTerms: BpCreditTerm[];
@@ -109,7 +119,7 @@ export interface BusinessPartnerRecord extends BaseRecord {
   bpCode: string;
   legalType: BpLegalType | "";
   inHouse: boolean;
-  /** Tax code (MST): unique per tenant among non-deleted partners. */
+  /** Company: Tax Code (MST); Individual: Identity Number (CCCD). Unique per tenant among non-deleted partners. */
   taxCode: string;
   form: string;
   invoiceSerial: string;
@@ -142,8 +152,6 @@ export interface BusinessPartnerRecord extends BaseRecord {
   creditLimitCurrency: string;
   note: string;
   roles: BpRole[];
-  contacts: BpContact[];
-  salesAssignments: BpSalesman[];
   licenseAdjustments: BpLicenseAdjustment[];
   documents: BpDocument[];
   customer: BpCustomerProfile;

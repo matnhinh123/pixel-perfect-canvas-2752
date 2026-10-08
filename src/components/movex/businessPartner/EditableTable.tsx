@@ -30,7 +30,6 @@ const cell =
  */
 export function EditableTable<T extends { rid: string }>({
   title,
-  note,
   rows,
   onChange,
   blank,
@@ -40,7 +39,6 @@ export function EditableTable<T extends { rid: string }>({
   error,
 }: {
   title: string;
-  note?: ReactNode;
   rows: T[];
   onChange: (rows: T[]) => void;
   blank: () => T;
@@ -123,15 +121,7 @@ export function EditableTable<T extends { rid: string }>({
   return (
     <div className="rounded-xl border bg-card-header/40 p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <h3 className="flex items-center gap-2 text-base font-semibold text-card-title">
-            {title}
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-              {rows.length}
-            </span>
-          </h3>
-          {note && <p className="mt-0.5 text-xs text-muted-foreground">{note}</p>}
-        </div>
+        <h3 className="text-base font-semibold text-card-title">{title}</h3>
         <Button
           size="sm"
           type="button"

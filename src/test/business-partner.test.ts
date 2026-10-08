@@ -68,8 +68,44 @@ describe("Profile rules", () => {
     expect(n.legalType).toBe("Company");
     expect(n.businessCategory).toEqual(["Trading"]);
     expect(n.currencies).toEqual(["VND"]);
-    expect(n.contacts[0]).toMatchObject({ fullName: "A", phone: "09", position: "Sales Contact" });
-    expect(n.salesAssignments[0]).toMatchObject({ staffId: "E-002", staffName: "Lê Thị Hoa" });
-    expect(n.customer).not.toHaveProperty("contacts");
+    expect(n.customer.contacts[0]).toMatchObject({
+      fullName: "A",
+      mobilePhone: "09",
+      contactRole: "Sales Contact",
+    });
+    expect(n.customer.salesmen[0]).toMatchObject({ staffId: "E-002", staffName: "Lê Thị Hoa" });
+    expect(n).not.toHaveProperty("contacts");
+  });
+
+  it("moves the shared contact list into every role the partner has", () => {
+    const old = {
+      ...seedBusinessPartners()[0]!,
+      roles: ["Customer", "Vendor"],
+      contacts: [{ rid: "x", fullName: "B", phone: "08", position: "Director" }],
+      salesAssignments: [],
+      customer: { creditTerms: [], banks: [] },
+      vendor: { paymentTerms: [], banks: [] },
+    } as unknown as BusinessPartnerRecord;
+    const n = normalizeBusinessPartner(old);
+    expect(n.customer.contacts[0]?.fullName).toBe("B");
+    expect(n.vendor.contacts[0]?.fullName).toBe("B");
+    expect(n).not.toHaveProperty("salesAssignments");
+  });
+
+  it("requires Tax Code for a Company, Identity Number for an Individual, neither for a Representative", () => {
+    const d = { ...newBusinessPartnerDraft(), taxCode: "" };
+    expect(validateBusinessPartner({ ...d, legalType: "Company" })["taxCode"]).toBeTruthy();
+    expect(validateBusinessPartner({ ...d, legalType: "Individual" })["taxCode"]).toBeTruthy();
+    expect(
+      validateBusinessPartner({ ...d, legalType: "Representative" })["taxCode"],
+    ).toBeUndefined();
+    expect(
+      validateBusinessPartner({ ...d, legalType: "Individual", taxCode: "079085001234" })[
+        "taxCode"
+      ],
+    ).toBeUndefined();
+    expect(
+      validateBusinessPartner({ ...d, legalType: "Individual", taxCode: "0312" })["taxCode"],
+    ).toBeTruthy();
   });
 });
