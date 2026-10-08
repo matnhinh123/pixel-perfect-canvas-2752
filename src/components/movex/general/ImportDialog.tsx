@@ -30,12 +30,11 @@ import { Tag, thClass } from "@/components/movex/common";
 import { useConfirm } from "./ConfirmDialog";
 import {
   commitImport,
-  downloadFile,
-  errorFileCsv,
-  parseCsv,
+  downloadErrorFile,
+  downloadTable,
+  downloadTemplate,
+  readImportFile,
   rollbackImport,
-  templateCsv,
-  toCsv,
   validateImport,
   type ImportEntityConfig,
   type ImportValidation,
@@ -124,8 +123,19 @@ export function ImportDialog({
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
-    const text = /\.csv$/i.test(f.name) ? await f.text() : "";
-    runValidation(f.name, parseCsv(text));
+    let table: string[][];
+    try {
+      table = await readImportFile(f);
+    } catch {
+      toast.error(
+        t(
+          `Không đọc được file "${f.name}". Hãy mở bằng Excel và lưu lại dạng .xlsx.`,
+          `Could not read "${f.name}". Open it in Excel and save it again as .xlsx.`,
+        ),
+      );
+      return;
+    }
+    runValidation(f.name, table);
   };
 
   const doImport = () => {
@@ -172,8 +182,8 @@ export function ImportDialog({
           <DialogTitle>Import {entityLabel}</DialogTitle>
           <DialogDescription>
             {t(
-              "Import file Excel (CSV) với 5 bước kiểm tra. Dòng lỗi không bao giờ bị import âm thầm.",
-              "Import an Excel (CSV) file with 5 validation steps. Invalid rows are never imported silently.",
+              "Import file Excel (.xlsx) hoặc CSV với 5 bước kiểm tra. Dòng lỗi không bao giờ bị import âm thầm.",
+              "Import an Excel (.xlsx) or CSV file with 5 validation steps. Invalid rows are never imported silently.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -220,7 +230,7 @@ export function ImportDialog({
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        downloadFile(`${config.screen}_import_template.csv`, templateCsv(config));
+                        void downloadTemplate(config);
                         setStep(1);
                       }}
                     >
@@ -232,7 +242,7 @@ export function ImportDialog({
                       size="sm"
                       onClick={() => {
                         const [h, ...rows] = config.sampleFile();
-                        downloadFile(`${config.screen}_sample_20rows.csv`, toCsv(h!, rows));
+                        void downloadTable(`${config.screen}_sample_20rows`, h!, rows);
                       }}
                     >
                       <FileSpreadsheet className="h-4 w-4" />
@@ -243,13 +253,17 @@ export function ImportDialog({
                 <div className="rounded-lg border border-dashed p-4">
                   <div className="mb-1 text-sm font-semibold">2. Upload file Excel</div>
                   <p className="mb-3 text-xs text-muted-foreground">
-                    {t("Lưu sheet Excel dạng", "Save the Excel sheet as")} <b>CSV UTF-8</b>{" "}
-                    {t("rồi upload tại đây.", "and upload it here.")}
+                    {t("Chấp nhận file Excel", "Accepts Excel")} <b>.xlsx</b> {t("hoặc", "or")}{" "}
+                    <b>.csv</b>{" "}
+                    {t(
+                      "(đọc sheet đầu tiên, dòng 1 là tiêu đề cột).",
+                      "(first sheet, row 1 = column headers).",
+                    )}
                   </p>
                   <input
                     ref={fileRef}
                     type="file"
-                    accept=".csv,.xlsx,.xls"
+                    accept=".xlsx,.csv"
                     className="hidden"
                     onChange={(e) => {
                       void onFile(e.target.files?.[0]);
@@ -265,7 +279,7 @@ export function ImportDialog({
                       variant="secondary"
                       size="sm"
                       onClick={() =>
-                        runValidation(`${config.screen}_sample_20rows.csv`, config.sampleFile())
+                        runValidation(`${config.screen}_sample_20rows.xlsx`, config.sampleFile())
                       }
                     >
                       {t("Dùng file demo (20 dòng)", "Use demo file (20 rows)")}
@@ -333,12 +347,7 @@ export function ImportDialog({
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              downloadFile(
-                                `${config.screen}_import_errors.csv`,
-                                errorFileCsv(result),
-                              )
-                            }
+                            onClick={() => void downloadErrorFile(config, result)}
                           >
                             <Download className="h-4 w-4" />
                             {t("Tải file lỗi", "Download error file")}

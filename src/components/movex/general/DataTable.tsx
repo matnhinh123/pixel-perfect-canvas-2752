@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -40,6 +40,7 @@ export function DataTable<T extends { id: string }>({
   onSort,
   widths,
   onResize,
+  onReorder,
   selected,
   onToggle,
   onToggleAll,
@@ -60,6 +61,8 @@ export function DataTable<T extends { id: string }>({
   onSort: (s: SortState | null) => void;
   widths: Record<string, number>;
   onResize: (key: string, w: number) => void;
+  /** Header drag & drop: move column `from` before (or `after`) column `to`. */
+  onReorder?: (from: string, to: string, after: boolean) => void;
   selected?: Set<string>;
   onToggle?: (id: string) => void;
   onToggleAll?: (ids: string[], on: boolean) => void;
@@ -76,6 +79,17 @@ export function DataTable<T extends { id: string }>({
   const allOn = !!selected && ids.length > 0 && ids.every((id) => selected.has(id));
   const someOn = !!selected && ids.some((id) => selected.has(id));
   const drag = useRef<{ key: string; x: number; w: number } | null>(null);
+  // Column being dragged, and where it would land (before / after the hovered header).
+  const [moving, setMoving] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<{ key: string; after: boolean } | null>(null);
+  const endMove = () => {
+    setMoving(null);
+    setDropAt(null);
+  };
+  const sideOf = (e: React.DragEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return e.clientX > r.left + r.width / 2;
+  };
 
   const startResize = (e: React.MouseEvent, key: string) => {
     e.preventDefault();
@@ -126,12 +140,51 @@ export function DataTable<T extends { id: string }>({
                 const sortable = c.sortable !== false;
                 const active = sort?.key === c.key;
                 const w = widths[c.key] ?? c.width;
+                const target = dropAt?.key === c.key && moving !== c.key ? dropAt : null;
                 return (
                   <TableHead
                     key={c.key}
-                    className={cn(thClass, "group relative select-none", !w && "whitespace-nowrap")}
+                    className={cn(
+                      thClass,
+                      "group relative select-none",
+                      !w && "whitespace-nowrap",
+                      onReorder && "cursor-grab active:cursor-grabbing",
+                      moving === c.key && "opacity-40",
+                    )}
                     style={w ? { width: w, minWidth: w } : undefined}
+                    {...(onReorder && {
+                      draggable: true,
+                      title: t("Kéo để đổi vị trí cột", "Drag to move the column"),
+                      onDragStart: (e: React.DragEvent) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", c.key);
+                        setMoving(c.key);
+                      },
+                      onDragOver: (e: React.DragEvent) => {
+                        if (!moving) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        const after = sideOf(e);
+                        if (dropAt?.key !== c.key || dropAt.after !== after)
+                          setDropAt({ key: c.key, after });
+                      },
+                      onDrop: (e: React.DragEvent) => {
+                        e.preventDefault();
+                        if (moving && moving !== c.key) onReorder(moving, c.key, sideOf(e));
+                        endMove();
+                      },
+                      onDragEnd: endMove,
+                    })}
                   >
+                    {target && (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "pointer-events-none absolute inset-y-1 w-0.5 rounded bg-primary",
+                          target.after ? "right-0" : "left-0",
+                        )}
+                      />
+                    )}
                     {sortable ? (
                       <button
                         type="button"

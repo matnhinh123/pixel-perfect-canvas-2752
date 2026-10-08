@@ -12,11 +12,23 @@ import type {
   BpSalesman,
   BusinessPartnerRecord,
 } from "@/types";
+import { BP_ROLES } from "@/types";
 import { EMPLOYEES, departmentName } from "@/mock-data/staff";
-import { LEGAL_TYPES, TAX_REGISTRY, TENANT_DEFAULT_CURRENCY } from "@/mock-data/businessPartners";
+import {
+  BUSINESS_CATEGORIES,
+  COUNTRIES,
+  CURRENCIES,
+  LEGAL_TYPES,
+  PARTNER_GROUPS,
+  PARTNER_SCOPES,
+  SERVICE_PROVIDER_TYPES,
+  TAX_REGISTRY,
+  TENANT_DEFAULT_CURRENCY,
+} from "@/mock-data/businessPartners";
 import { tr } from "@/lib/i18n";
 import { auditService } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
+import { draftImportConfig, listCell, pick } from "./importExportService";
 
 export const bpCrud = makeCrud<BusinessPartnerRecord>({
   entityType: "Business Partner",
@@ -740,3 +752,190 @@ export const businessPartnerService = {
     return next;
   },
 };
+
+// ---------------------------------------------------------------- Import
+
+const STATUSES = ["Active", "Inactive"] as const;
+/** Each item of a multi-value cell matched case-insensitively; unknown items come back as null. */
+const pickAll = <T extends string>(v: string | undefined, allowed: readonly T[]) =>
+  listCell(v).map((x) => pick(x, allowed) || null);
+
+const bpDraftOfRow = (r: Record<string, string>): BusinessPartnerDraft => {
+  const currency = pick(r["currency"], CURRENCIES) || TENANT_DEFAULT_CURRENCY;
+  const localAddress = r["localAddress"] ?? "";
+  const creditLimit = (r["creditLimit"] ?? "").replace(/[\s,]/g, "");
+  return {
+    ...newBusinessPartnerDraft(),
+    bpCode: sanitizeBpCode(r["bpCode"] ?? ""),
+    legalType: pick(r["legalType"], LEGAL_TYPES) || "",
+    roles: pickAll(r["roles"], BP_ROLES).filter((x): x is BpRole => !!x),
+    taxCode: r["taxCode"] ?? "",
+    localName: r["localName"] ?? "",
+    englishName: r["englishName"] ?? "",
+    localAddress,
+    // Same pre-fill as the form when the English address is left empty.
+    englishAddress: r["englishAddress"] || toEnglishAddress(localAddress),
+    country: pick(r["country"], COUNTRIES) || "",
+    province: r["province"] ?? "",
+    postcode: r["postcode"] ?? "",
+    email: r["email"] ?? "",
+    phone: r["phone"] ?? "",
+    currency,
+    currencies: [currency],
+    businessCategory: pickAll(r["businessCategory"], BUSINESS_CATEGORIES).filter(
+      (x): x is string => !!x,
+    ),
+    partnerGroup: pick(r["partnerGroup"], PARTNER_GROUPS) || "",
+    partnerScope: pick(r["partnerScope"], PARTNER_SCOPES) || "",
+    serviceProviderType: pick(r["serviceProviderType"], SERVICE_PROVIDER_TYPES) || "",
+    defaultPaymentTerm: r["defaultPaymentTerm"] ?? "",
+    creditLimit,
+    creditLimitCurrency: creditLimit ? currency : "",
+    note: r["note"] ?? "",
+    status: pick(r["status"], STATUSES) || "Active",
+  };
+};
+
+const oneOf = (label: string, values: readonly string[]) => `${label}: ${values.join(", ")}`;
+
+/** Profile fields only; contacts, banks, credit / payment terms are added on the detail page. */
+export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraft>({
+  entityType: "Business Partner",
+  screen: "business-partner",
+  keyColumn: "bpCode",
+  columns: [
+    { key: "bpCode", header: "BP Code", required: true, example: "ABC-LOGISTICS" },
+    { key: "legalType", header: "Legal Type", required: true, example: "Company" },
+    {
+      key: "roles",
+      header: "Role",
+      required: true,
+      example: "Customer; Vendor",
+      aliases: ["Roles", "Vai trò"],
+    },
+    {
+      key: "taxCode",
+      header: "Tax Code",
+      required: true,
+      example: "0312345678",
+      aliases: ["Tax ID", "Mã số thuế"],
+    },
+    {
+      key: "localName",
+      header: "Local Name",
+      required: true,
+      example: "Công ty TNHH ABC Logistics",
+    },
+    {
+      key: "englishName",
+      header: "English Name",
+      required: true,
+      example: "ABC Logistics Co., Ltd",
+    },
+    {
+      key: "localAddress",
+      header: "Local Address",
+      required: true,
+      example: "12 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh",
+    },
+    { key: "englishAddress", header: "English Address", example: "" },
+    { key: "country", header: "Country", required: true, example: "Vietnam" },
+    { key: "province", header: "Province", example: "TP. Hồ Chí Minh" },
+    { key: "postcode", header: "Postcode", example: "" },
+    { key: "email", header: "Email", example: "contact@abc.vn" },
+    { key: "phone", header: "Phone", example: "028 3823 0000" },
+    { key: "currency", header: "Currency", example: "VND" },
+    {
+      key: "businessCategory",
+      header: "Business Category",
+      required: true,
+      example: "Logistics; Trading",
+    },
+    { key: "partnerGroup", header: "Partner Group", required: true, example: "SME" },
+    { key: "partnerScope", header: "Partner Scope", example: "Domestic", aliases: ["Scope"] },
+    {
+      key: "serviceProviderType",
+      header: "Service Provider Type",
+      example: "",
+      aliases: ["Provider Type"],
+    },
+    {
+      key: "defaultPaymentTerm",
+      header: "Payment Term",
+      example: "",
+      aliases: ["Default Payment Term"],
+    },
+    { key: "creditLimit", header: "Credit Limit", example: "" },
+    { key: "status", header: "Status", example: "Active", aliases: ["Trạng thái"] },
+    { key: "note", header: "Note", example: "", aliases: ["Notes"] },
+  ],
+  existingKeys: () =>
+    new Set(
+      businessPartnerRepository
+        .all()
+        .filter((b) => !b.deleted)
+        .map((b) => b.bpCode.toLowerCase()),
+    ),
+  parseCheck: (r) => {
+    const e: { field: string; error: string }[] = [];
+    const one = (k: string, values: readonly string[], label = "Use one of") => {
+      if (pick(r[k], values) === undefined) e.push({ field: k, error: oneOf(label, values) });
+    };
+    one("legalType", LEGAL_TYPES);
+    one("country", COUNTRIES);
+    one("currency", CURRENCIES);
+    one("partnerGroup", PARTNER_GROUPS);
+    one("partnerScope", PARTNER_SCOPES);
+    one("serviceProviderType", SERVICE_PROVIDER_TYPES);
+    one("status", STATUSES);
+    if (pickAll(r["roles"], BP_ROLES).includes(null))
+      e.push({ field: "roles", error: oneOf("Use", BP_ROLES) + " (separate with ;)" });
+    if (pickAll(r["businessCategory"], BUSINESS_CATEGORIES).includes(null))
+      e.push({
+        field: "businessCategory",
+        error: oneOf("Use", BUSINESS_CATEGORIES) + " (separate with ;)",
+      });
+    const code = (r["bpCode"] ?? "").trim().toUpperCase();
+    if (code && sanitizeBpCode(code) !== code)
+      e.push({ field: "bpCode", error: "Only A–Z, 0–9, dot, hyphen, underscore (max 50)" });
+    return e;
+  },
+  toDraft: bpDraftOfRow,
+  validate: (d) => validateBusinessPartner(d),
+  save: (d) => businessPartnerService.save(d),
+  rollback: (ids) => bpCrud.removeMany(ids),
+  sampleRows: () => {
+    const rows = Array.from({ length: 20 }, (_, i) => {
+      const n = String(i + 1).padStart(2, "0");
+      const vendor = i % 3 === 1;
+      return [
+        `IMP-BP${n}`,
+        "Company",
+        vendor ? "Vendor" : i % 3 === 2 ? "Customer; Vendor" : "Customer",
+        `0399${String(100000 + i)}`,
+        `Công ty TNHH Nhập Mẫu ${n}`,
+        `Sample Import ${n} Co., Ltd`,
+        `${i + 1} Lê Lợi, Quận 1, TP. Hồ Chí Minh`,
+        "",
+        "Vietnam",
+        "TP. Hồ Chí Minh",
+        "",
+        `contact${n}@sample.vn`,
+        "",
+        "VND",
+        vendor ? "Logistics" : "Trading; Retail",
+        vendor ? "Carrier" : "SME",
+        "Domestic",
+        vendor ? "Trucking" : "",
+        "",
+        "",
+        i % 8 === 7 ? "Inactive" : "Active",
+        "",
+      ];
+    });
+    rows[4]![0] = "IMP-BP01"; // duplicate BP Code
+    rows[10]![2] = "Partner"; // unknown role
+    rows[15]![11] = "not-an-email"; // invalid email
+    return rows;
+  },
+});
