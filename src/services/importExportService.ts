@@ -14,8 +14,12 @@ const esc = (v: unknown) => {
 export const toCsv = (headers: string[], rows: unknown[][]) =>
   BOM + [headers, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
 
-export function downloadFile(fileName: string, content: string, mime = "text/csv;charset=utf-8") {
-  const blob = new Blob([content], { type: mime });
+export function downloadFile(
+  fileName: string,
+  content: string | Blob,
+  mime = "text/csv;charset=utf-8",
+) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -59,18 +63,99 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
+// ---------- Excel (.xlsx) helpers — exceljs is loaded on first use only ----------
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const loadExcel = async () => (await import("exceljs")).default;
+
+export type FileFormat = "xlsx" | "csv";
+
+/** One-sheet workbook: bold, frozen header row; column widths follow the content. */
+export async function toXlsx(headers: string[], rows: unknown[][], sheetName = "Data") {
+  const Excel = await loadExcel();
+  const wb = new Excel.Workbook();
+  const ws = wb.addWorksheet(sheetName.slice(0, 31), { views: [{ state: "frozen", ySplit: 1 }] });
+  ws.addRow(headers).font = { bold: true };
+  rows.forEach((r) => ws.addRow(r.map((v) => (v == null ? "" : v))));
+  ws.columns.forEach((col, i) => {
+    const longest = Math.max(
+      String(headers[i] ?? "").length,
+      ...rows.slice(0, 200).map((r) => String(r[i] ?? "").length),
+    );
+    col.width = Math.min(60, Math.max(10, longest + 2));
+  });
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], { type: XLSX_MIME });
+}
+
+const ymd = (d: Date) =>
+  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+
+/** Cell → text as the user sees it (dates as YYYY-MM-DD, formulas as their result). */
+function cellText(v: unknown): string {
+  if (v == null) return "";
+  if (v instanceof Date) return ymd(v);
+  if (typeof v === "object") {
+    const o = v as { result?: unknown; text?: unknown; richText?: { text: string }[] };
+    if (o.richText) return o.richText.map((x) => x.text).join("");
+    if ("result" in o) return cellText(o.result);
+    if (o.text != null) return cellText(o.text);
+    return "";
+  }
+  return String(v);
+}
+
+/** First worksheet of an .xlsx file as a table of trimmed-safe strings (blank rows dropped). */
+export async function parseXlsx(data: ArrayBuffer): Promise<string[][]> {
+  const Excel = await loadExcel();
+  const wb = new Excel.Workbook();
+  await wb.xlsx.load(data);
+  const ws = wb.worksheets[0];
+  if (!ws) return [];
+  const out: string[][] = [];
+  ws.eachRow({ includeEmpty: false }, (row) => {
+    const cells: string[] = [];
+    for (let c = 1; c <= ws.columnCount; c++) cells.push(cellText(row.getCell(c).value));
+    out.push(cells);
+  });
+  return out.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
+/** Reads an uploaded import file (.xlsx or .csv); other types come back empty and fail validation. */
+export async function readImportFile(f: File): Promise<string[][]> {
+  if (/\.xlsx$/i.test(f.name)) return parseXlsx(await f.arrayBuffer());
+  if (/\.csv$/i.test(f.name)) return parseCsv(await f.text());
+  return [];
+}
+
+/** Downloads a table as Excel (.xlsx) or CSV. `fileBase` has no extension. */
+export async function downloadTable(
+  fileBase: string,
+  headers: string[],
+  rows: unknown[][],
+  format: FileFormat = "xlsx",
+) {
+  const fileName = `${fileBase}.${format}`;
+  downloadFile(fileName, format === "xlsx" ? await toXlsx(headers, rows) : toCsv(headers, rows));
+  return fileName;
+}
+
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
 
 // ---------- Export ----------
-export function exportView(opts: {
+export async function exportView(opts: {
   entityType: EntityType;
   screen: string;
   headers: string[];
   rows: unknown[][];
   scope: string;
+  format?: FileFormat;
 }) {
-  const fileName = `${opts.screen}_${stamp()}.csv`;
-  downloadFile(fileName, toCsv(opts.headers, opts.rows));
+  const fileName = await downloadTable(
+    `${opts.screen}_${stamp()}`,
+    opts.headers,
+    opts.rows,
+    opts.format ?? "xlsx",
+  );
   auditService.log({
     action: "EXPORT",
     entityType: opts.entityType,
@@ -97,6 +182,8 @@ export interface ImportColumn {
   header: string;
   required?: boolean;
   example?: string;
+  /** Other accepted headers, e.g. the list's own column labels so an exported file imports back. */
+  aliases?: string[];
 }
 
 export interface ImportEntityConfig {
@@ -124,8 +211,9 @@ export interface ImportValidation {
   structureError: string | null;
 }
 
-export function templateCsv(cfg: ImportEntityConfig) {
-  return toCsv(
+export function downloadTemplate(cfg: ImportEntityConfig) {
+  return downloadTable(
+    `${cfg.screen}_import_template`,
     cfg.columns.map((c) => c.header),
     [cfg.columns.map((c) => c.example ?? "")],
   );
@@ -138,17 +226,23 @@ export function validateImport(
 ): ImportValidation {
   const base = { fileName, validRows: [], errors: [] as ImportError[], invalidRowCount: 0 };
   // 1. File structure
-  if (!/\.csv$/i.test(fileName))
+  if (!/\.(xlsx|csv)$/i.test(fileName))
     return {
       ...base,
       totalRows: 0,
-      structureError:
-        "Unsupported file type. This demo accepts .csv exported from Excel (File → Save As → CSV UTF-8).",
+      structureError: /\.xls$/i.test(fileName)
+        ? "Old Excel 97–2003 (.xls) files are not supported. Open the file in Excel and save it as .xlsx."
+        : "Unsupported file type. Upload an Excel file (.xlsx) or a CSV file.",
     };
   const [header, ...data] = table;
   if (!header) return { ...base, totalRows: 0, structureError: "File is empty." };
   const norm = header.map((h) => h.trim().toLowerCase());
-  const missing = cfg.columns.filter((c) => !norm.includes(c.header.toLowerCase()));
+  // Column position by header or alias; only required columns must be present.
+  const indexOf = (c: ImportColumn) =>
+    [c.header, ...(c.aliases ?? [])]
+      .map((h) => norm.indexOf(h.toLowerCase()))
+      .find((i) => i >= 0) ?? -1;
+  const missing = cfg.columns.filter((c) => c.required && indexOf(c) < 0);
   if (missing.length)
     return {
       ...base,
@@ -158,7 +252,10 @@ export function validateImport(
 
   const rows = data.map((cells) =>
     Object.fromEntries(
-      cfg.columns.map((c) => [c.key, (cells[norm.indexOf(c.header.toLowerCase())] ?? "").trim()]),
+      cfg.columns.map((c) => {
+        const i = indexOf(c);
+        return [c.key, i < 0 ? "" : (cells[i] ?? "").trim()];
+      }),
     ),
   );
   const headerOf = (key: string) => cfg.columns.find((c) => c.key === key)?.header ?? key;
@@ -212,11 +309,103 @@ export function validateImport(
   };
 }
 
-export function errorFileCsv(v: ImportValidation) {
-  return toCsv(
+export function downloadErrorFile(cfg: ImportEntityConfig, v: ImportValidation) {
+  return downloadTable(
+    `${cfg.screen}_import_errors`,
     ["Row", "Field", "Value", "Error", "Validation step"],
     v.errors.map((e) => [e.row, e.field, e.value, e.error, e.stage]),
   );
+}
+
+// ---------- Draft-based import (entities that already have a form draft + validate + save) ----------
+type FieldError = { field: string; error: string };
+
+/** Cell → number for a draft; empty → NaN (e.g. optional coordinates). */
+export const numCell = (v: string | undefined) => {
+  const s = (v ?? "").trim().replace(/\s/g, "");
+  return s ? Number(s.replace(",", ".")) : NaN;
+};
+
+/** Date cell → YYYY-MM-DD. Accepts YYYY-MM-DD and DD/MM/YYYY (also with - or .); "" if unreadable. */
+export function dateCell(v: string | undefined): string {
+  const s = (v ?? "").trim();
+  if (!s) return "";
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if (m) return `${m[1]}-${m[2]!.padStart(2, "0")}-${m[3]!.padStart(2, "0")}`;
+  m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s);
+  if (m) return `${m[3]}-${m[2]!.padStart(2, "0")}-${m[1]!.padStart(2, "0")}`;
+  return "";
+}
+
+/** Case-insensitive match of a cell against allowed values: canonical value, "" if empty, undefined if unknown. */
+export const pick = <T extends string>(
+  v: string | undefined,
+  allowed: readonly T[],
+): T | "" | undefined => {
+  const s = (v ?? "").trim().toLowerCase();
+  return s ? allowed.find((a) => a.toLowerCase() === s) : "";
+};
+
+/** "A; B, C" → ["A", "B", "C"]. */
+export const listCell = (v: string | undefined) =>
+  (v ?? "")
+    .split(/[;,|\n]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+/**
+ * Builds an import config from the entity's own form logic: each row becomes a draft, the form's
+ * validate() reports row errors (so import and the detail page enforce the same rules) and save()
+ * creates the record with its normal audit entry.
+ */
+export function draftImportConfig<D>(o: {
+  entityType: EntityType;
+  screen: string;
+  keyColumn: string;
+  columns: ImportColumn[];
+  existingKeys: () => Set<string>;
+  /** Value checks the draft cannot express (unknown dropdown values, unreadable numbers / dates). */
+  parseCheck?: (row: Record<string, string>) => FieldError[];
+  toDraft: (row: Record<string, string>) => D;
+  validate: (d: D) => Record<string, string>;
+  /** Draft error key → column key, where they differ. */
+  errorColumn?: Record<string, string>;
+  save: (d: D) => { id: string };
+  rollback: (ids: string[]) => void;
+  /** 20 demo rows (a few invalid on purpose). */
+  sampleRows: () => string[][];
+}): ImportEntityConfig {
+  const cfg: ImportEntityConfig = {
+    entityType: o.entityType,
+    screen: o.screen,
+    keyColumn: o.keyColumn,
+    columns: o.columns,
+    existingKeys: o.existingKeys,
+    rowCheck: (r) => {
+      const parsed = o.parseCheck?.(r) ?? [];
+      if (parsed.length) return parsed;
+      return Object.entries(o.validate(o.toDraft(r))).map(([k, error]) => ({
+        field: o.errorColumn?.[k] ?? k,
+        error,
+      }));
+    },
+    commit: (rows) => {
+      const ids: string[] = [];
+      for (const r of rows) {
+        // A row can still clash with an earlier row of the same file on a secondary unique field
+        // (tax code, VIN…); save() rejects it and the row is simply not imported.
+        try {
+          ids.push(o.save(o.toDraft(r)).id);
+        } catch {
+          /* skipped */
+        }
+      }
+      return ids;
+    },
+    rollback: o.rollback,
+    sampleFile: () => [o.columns.map((c) => c.header), ...o.sampleRows()],
+  };
+  return cfg;
 }
 
 export function commitImport(cfg: ImportEntityConfig, v: ImportValidation): ImportBatch {

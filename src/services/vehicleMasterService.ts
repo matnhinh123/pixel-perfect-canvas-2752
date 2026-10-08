@@ -5,6 +5,7 @@ import { readJson, writeJson } from "@/repositories/storage";
 import {
   VEHICLE_GROUPS,
   VEHICLE_MASTER_TYPES,
+  VEHICLE_OWNERSHIPS,
   type BusinessPartnerRecord,
   type VehicleMasterRecord,
   type VehicleMasterType,
@@ -13,6 +14,7 @@ import {
 import { tr } from "@/lib/i18n";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
+import { dateCell, draftImportConfig, pick } from "./importExportService";
 
 export const vehicleCrud = makeCrud<VehicleMasterRecord>({
   entityType: "Vehicle",
@@ -421,3 +423,186 @@ export const vehicleService = {
     return next;
   },
 };
+
+/* ------------------------------------------------------------------ import */
+
+const STATUSES = ["Active", "Inactive"] as const;
+const DATE_FIELDS = ["inspectionExpiry", "insuranceExpiry", "badgeExpiry", "buyingDate"] as const;
+
+/** Outsourced owner by BP Code (or "BPCODE · Name" as exported from the list). */
+const ownerIdOf = (v: string | undefined) => {
+  const code = (v ?? "").split("·")[0]!.trim().toUpperCase();
+  if (!code || code === "OWN") return "";
+  return (
+    businessPartnerRepository.all().find((b) => !b.deleted && b.bpCode.toUpperCase() === code)
+      ?.id ?? ""
+  );
+};
+
+const vehicleDraftOfRow = (r: Record<string, string>): VehicleDraft => {
+  const ownerCell = (r["owner"] ?? "").trim();
+  const ownership: VehicleOwnership =
+    pick(r["ownership"], VEHICLE_OWNERSHIPS) ||
+    (ownerCell && ownerCell.toLowerCase() !== "own" ? "Outsourced" : "Own");
+  return {
+    ...newVehicleDraft(),
+    plateNumber: r["plateNumber"] ?? "",
+    vehicleType: pick(r["vehicleType"], VEHICLE_MASTER_TYPES) || "",
+    vehicleGroup: pick(r["vehicleGroup"], VEHICLE_GROUP_OPTIONS) || (r["vehicleGroup"] ?? ""),
+    ownership,
+    ownerId: ownership === "Outsourced" ? ownerIdOf(ownerCell) : "",
+    authorizedPayload: (r["authorizedPayload"] ?? "").replace(/[\s,]/g, ""),
+    chassisNumber: r["chassisNumber"] ?? "",
+    engineNumber: r["engineNumber"] ?? "",
+    productionYear: r["productionYear"] ?? "",
+    productionCountry: r["productionCountry"] ?? "",
+    fuelType: r["fuelType"] ?? "",
+    fuelRate: r["fuelRate"] ?? "",
+    fuelCapacity: r["fuelCapacity"] ?? "",
+    inspectionExpiry: dateCell(r["inspectionExpiry"]),
+    insuranceExpiry: dateCell(r["insuranceExpiry"]),
+    badgeExpiry: dateCell(r["badgeExpiry"]),
+    buyingDate: dateCell(r["buyingDate"]),
+    tradeMark: r["tradeMark"] ?? "",
+    modelCode: r["modelCode"] ?? "",
+    status: pick(r["status"], STATUSES) || "Active",
+  };
+};
+
+/** Headers accept the template name plus the list's Vietnamese / English labels (export → import). */
+export const vehicleImportConfig = draftImportConfig<VehicleDraft>({
+  entityType: "Vehicle",
+  screen: "vehicle-master",
+  keyColumn: "plateNumber",
+  columns: [
+    {
+      key: "plateNumber",
+      header: "Plate Number",
+      required: true,
+      example: "51D-123.45",
+      aliases: ["Plate No.", "Biển số"],
+    },
+    {
+      key: "vehicleType",
+      header: "Vehicle Type",
+      required: true,
+      example: "Truck",
+      aliases: ["Type", "Loại xe"],
+    },
+    {
+      key: "vehicleGroup",
+      header: "Vehicle Group",
+      required: true,
+      example: "Medium Truck",
+      aliases: ["Group", "Nhóm xe"],
+    },
+    { key: "ownership", header: "Ownership", example: "Own", aliases: ["Sở hữu"] },
+    { key: "owner", header: "Owner BP Code", example: "", aliases: ["Owner", "Chủ xe"] },
+    {
+      key: "authorizedPayload",
+      header: "Capacity (kg)",
+      example: "8000",
+      aliases: ["Tải trọng (kg)"],
+    },
+    {
+      key: "chassisNumber",
+      header: "Chassis Number (VIN)",
+      example: "",
+      aliases: ["VIN", "Số khung"],
+    },
+    {
+      key: "engineNumber",
+      header: "Engine Number",
+      example: "",
+      aliases: ["Engine No.", "Số máy"],
+    },
+    { key: "productionYear", header: "Production Year", example: "2022" },
+    { key: "productionCountry", header: "Production Country", example: "", aliases: ["Xuất xứ"] },
+    { key: "modelCode", header: "Model Code", example: "", aliases: ["Model"] },
+    { key: "tradeMark", header: "Trade Mark", example: "Hino" },
+    { key: "fuelType", header: "Fuel Type", example: "Diesel" },
+    { key: "fuelRate", header: "Fuel Rate (l/100km)", example: "18", aliases: ["Fuel Rate"] },
+    {
+      key: "fuelCapacity",
+      header: "Fuel Capacity (l)",
+      example: "200",
+      aliases: ["Fuel Capacity"],
+    },
+    {
+      key: "inspectionExpiry",
+      header: "Registration Expiry",
+      example: "2027-06-30",
+      aliases: ["Hạn đăng kiểm"],
+    },
+    {
+      key: "insuranceExpiry",
+      header: "Insurance Expiry",
+      example: "2027-03-31",
+      aliases: ["Hạn bảo hiểm"],
+    },
+    { key: "badgeExpiry", header: "Badge Expiry", example: "", aliases: ["Hạn phù hiệu"] },
+    { key: "buyingDate", header: "Buying Date", example: "" },
+    { key: "status", header: "Status", example: "Active", aliases: ["Trạng thái"] },
+  ],
+  existingKeys: () =>
+    new Set(
+      vehicleMasterRepository
+        .all()
+        .filter((v) => !v.deleted)
+        .map((v) => norm(v.plateNumber).toLowerCase()),
+    ),
+  parseCheck: (r) => {
+    const e: { field: string; error: string }[] = [];
+    if (!pick(r["vehicleType"], VEHICLE_MASTER_TYPES))
+      e.push({ field: "vehicleType", error: `Use one of: ${VEHICLE_MASTER_TYPES.join(", ")}` });
+    if (!pick(r["vehicleGroup"], VEHICLE_GROUP_OPTIONS))
+      e.push({ field: "vehicleGroup", error: `Use one of: ${VEHICLE_GROUP_OPTIONS.join(", ")}` });
+    if (pick(r["ownership"], VEHICLE_OWNERSHIPS) === undefined)
+      e.push({ field: "ownership", error: "Own or Outsourced (empty = Own)" });
+    if (pick(r["status"], STATUSES) === undefined)
+      e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
+    const owner = (r["owner"] ?? "").trim();
+    if (owner && owner.toLowerCase() !== "own" && !ownerIdOf(owner))
+      e.push({ field: "owner", error: "No Business Partner with this BP Code" });
+    for (const k of DATE_FIELDS)
+      if (r[k] && !dateCell(r[k]))
+        e.push({ field: k, error: "Date must be YYYY-MM-DD or DD/MM/YYYY" });
+    return e;
+  },
+  toDraft: vehicleDraftOfRow,
+  validate: (d) => validateVehicle(d),
+  errorColumn: { ownerId: "owner" },
+  save: (d) => vehicleService.save(d),
+  rollback: (ids) => vehicleCrud.removeMany(ids),
+  sampleRows: () => {
+    const rows = Array.from({ length: 20 }, (_, i) => {
+      const type = (["Truck", "Tractor", "Trailer"] as const)[i % 3]!;
+      return [
+        `99C-${String(500 + i).padStart(3, "0")}.${String(10 + i)}`,
+        type,
+        type === "Truck" ? "Medium Truck" : "Tractor / Container Truck",
+        "Own",
+        "",
+        type === "Trailer" ? "" : type === "Truck" ? "8000" : "32000",
+        "",
+        "",
+        String(2018 + (i % 6)),
+        "Japan",
+        "",
+        type === "Truck" ? "Hino" : "Hyundai",
+        "Diesel",
+        type === "Trailer" ? "" : "22",
+        type === "Trailer" ? "" : "300",
+        `2027-${String((i % 12) + 1).padStart(2, "0")}-15`,
+        "2027-01-31",
+        "",
+        "",
+        i % 7 === 6 ? "Inactive" : "Active",
+      ];
+    });
+    rows[3]![0] = rows[0]![0]!; // duplicate plate
+    rows[8]![1] = "Bus"; // unknown type
+    rows[12]![5] = ""; // Truck without capacity
+    return rows;
+  },
+});

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Download,
   Eye,
@@ -26,7 +25,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -132,7 +130,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const [pageSize, setPageSize] = useState(10);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
-  const [importOpen, setImportOpen] = useState<false | "import" | "history">(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [auditRow, setAuditRow] = useState<T | null>(null);
   const appLang = useLang();
   const lang = p.lang ?? appLang;
@@ -300,7 +298,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const selectedRows = p.rows.filter((r) => selected.has(r.id));
   const filtersActive = q.trim() !== "" || quickConditions.length > 0 || advanced.length > 0;
 
-  const doExport = (rows: T[], scope: string) => {
+  const doExport = async (rows: T[], scope: string) => {
     if (rows.length === 0) {
       toast.error(
         t(
@@ -311,17 +309,23 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
       return;
     }
     const cols = visibleCols;
-    const file = exportView({
-      entityType: p.entityType,
-      screen,
-      scope,
-      headers: cols.map((c) => c.label),
-      rows: rows.map((r) => cols.map((c) => (c.exportValue ?? c.value)(r) ?? "")),
-    });
-    toast.success(
-      t(`Đã export ${rows.length} dòng → ${file}`, `Exported ${rows.length} rows → ${file}`),
-    );
+    try {
+      const file = await exportView({
+        entityType: p.entityType,
+        screen,
+        scope,
+        headers: cols.map((c) => c.label),
+        rows: rows.map((r) => cols.map((c) => (c.exportValue ?? c.value)(r) ?? "")),
+      });
+      toast.success(
+        t(`Đã export ${rows.length} dòng → ${file}`, `Exported ${rows.length} rows → ${file}`),
+      );
+    } catch {
+      toast.error(t("Export thất bại, vui lòng thử lại.", "Export failed, please try again."));
+    }
   };
+  const viewScope = filtersActive || sort ? "current view (search + filter + sort)" : "all records";
+  const sortedSelection = () => applySort(selectedRows, sort, get);
 
   const refresh = () => {
     setLoading(true);
@@ -339,34 +343,12 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   const ro =
     p.readOnlyReason ?? t("Không khả dụng cho danh sách này", "Not available for this list");
 
+  // Import history stays reachable as a tab inside the import dialog.
   const importBtn = p.importConfig ? (
-    <div className="flex">
-      <Button variant="outline" className="rounded-r-none" onClick={() => setImportOpen("import")}>
-        <Upload className="h-4 w-4" />
-        Import
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            className="rounded-l-none border-l-0 px-2"
-            aria-label="Import options"
-          >
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setImportOpen("import")}>
-            <Upload className="h-4 w-4" />
-            {t("Import từ Excel…", "Import from Excel…")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setImportOpen("history")}>
-            <History className="h-4 w-4" />
-            {t("Lịch sử import", "Import history")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+    <Button variant="outline" onClick={() => setImportOpen(true)}>
+      <Upload className="h-4 w-4" />
+      Import
+    </Button>
   ) : (
     <DisabledWithReason reason={ro}>
       <Button variant="outline" disabled>
@@ -376,40 +358,31 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     </DisabledWithReason>
   );
 
+  // One click → Excel (.xlsx) of the current view (search + filter + sort, visible columns).
+  // Selected rows are exported from the selection bar.
   const exportBtn = (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline">
-          <Download className="h-4 w-4" />
-          Export
-          <ChevronDown className="h-3.5 w-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          Excel (CSV) · {visibleCols.length} {t("cột đang hiển thị", "visible columns")}
-        </DropdownMenuLabel>
-        <DropdownMenuItem
-          onClick={() =>
-            doExport(
-              filtered,
-              filtersActive || sort ? "current view (search + filter + sort)" : "all records",
-            )
-          }
-        >
-          <Download className="h-4 w-4" />
-          {t("Export theo view hiện tại", "Export current view")} ({filtered.length})
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={selectedRows.length === 0}
-          onClick={() => doExport(applySort(selectedRows, sort, get), "selected rows")}
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          {t("Export dòng đã chọn", "Export selected rows")} ({selectedRows.length})
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="outline"
+      onClick={() => void doExport(filtered, viewScope)}
+      title={t(
+        `Export Excel: ${filtered.length} dòng · ${visibleCols.length} cột đang hiển thị`,
+        `Export Excel: ${filtered.length} rows · ${visibleCols.length} visible columns`,
+      )}
+    >
+      <Download className="h-4 w-4" />
+      Export
+    </Button>
   );
+
+  /** Header drag & drop: moves `from` before / after `to` in the saved column order. */
+  const reorderColumn = (from: string, to: string, after: boolean) =>
+    setPref((x) => {
+      const order = x.order.filter((k) => k !== from);
+      const i = order.indexOf(to);
+      if (i < 0) return x;
+      order.splice(after ? i + 1 : i, 0, from);
+      return { ...x, order };
+    });
 
   const addBtn = p.onAdd ? (
     <Button onClick={p.onAdd}>
@@ -638,7 +611,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => doExport(applySort(selectedRows, sort, get), "selected rows")}
+                onClick={() => void doExport(sortedSelection(), "selected rows")}
               >
                 <Download className="h-4 w-4" />
                 {t("Export đã chọn", "Export selected")}
@@ -687,6 +660,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             onSort={setSort}
             widths={pref.widths}
             onResize={(k, w) => setPref((x) => ({ ...x, widths: { ...x.widths, [k]: w } }))}
+            onReorder={reorderColumn}
             selected={selected}
             onToggle={(id) =>
               setSelected((s) => {
@@ -754,7 +728,6 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             onOpenChange={(o) => !o && setImportOpen(false)}
             config={p.importConfig}
             entityLabel={p.entityLabel}
-            initialTab={importOpen}
           />
         )}
         {crud && (

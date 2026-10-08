@@ -3,6 +3,8 @@ import { locationRepository, routeRepository, tollStationRepository, uid } from 
 import { normalizeLocation, type LocationMasterRecord } from "@/mock-data/locations";
 import {
   COUNTRY_ISO2,
+  LOCATION_COUNTRIES,
+  LOCATION_TYPES,
   PORT_SUB_TYPES,
   requiresIata,
   requiresUnLocode,
@@ -10,6 +12,7 @@ import {
 import { tr } from "@/lib/i18n";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
+import { draftImportConfig, numCell, pick } from "./importExportService";
 
 const routesUsing = (id: string) =>
   routeRepository
@@ -258,3 +261,127 @@ export const locationService = {
     return next;
   },
 };
+
+// ---------------------------------------------------------------- import
+
+const STATUSES = ["Active", "Inactive"] as const;
+
+/** Import row → form draft; the form's validateLocation() then checks it like a manual entry. */
+const locationDraftOfRow = (r: Record<string, string>): LocationDraft =>
+  withLocationType(
+    {
+      ...newLocationDraft(),
+      code: r["code"] ?? "",
+      name: r["name"] ?? "",
+      address: r["address"] ?? "",
+      province: r["province"] ?? "",
+      country: pick(r["country"], LOCATION_COUNTRIES) || (r["country"] ?? ""),
+      locationSubType: pick(r["locationSubType"], PORT_SUB_TYPES) || "",
+      unLocode: r["unLocode"] ?? "",
+      iataCode: r["iataCode"] ?? "",
+      lat: numCell(r["lat"]),
+      lng: numCell(r["lng"]),
+      status: pick(r["status"], STATUSES) || "Active",
+      remark: r["remark"] ?? "",
+    },
+    pick(r["locationType"], LOCATION_TYPES) || "",
+  );
+
+/** Headers accept the template name plus the list's Vietnamese / English labels (export → import). */
+export const locationImportConfig = draftImportConfig<LocationDraft>({
+  entityType: "Location",
+  screen: "location",
+  keyColumn: "code",
+  columns: [
+    { key: "code", header: "Code", required: true, example: "VN101", aliases: ["Mã"] },
+    { key: "name", header: "Name", required: true, example: "Kho Bình Tân", aliases: ["Tên"] },
+    {
+      key: "locationType",
+      header: "Location Type",
+      required: true,
+      example: "Warehouse",
+      aliases: ["Type", "Loại"],
+    },
+    { key: "locationSubType", header: "Port Sub Type", example: "", aliases: ["Loại cảng"] },
+    {
+      key: "country",
+      header: "Country",
+      required: true,
+      example: "Vietnam",
+      aliases: ["Quốc gia"],
+    },
+    {
+      key: "province",
+      header: "Province/City",
+      example: "TP. Hồ Chí Minh",
+      aliases: ["Tỉnh/Thành phố"],
+    },
+    {
+      key: "address",
+      header: "Address",
+      required: true,
+      example: "Bình Tân, TP. Hồ Chí Minh",
+      aliases: ["Địa chỉ"],
+    },
+    { key: "unLocode", header: "UN/LOCODE", example: "" },
+    { key: "iataCode", header: "IATA Code", example: "" },
+    { key: "lat", header: "Latitude", example: "10.7652", aliases: ["Vĩ độ"] },
+    { key: "lng", header: "Longitude", example: "106.6039", aliases: ["Kinh độ"] },
+    { key: "status", header: "Status", example: "Active", aliases: ["Trạng thái"] },
+    { key: "remark", header: "Remark", example: "", aliases: ["Ghi chú"] },
+  ],
+  existingKeys: () =>
+    new Set(
+      locationRepository
+        .all()
+        .filter((l) => !l.deleted)
+        .map((l) => (l.code ?? "").toLowerCase())
+        .filter(Boolean),
+    ),
+  parseCheck: (r) => {
+    const e: { field: string; error: string }[] = [];
+    if (pick(r["locationType"], LOCATION_TYPES) === undefined)
+      e.push({ field: "locationType", error: `Use one of: ${LOCATION_TYPES.join(", ")}` });
+    if (pick(r["country"], LOCATION_COUNTRIES) === undefined)
+      e.push({ field: "country", error: `Use one of: ${LOCATION_COUNTRIES.join(", ")}` });
+    if (pick(r["locationSubType"], PORT_SUB_TYPES) === undefined)
+      e.push({ field: "locationSubType", error: `Use one of: ${PORT_SUB_TYPES.join(", ")}` });
+    if (pick(r["status"], STATUSES) === undefined)
+      e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
+    for (const k of ["lat", "lng"])
+      if (r[k] && !Number.isFinite(numCell(r[k])))
+        e.push({ field: k, error: "Must be a number (e.g. 10.7652)" });
+    return e;
+  },
+  toDraft: locationDraftOfRow,
+  validate: (d) => validateLocation(d),
+  errorColumn: { coords: "lat" },
+  save: (d) => locationService.save(d),
+  rollback: (ids) => locationCrud.removeMany(ids),
+  sampleRows: () => {
+    const rows = Array.from({ length: 20 }, (_, i) => {
+      const n = String(i + 1).padStart(2, "0");
+      const port = i % 5 === 0,
+        airport = i % 7 === 3;
+      return [
+        `IMP-L${n}`,
+        port ? `Cảng nhập ${n}` : airport ? `Sân bay nhập ${n}` : `Kho nhập ${n}`,
+        port ? "Port" : airport ? "Airport" : "Warehouse",
+        port ? "ICD" : "",
+        "Vietnam",
+        "Bình Dương",
+        `Lô ${n}, KCN VSIP I, Thuận An, Bình Dương`,
+        port ? `VNI${n}` : "",
+        airport ? "VCS" : "",
+        (10.92 + i * 0.004).toFixed(4),
+        (106.71 + i * 0.003).toFixed(4),
+        i % 6 === 5 ? "Inactive" : "Active",
+        "",
+      ];
+    });
+    rows[2]![0] = "IMP-L01"; // duplicate code
+    rows[9]![2] = "Depot"; // unknown type
+    rows[14]![6] = ""; // missing address
+    return rows;
+  },
+});

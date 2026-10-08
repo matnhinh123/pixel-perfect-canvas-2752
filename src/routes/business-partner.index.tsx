@@ -5,7 +5,11 @@ import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
 import { useCollection } from "@/hooks/use-store";
 import { businessPartnerRepository } from "@/repositories";
-import { bpCrud, normalizeBusinessPartner } from "@/services/businessPartnerService";
+import {
+  bpCrud,
+  businessPartnerImportConfig,
+  normalizeBusinessPartner,
+} from "@/services/businessPartnerService";
 import { useT } from "@/lib/i18n";
 import { BP_ROLES, type BusinessPartnerRecord } from "@/types";
 import {
@@ -229,6 +233,7 @@ function BusinessPartnerList() {
       ]}
       showRefresh={false}
       crud={bpCrud}
+      importConfig={businessPartnerImportConfig}
       addLabel="Add Business Partner"
       onAdd={() =>
         void navigate({ to: "/business-partner/$id", params: { id: "new" }, search: {} })

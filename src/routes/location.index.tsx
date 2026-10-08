@@ -5,7 +5,7 @@ import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
 import { useCollection } from "@/hooks/use-store";
 import { locationRepository } from "@/repositories";
-import { listLocations, locationCrud } from "@/services/locationService";
+import { listLocations, locationCrud, locationImportConfig } from "@/services/locationService";
 import {
   LOCATION_COUNTRIES,
   LOCATION_TYPES,
@@ -232,6 +232,7 @@ function LocationList() {
       ]}
       showRefresh={false}
       crud={locationCrud}
+      importConfig={locationImportConfig}
       addLabel="Add Location"
       onAdd={() => void navigate({ to: "/location/$id", params: { id: "new" }, search: {} })}
       onView={(r) => open(r, "view")}

@@ -12,6 +12,7 @@ import {
   ownerLabel,
   VEHICLE_GROUP_OPTIONS,
   vehicleCrud,
+  vehicleImportConfig,
 } from "@/services/vehicleMasterService";
 import { PRODUCTION_COUNTRIES, TRADE_MARKS, VEHICLE_TYPES } from "@/mock-data/vehicleMaster";
 import { formatDate } from "@/lib/format";
@@ -351,6 +352,7 @@ function VehicleList() {
       ]}
       showRefresh={false}
       crud={vehicleCrud}
+      importConfig={vehicleImportConfig}
       addLabel="Add Vehicle"
       onAdd={() => void navigate({ to: "/vehicle/$id", params: { id: "new" }, search: {} })}
       onView={(r) => open(r, "view")}

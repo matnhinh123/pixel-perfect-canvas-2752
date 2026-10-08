@@ -1,4 +1,14 @@
-import { VEHICLE_PROFILES, type RouteRecord, type RoutePoint, type VehicleProfile } from "@/types";
+import {
+  VEHICLE_GROUPS,
+  VEHICLE_PROFILES,
+  profileNeedsCapacity,
+  type RouteRecord,
+  type RoutePoint,
+  type RouteType,
+  type Terrain,
+  type VehicleGroup,
+  type VehicleProfile,
+} from "@/types";
 import { costRepository, routeRepository, uid } from "@/repositories";
 import { activeLocations, findLocationByName } from "@/services/routing/locationStore";
 import { findVehicle, routeVehicleFields, vehicleLabel, VEHICLES } from "@/mock-data/vehicles";
@@ -11,7 +21,10 @@ import { formatDate, formatVnd, todayYmd } from "@/lib/format";
 export type RouteAuditAction = Omit<AuditInput, "entityType" | "entityId" | "entityLabel">;
 
 export const formatDeparture = (s: string) => (s ? `${formatDate(s)} ${s.slice(11, 16)}` : "—");
-import type { ImportEntityConfig } from "./importExportService";
+import { pick, type ImportEntityConfig } from "./importExportService";
+
+const ROUTE_TYPES: readonly RouteType[] = ["Single Trip", "Round Trip"];
+const TERRAINS: readonly Terrain[] = ["Plain", "Highland"];
 
 const costRefs = (routeId: string) =>
   costRepository.all().filter((c) => !c.deleted && c.routeId === routeId);
@@ -241,14 +254,55 @@ export const routeImportConfig: ImportEntityConfig = {
   entityType: "Route",
   screen: "routing",
   keyColumn: "code",
+  // Aliases = the Routing list labels (VI / EN), so an exported list can be imported back.
+  // Origin / Destination take a location code or name; the code column wins when both exist.
   columns: [
-    { key: "code", header: "Route Code", required: true, example: "RT-HCM-BD-02" },
-    { key: "name", header: "Route Name", required: true, example: "HCM → Bình Dương (ca đêm)" },
-    { key: "origin", header: "Origin", required: true, example: "Kho Quận 7" },
-    { key: "destination", header: "Destination", required: true, example: "KCN VSIP I" },
-    { key: "vehicleProfile", header: "Vehicle Profile", required: true, example: "Truck" },
-    { key: "vehicleGroup", header: "Vehicle Group", required: true, example: "Medium Truck" },
-    { key: "capacityKg", header: "Capacity (kg)", example: "8000" },
+    {
+      key: "code",
+      header: "Route Code",
+      required: true,
+      example: "RT-HCM-BD-02",
+      aliases: ["Mã route"],
+    },
+    {
+      key: "name",
+      header: "Route Name",
+      required: true,
+      example: "HCM → Bình Dương (ca đêm)",
+      aliases: ["Tên route"],
+    },
+    {
+      key: "origin",
+      header: "Origin",
+      required: true,
+      example: "Kho Quận 7",
+      aliases: ["Departure code", "Mã đi", "Departure", "Điểm đi"],
+    },
+    {
+      key: "destination",
+      header: "Destination",
+      required: true,
+      example: "KCN VSIP I",
+      aliases: ["Dest. code", "Mã đến", "Điểm đến"],
+    },
+    {
+      key: "vehicleProfile",
+      header: "Vehicle Profile",
+      required: true,
+      example: "Truck",
+      aliases: ["Truck / Container", "Loại xe"],
+    },
+    {
+      key: "vehicleGroup",
+      header: "Vehicle Group",
+      required: true,
+      example: "Medium Truck",
+      aliases: ["Vehicle", "Phương tiện", "Nhóm xe"],
+    },
+    { key: "capacityKg", header: "Capacity (kg)", example: "8000", aliases: ["Tải trọng (kg)"] },
+    { key: "type", header: "Route Type", example: "Single Trip", aliases: ["Loại tuyến"] },
+    { key: "terrain", header: "Terrain", example: "Plain", aliases: ["Địa hình"] },
+    { key: "description", header: "Note", example: "", aliases: ["Ghi chú"] },
   ],
   existingKeys: () =>
     new Set(
@@ -267,20 +321,17 @@ export const routeImportConfig: ImportEntityConfig = {
   },
   rowCheck: (r) => {
     const e: { field: string; error: string }[] = [];
-    if (!VEHICLE_PROFILES.includes((r["vehicleProfile"] ?? "") as VehicleProfile))
-      e.push({ field: "vehicleProfile", error: "Unknown vehicle profile" });
-    if (
-      ![
-        "Van / Pickup",
-        "Light Truck",
-        "Medium Truck",
-        "Heavy Truck",
-        "Tractor / Container Truck",
-      ].includes(r["vehicleGroup"] ?? "")
-    )
-      e.push({ field: "vehicleGroup", error: "Unknown vehicle group" });
+    const profile = pick(r["vehicleProfile"], VEHICLE_PROFILES);
+    if (!profile)
+      e.push({ field: "vehicleProfile", error: `Use one of: ${VEHICLE_PROFILES.join(", ")}` });
+    if (!pick(r["vehicleGroup"], VEHICLE_GROUPS))
+      e.push({ field: "vehicleGroup", error: `Use one of: ${VEHICLE_GROUPS.join(", ")}` });
+    if (pick(r["type"], ROUTE_TYPES) === undefined)
+      e.push({ field: "type", error: "Single Trip or Round Trip (empty = Single Trip)" });
+    if (pick(r["terrain"], TERRAINS) === undefined)
+      e.push({ field: "terrain", error: "Plain or Highland (empty = Plain)" });
     const kg = Number(r["capacityKg"] || 0);
-    if ((r["vehicleProfile"] === "Truck" || r["vehicleProfile"] === "Container") && !(kg > 0))
+    if (profile && profileNeedsCapacity(profile) && !(kg > 0))
       e.push({ field: "capacityKg", error: "Capacity is required for Truck / Container" });
     return e;
   },
@@ -289,21 +340,24 @@ export const routeImportConfig: ImportEntityConfig = {
       const o = findLocationByName(r["origin"]!)!,
         d = findLocationByName(r["destination"]!)!;
       const kg = Number(r["capacityKg"] || 0);
+      const group = pick(r["vehicleGroup"], VEHICLE_GROUPS) as VehicleGroup;
       // Imported rows name a vehicle group; link the first matching vehicle from Vehicle Master.
-      const vehicle = VEHICLES.find((v) => v.group === r["vehicleGroup"]);
+      const vehicle = VEHICLES.find((v) => v.group === group);
       return {
         ...newRouteDraft(),
         id: uid("R-"),
         code: r["code"]!.toUpperCase(),
         name: r["name"]!,
-        description: "",
-        type: "Single Trip",
+        description: r["description"] ?? "",
+        type: pick(r["type"], ROUTE_TYPES) || "Single Trip",
+        terrain: pick(r["terrain"], TERRAINS) || "Plain",
         origin: { name: o.name, address: o.address, lat: o.lat, lng: o.lng, locationId: o.id },
         destination: { name: d.name, address: d.address, lat: d.lat, lng: d.lng, locationId: d.id },
-        vehicleProfile: r["vehicleProfile"] as RouteRecord["vehicleProfile"],
-        vehicleGroup: r["vehicleGroup"] as RouteRecord["vehicleGroup"],
+        vehicleProfile: pick(r["vehicleProfile"], VEHICLE_PROFILES) as VehicleProfile,
+        vehicleGroup: group,
         ...(kg > 0 ? { capacityKg: kg } : {}),
         ...(vehicle ? { vehicleId: vehicle.id } : {}),
+        // Distances are not calculated yet: the route is activated after "Calculate Route".
         status: "Inactive",
         ...stampCreate(),
       };
@@ -333,6 +387,9 @@ export const routeImportConfig: ImportEntityConfig = {
         container ? "Container" : "Truck",
         container ? "Tractor / Container Truck" : i % 2 ? "Light Truck" : "Medium Truck",
         container ? "28000" : "6000",
+        i % 3 === 0 ? "Round Trip" : "Single Trip",
+        i % 5 === 0 ? "Highland" : "Plain",
+        "",
       ]);
     }
     rows[1]![0] = "RT001"; // row 3 → duplicate of row 2
