@@ -327,12 +327,16 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
         <Panel title="General Information">
           {/* Role first, then one 6-column grid: short values take one column, names/addresses take half. */}
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-6">
-            <Field
-              label="Role"
-              required
-              error={errors["roles"]}
-              className="sm:col-span-2 lg:col-span-6"
+            {/* Not a <Field>: that renders a <label>, and a click anywhere on this full-width row would
+                tick the first checkbox. Each checkbox has its own label instead. */}
+            <div
+              role="group"
+              aria-label="Role"
+              className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-6"
             >
+              <span className="text-sm font-semibold text-foreground">
+                Role<span className="ml-0.5 text-destructive">*</span>
+              </span>
               <div className="flex h-9 items-center gap-6">
                 {(["Customer", "Vendor"] as const).map((r) => (
                   <label key={r} className="flex cursor-pointer items-center gap-2 text-sm">
@@ -352,7 +356,10 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                   )}
                 </p>
               )}
-            </Field>
+              {errors["roles"] && (
+                <span className="text-xs font-medium text-destructive">{errors["roles"]}</span>
+              )}
+            </div>
 
             <Field label="Legal Type" required error={errors["legalType"]}>
               <NativeSelect

@@ -6,10 +6,18 @@ import type { ListColumn } from "@/components/movex/general/types";
 import { useCollection } from "@/hooks/use-store";
 import { businessPartnerRepository } from "@/repositories";
 import { bpCrud, normalizeBusinessPartner } from "@/services/businessPartnerService";
-import { formatDateTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { BP_ROLES, type BusinessPartnerRecord } from "@/types";
-import { BUSINESS_CATEGORIES, LEGAL_TYPES } from "@/mock-data/businessPartners";
+import {
+  BUSINESS_CATEGORIES,
+  COUNTRIES,
+  CURRENCIES,
+  INVOICE_LANGUAGES,
+  LEGAL_TYPES,
+  PARTNER_GROUPS,
+  SERVICE_PROVIDER_TYPES,
+  TAX_OPTIONS,
+} from "@/mock-data/businessPartners";
 
 export const Route = createFileRoute("/business-partner/")({
   head: () => ({
@@ -24,7 +32,11 @@ export const Route = createFileRoute("/business-partner/")({
 type Row = BusinessPartnerRecord;
 type T = (vi: string, en: string) => string;
 
-const allColumns = (t: T): ListColumn<Row>[] => [
+/**
+ * The list mirrors the General Information form field for field, in the same order (BP Code is
+ * pinned on the left; Status, shown in the detail header, comes last). Labels match the form.
+ */
+const columnsFor = (t: T): ListColumn<Row>[] => [
   {
     key: "bpCode",
     width: 150,
@@ -34,40 +46,6 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     value: (r) => r.bpCode,
     render: (r) => <span className="font-semibold text-primary">{r.bpCode}</span>,
   },
-  {
-    key: "legalType",
-    width: 105,
-    label: "Legal Type",
-    type: "enum",
-    options: [...LEGAL_TYPES],
-    value: (r) => r.legalType,
-  },
-  { key: "taxCode", width: 120, label: "Tax ID", type: "text", value: (r) => r.taxCode },
-  {
-    key: "invoiceSerial",
-    width: 115,
-    label: "Invoice Serial",
-    type: "text",
-    value: (r) => r.invoiceSerial,
-  },
-  {
-    key: "localName",
-    width: 230,
-    truncate: true,
-    label: "Local Name",
-    type: "text",
-    value: (r) => r.localName,
-    className: "font-medium",
-  },
-  {
-    key: "englishName",
-    width: 230,
-    truncate: true,
-    label: "English Name",
-    type: "text",
-    value: (r) => r.englishName,
-  },
-  { key: "email", width: 190, truncate: true, label: "Email", type: "text", value: (r) => r.email },
   {
     key: "roles",
     width: 170,
@@ -83,20 +61,77 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     ),
   },
   {
-    key: "phone",
-    width: 130,
-    defaultHidden: true,
-    label: "Phone",
-    type: "text",
-    value: (r) => r.phone,
+    key: "legalType",
+    width: 120,
+    label: "Legal Type",
+    type: "enum",
+    options: [...LEGAL_TYPES],
+    value: (r) => r.legalType,
   },
   {
-    key: "form",
-    width: 90,
-    label: "Form",
+    key: "taxCode",
+    width: 190,
+    label: "Tax Code / Identity Number",
     type: "text",
-    value: (r) => r.form,
-    defaultHidden: true,
+    value: (r) => r.taxCode,
+  },
+  {
+    key: "partnerGroup",
+    width: 130,
+    label: "Partner Group",
+    type: "enum",
+    options: PARTNER_GROUPS,
+    value: (r) => r.partnerGroup,
+  },
+  {
+    key: "serviceProviderType",
+    width: 170,
+    label: "Service Provider Type",
+    type: "enum",
+    options: SERVICE_PROVIDER_TYPES,
+    value: (r) => r.serviceProviderType,
+  },
+  {
+    key: "businessCategory",
+    width: 180,
+    truncate: true,
+    label: "Business Category",
+    type: "text",
+    value: (r) => r.businessCategory.join(", "),
+  },
+  { key: "tax", width: 140, label: "Tax", type: "enum", options: TAX_OPTIONS, value: (r) => r.tax },
+  {
+    key: "currency",
+    width: 100,
+    label: "Currency",
+    type: "enum",
+    options: CURRENCIES,
+    value: (r) => r.currency,
+  },
+  {
+    key: "invoiceLanguage",
+    width: 160,
+    label: "Invoicing Language",
+    type: "enum",
+    options: INVOICE_LANGUAGES,
+    value: (r) => r.invoiceLanguage,
+  },
+  {
+    key: "localName",
+    width: 240,
+    truncate: true,
+    label: "Local Name",
+    type: "text",
+    value: (r) => r.localName,
+    className: "font-medium",
+  },
+  {
+    key: "englishName",
+    width: 240,
+    truncate: true,
+    label: "English Name",
+    type: "text",
+    value: (r) => r.englishName,
   },
   {
     key: "localAddress",
@@ -105,7 +140,6 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     label: "Local Address",
     type: "text",
     value: (r) => r.localAddress,
-    defaultHidden: true,
   },
   {
     key: "englishAddress",
@@ -114,101 +148,26 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     label: "English Address",
     type: "text",
     value: (r) => r.englishAddress,
-    defaultHidden: true,
   },
   {
     key: "country",
-    width: 110,
+    width: 120,
     label: "Country",
-    type: "text",
+    type: "enum",
+    options: COUNTRIES,
     value: (r) => r.country,
-    defaultHidden: true,
   },
   {
     key: "province",
-    width: 140,
+    width: 150,
     truncate: true,
     label: "Province",
     type: "text",
     value: (r) => r.province,
-    defaultHidden: true,
   },
-  {
-    key: "postcode",
-    width: 100,
-    label: "Postcode",
-    type: "text",
-    value: (r) => r.postcode,
-    defaultHidden: true,
-  },
-  { key: "fax", width: 120, label: "Fax", type: "text", value: (r) => r.fax, defaultHidden: true },
-  {
-    key: "invoiceLanguage",
-    width: 150,
-    label: "Invoice Lang.",
-    type: "text",
-    value: (r) => r.invoiceLanguage,
-    defaultHidden: true,
-  },
-  {
-    key: "currency",
-    width: 110,
-    label: "Currency",
-    type: "text",
-    value: (r) => r.currency,
-    defaultHidden: true,
-  },
-  {
-    key: "businessCategory",
-    width: 160,
-    truncate: true,
-    label: "Business Category",
-    type: "text",
-    value: (r) => r.businessCategory.join(", "),
-    defaultHidden: true,
-  },
-  {
-    key: "currencies",
-    width: 140,
-    label: "Currencies",
-    type: "text",
-    value: (r) => r.currencies.join(", "),
-    defaultHidden: true,
-  },
-  {
-    key: "defaultPaymentTerm",
-    width: 130,
-    label: "Payment Term",
-    type: "text",
-    value: (r) => r.defaultPaymentTerm,
-    defaultHidden: true,
-  },
-  {
-    key: "partnerScope",
-    width: 130,
-    label: "Scope",
-    type: "text",
-    value: (r) => r.partnerScope,
-    defaultHidden: true,
-  },
-  {
-    key: "serviceProviderType",
-    width: 170,
-    truncate: true,
-    label: "Provider Type",
-    type: "text",
-    value: (r) => r.serviceProviderType,
-    defaultHidden: true,
-  },
-  {
-    key: "inHouse",
-    width: 120,
-    label: "In-house",
-    type: "enum",
-    options: ["Yes", "No"],
-    value: (r) => (r.inHouse ? "Yes" : "No"),
-    defaultHidden: true,
-  },
+  { key: "postcode", width: 100, label: "Post Code", type: "text", value: (r) => r.postcode },
+  { key: "email", width: 200, truncate: true, label: "Email", type: "text", value: (r) => r.email },
+  { key: "phone", width: 140, label: "Phone", type: "text", value: (r) => r.phone },
   {
     key: "status",
     width: 110,
@@ -218,47 +177,7 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     value: (r) => r.status,
     render: (r) => <StatusBadge status={r.status} />,
   },
-  {
-    key: "createdAt",
-    width: 150,
-    label: t("Ngày tạo", "Created At"),
-    type: "date",
-    value: (r) => r.createdAt.slice(0, 10),
-    render: (r) => formatDateTime(r.createdAt),
-    defaultHidden: true,
-  },
-  {
-    key: "createdBy",
-    width: 130,
-    truncate: true,
-    label: t("Người tạo", "Created By"),
-    type: "text",
-    value: (r) => r.createdBy,
-    defaultHidden: true,
-  },
 ];
-
-/** Default left-to-right order: identity, names, role and status first so they stay on screen. */
-const COLUMN_ORDER = [
-  "bpCode",
-  "localName",
-  "englishName",
-  "roles",
-  "status",
-  "legalType",
-  "taxCode",
-];
-const columnsFor = (t: T): ListColumn<Row>[] => {
-  const cols = allColumns(t);
-  const rank = (k: string) => {
-    const i = COLUMN_ORDER.indexOf(k);
-    return i < 0 ? COLUMN_ORDER.length : i;
-  };
-  return cols
-    .map((c, i) => ({ c, i }))
-    .sort((x, y) => rank(x.c.key) - rank(y.c.key) || x.i - y.i)
-    .map((x) => x.c);
-};
 
 function BusinessPartnerList() {
   const { t, lang } = useT();
