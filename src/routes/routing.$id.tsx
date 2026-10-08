@@ -1,11 +1,27 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, History, List, Loader2, Plus, RefreshCw, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  History,
+  List,
+  Loader2,
+  Lock,
+  Plus,
+  RefreshCw,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { EmptyState, Field, Panel, StatusBadge, Tag } from "@/components/movex/common";
+import {
+  EmptyState,
+  Field,
+  NativeSelect,
+  Panel,
+  StatusBadge,
+  Tag,
+} from "@/components/movex/common";
 import { RouteMapPanel, type MapToll } from "@/components/movex/RouteMapPanel";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
@@ -27,6 +43,7 @@ import { useCollection } from "@/hooks/use-store";
 import {
   emptyPoint,
   newRouteDraft,
+  routeCodeLockedHint,
   routeService,
   validateRoute,
   type RouteAuditAction,
@@ -40,7 +57,7 @@ import {
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import { routeLegs, routeTotals } from "@/services/cost/costMath";
-import { locationRepository, routeRepository } from "@/repositories";
+import { costRepository, locationRepository, routeRepository } from "@/repositories";
 import { formatDuration, parseDurationText } from "@/lib/format";
 import {
   type RouteCalculation,
@@ -50,7 +67,9 @@ import {
   type RouteType,
   type Status,
   type Terrain,
+  type VehicleGroup,
   type VehicleProfile,
+  VEHICLE_GROUPS,
 } from "@/types";
 import { cn } from "@/lib/utils";
 import { nearestVertex } from "@/services/routing/geo";
@@ -126,6 +145,9 @@ const PROFILE_LABEL: Record<VehicleProfile, string> = {
   Motorcycle: "Motorcycle",
 };
 
+/** Toll Stations panel shows the first tolls in route order; the details sheet lists all. */
+const TOLL_PREVIEW_LIMIT = 5;
+
 const altId = (a: RouteCalculation, i: number) => a.id ?? `ALT-${i + 1}`;
 const altName = (alts: RouteCalculation[], id: string | null) => {
   const i = alts.findIndex((a, j) => altId(a, j) === id);
@@ -146,6 +168,11 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const [lastSig, setLastSig] = useState(() => (initial.outbound ? calcSig(initial) : ""));
   const [auditOpen, setAuditOpen] = useState(false);
   const locationsAll = useCollection(locationRepository);
+  const costsAll = useCollection(costRepository);
+  /** Cost records using this route: its Route Code is then locked. */
+  const usedBy = source ? costsAll.filter((c) => !c.deleted && c.routeId === source.id).length : 0;
+  const vehicleGroups: string[] = VEHICLE_GROUPS.filter((g) => (g as string) !== "DEFAULT");
+  if (r.vehicleGroup && !vehicleGroups.includes(r.vehicleGroup)) vehicleGroups.push(r.vehicleGroup);
   const [addTollOpen, setAddTollOpen] = useState(false);
   const [tollDetailsOpen, setTollDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -256,7 +283,8 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
     if (v === "") setEstimatedTime(null);
     else {
       const min = parseDurationText(v);
-      if (min === null) toast.error('Thời gian không hợp lệ — nhập dạng "15h 48m", "15:48" hoặc số giờ.');
+      if (min === null)
+        toast.error('Thời gian không hợp lệ — nhập dạng "15h 48m", "15:48" hoặc số giờ.');
       else setEstimatedTime(min);
     }
     setTimeText(null);
@@ -340,7 +368,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       ...q,
       {
         action: "CHANGE_VEHICLE",
-        field: "Vehicle Group",
+        field: "Vehicle",
         oldValue: `${PROFILE_LABEL[r.vehicleProfile]} · Group ${vehicleClass}`,
         newValue: `${PROFILE_LABEL[profile]} · Group ${cls}`,
       },
@@ -568,12 +596,20 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
               <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                 <Field label="Route Code" required error={errors["code"]}>
                   <Input
-                    className="h-10"
+                    className={cn("h-10", usedBy > 0 && "bg-muted/50 text-muted-foreground")}
                     value={r.code}
+                    readOnly={usedBy > 0}
+                    title={usedBy > 0 ? routeCodeLockedHint(usedBy) : undefined}
                     onChange={(e) => set("code", e.target.value.toUpperCase())}
                     placeholder="e.g. RT-HCM-DN"
                     aria-invalid={!!errors["code"] || undefined}
                   />
+                  {usedBy > 0 && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Lock className="h-3 w-3" />
+                      {routeCodeLockedHint(usedBy)}
+                    </span>
+                  )}
                 </Field>
                 <Field label="Route Name" required error={errors["name"]}>
                   <Input
@@ -628,7 +664,15 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                     ))}
                   </div>
                 </Field>
-                <Field label="Notes" className="col-span-2">
+                <Field label="Vehicle Group" error={errors["vehicleGroup"]}>
+                  <NativeSelect
+                    className="h-10"
+                    value={r.vehicleGroup ?? ""}
+                    onChange={(v) => set("vehicleGroup", v as VehicleGroup)}
+                    options={vehicleGroups}
+                  />
+                </Field>
+                <Field label="Note" className="col-span-2">
                   <Textarea
                     rows={2}
                     maxLength={500}
@@ -850,15 +894,17 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                   <Plus className="h-4 w-4" />
                   Add Toll
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 border-primary/40 text-primary"
-                  onClick={() => setTollDetailsOpen(true)}
-                >
-                  <List className="h-4 w-4" />
-                  View Details
-                </Button>
+                {tollRows.length > TOLL_PREVIEW_LIMIT && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-primary/40 text-primary"
+                    onClick={() => setTollDetailsOpen(true)}
+                  >
+                    <List className="h-4 w-4" />
+                    View Details
+                  </Button>
+                )}
               </div>
             }
           >
@@ -867,9 +913,19 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 <span>
                   Tolls: <b className="text-base">{tollRows.length}</b>
                 </span>
+                {tollRows.length > TOLL_PREVIEW_LIMIT && (
+                  <span className="text-muted-foreground">
+                    Showing first {TOLL_PREVIEW_LIMIT} — use View Details for all
+                  </span>
+                )}
               </div>
             )}
-            <TollStationTable rows={tollRows} showLeg={round} calculated={totals.calculated} />
+            <TollStationTable
+              rows={tollRows}
+              showLeg={round}
+              calculated={totals.calculated}
+              limit={TOLL_PREVIEW_LIMIT}
+            />
           </Panel>
         </div>
       </div>

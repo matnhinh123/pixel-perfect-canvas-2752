@@ -60,6 +60,8 @@ export interface ExtraRowAction<T> {
   label: string;
   icon?: ReactNode;
   onClick: (row: T) => void;
+  /** Hide the action for some rows (e.g. Restore only on archived records). */
+  hidden?: (row: T) => boolean;
 }
 
 export interface EntityListPageProps<T extends BaseRecord> {
@@ -449,12 +451,14 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             {t("Lịch sử thay đổi", "Change History")}
           </DropdownMenuItem>
         )}
-        {p.extraRowActions?.map((a) => (
-          <DropdownMenuItem key={a.label} onClick={() => a.onClick(r)}>
-            {a.icon}
-            {a.label}
-          </DropdownMenuItem>
-        ))}
+        {p.extraRowActions
+          ?.filter((a) => !a.hidden?.(r))
+          .map((a) => (
+            <DropdownMenuItem key={a.label} onClick={() => a.onClick(r)}>
+              {a.icon}
+              {a.label}
+            </DropdownMenuItem>
+          ))}
         {crud && (
           <>
             <DropdownMenuSeparator />

@@ -7,8 +7,9 @@ import type {
   BpSalesman,
   BusinessPartnerRecord,
 } from "@/types";
+import { EMPLOYEES, departmentName } from "./staff";
 
-export const LEGAL_TYPES = ["Company", "Individual", "Government"] as const;
+export const LEGAL_TYPES = ["Company", "Individual", "Representative"] as const;
 export const COUNTRIES = ["Vietnam", "Singapore", "China", "Japan", "Korea", "Thailand", "USA"];
 export const PROVINCES = [
   "Ho Chi Minh City",
@@ -32,6 +33,10 @@ export const BUSINESS_CATEGORIES = [
   "Other",
 ];
 export const PARTNER_SCOPES = ["Domestic", "International", "Both"];
+export const PARTNER_GROUPS = ["Key Account", "SME", "Agent", "Carrier", "Supplier", "Internal"];
+export const TAX_OPTIONS = ["VAT 10%", "VAT 8%", "VAT 5%", "VAT 0%", "Not subject to VAT"];
+/** No tenant settings in the demo yet: the tenant's default currency. */
+export const TENANT_DEFAULT_CURRENCY = "VND";
 export const SERVICE_PROVIDER_TYPES = ["Carrier", "Forwarder", "Trucking", "Warehouse", "Agent"];
 export const FORMS = ["01GTKT", "02GTTT", "01/TVE"];
 
@@ -43,6 +48,7 @@ export const BANKS = [
   { code: "MB", name: "MB Bank", swift: "MSCBVNVX" },
 ];
 
+/** Payment / credit term options (Customer credit terms, Vendor payment terms, profile default). */
 export const CREDIT_TERMS = [
   "NET07",
   "NET15",
@@ -54,20 +60,13 @@ export const CREDIT_TERMS = [
 ] as const;
 export const WO_ACCESS_POLICIES = ["Temporary Allow", "Approval Required"] as const;
 export const APPROVERS = ["Finance Manager", "Chief Accountant", "Finance Director"];
-export const GENDERS = ["Mr.", "Ms."];
-export const CONTACT_ROLES = [
+export const CONTACT_POSITIONS = [
+  "Director",
   "Operations Contact",
   "Customs Contact",
   "Documentation Contact",
   "Accounting Contact",
   "Sales Contact",
-];
-export const BRANCHES = ["HCM", "HN", "HP", "DAD"];
-export const DEPARTMENTS = ["Sales", "Operations", "Customer Service", "Accounting"];
-export const SALESMEN = [
-  { code: "VTMINHTHUY", name: "Vũ Thị Minh Thủy" },
-  { code: "NVANHUNG", name: "Nguyễn Văn Hùng" },
-  { code: "TTHILAN", name: "Trần Thị Lan" },
 ];
 export const DOC_TYPES = [
   "Business License",
@@ -110,30 +109,25 @@ const pay = (
   status: "Active",
   ...p,
 });
-const sales = (rid: string, serviceCode: string, serviceName: string): BpSalesman => ({
+/** Sales assignment from the staff master; the service is optional. */
+const sales = (rid: string, staffId: string, serviceCode = "", serviceName = ""): BpSalesman => {
+  const e = EMPLOYEES.find((x) => x.id === staffId);
+  return {
+    rid,
+    staffId,
+    staffName: e?.name ?? "",
+    department: e ? departmentName(e.departmentId) : "",
+    serviceCode,
+    serviceName,
+    remark: "",
+  };
+};
+const contact = (rid: string, p: Partial<BpContact> & Pick<BpContact, "fullName">): BpContact => ({
   rid,
-  serviceCode,
-  serviceName,
-  salesCode: "VTMINHTHUY",
-  salesName: "Vũ Thị Minh Thủy",
-  remark: "",
-  branch: "HCM",
-  department: "Sales",
-});
-const contact = (
-  rid: string,
-  p: Partial<BpContact> & Pick<BpContact, "serviceCode" | "serviceName" | "fullName">,
-): BpContact => ({
-  rid,
-  gender: "Mr.",
-  identityNo: "",
-  telephone: "",
-  mobile: "",
-  contactRole: "Operations Contact",
+  position: "",
+  phone: "",
   email: "",
-  address: "",
-  primaryContact: true,
-  status: "Active",
+  primaryContact: false,
   ...p,
 });
 
@@ -157,13 +151,23 @@ const bp = (s: Seed, at = SEED_TIME): BusinessPartnerRecord => ({
   phone: "",
   invoiceLanguage: "Vietnamese",
   currency: "VND",
-  businessCategory: "Logistics",
+  currencies: ["VND"],
+  businessCategory: ["Logistics"],
   partnerScope: "Domestic",
+  partnerGroup: "SME",
+  tax: "VAT 10%",
   serviceProviderType: "",
+  defaultPaymentTerm: "NET30",
+  creditLimit: "",
+  creditLimitCurrency: "VND",
+  note: "",
   roles: ["Customer"],
+  contacts: [],
+  salesAssignments: [],
+  licenseAdjustments: [],
   documents: [],
-  customer: { creditTerms: [], contacts: [], banks: [], salesmen: [] },
-  vendor: { paymentTerms: [], contacts: [], banks: [], salesmen: [] },
+  customer: { creditTerms: [], banks: [] },
+  vendor: { paymentTerms: [], banks: [] },
   ...meta(at),
   ...s,
 });
@@ -180,19 +184,20 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
       email: "ops@mekongsaigonfreight.vn",
       localAddress: "45 Nguyễn Thị Minh Khai, Quận 1, TP.HCM",
       roles: ["Customer"],
+      creditLimit: "500000000",
+      contacts: [
+        contact("k1", {
+          fullName: "Lê Minh Tuấn",
+          position: "Operations Contact",
+          phone: "0938 345 678",
+          email: "tuan.le@example.com",
+          primaryContact: true,
+        }),
+      ],
+      salesAssignments: [sales("s1", "E-006", "FRT-SEA", "Sea Freight")],
       customer: {
         creditTerms: [credit("c1", { serviceCode: "FRT-SEA", serviceName: "Sea Freight" })],
-        contacts: [
-          contact("k1", {
-            serviceCode: "FRT-SEA",
-            serviceName: "Sea Freight",
-            fullName: "Lê Minh Tuấn",
-            mobile: "0938 345 678",
-            email: "tuan.le@example.com",
-          }),
-        ],
         banks: [],
-        salesmen: [sales("s1", "FRT-SEA", "Sea Freight")],
       },
     },
     "2026-05-04T03:00:00.000Z",
@@ -208,6 +213,8 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
       email: "contact@npalogistics.vn",
       roles: ["Vendor"],
       serviceProviderType: "Trucking",
+      defaultPaymentTerm: "NET15",
+      businessCategory: ["Logistics", "Other"],
       vendor: {
         paymentTerms: [
           pay("p1", {
@@ -216,9 +223,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             paymentTerm: "NET15",
           }),
         ],
-        contacts: [],
         banks: [],
-        salesmen: [],
       },
     },
     "2026-05-18T03:00:00.000Z",
@@ -246,8 +251,17 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
       localName: "Công Ty TNHH Thương Mại Dịch Vụ Đông Minh",
       englishName: "Dong Minh Trading Service Company Limited",
       email: "admin@dongminhtrading.vn",
-      businessCategory: "Trading",
+      businessCategory: ["Trading", "Retail"],
       roles: ["Customer"],
+      creditLimit: "200000000",
+      licenseAdjustments: [
+        {
+          rid: "l1",
+          adjustmentDate: "2026-03-12",
+          changeContent: "Head office address changed to District 7, Ho Chi Minh City",
+          documentNo: "GPKD-0318846207-03",
+        },
+      ],
     },
     "2026-06-15T03:00:00.000Z",
   ),
@@ -274,6 +288,27 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
       englishName: "QTL Logistics Co Ltd.",
       email: "lam@gmail.com",
       roles: ["Customer", "Vendor"],
+      partnerScope: "Both",
+      currencies: ["VND", "USD"],
+      businessCategory: ["Logistics", "Customs Broker"],
+      creditLimit: "750000000",
+      note: "Key account — trucking and customs.",
+      contacts: [
+        contact("k1", {
+          fullName: "Nguyễn Văn Hùng",
+          position: "Operations Contact",
+          phone: "0909 123 456",
+          email: "hung.nguyen@example.com",
+          primaryContact: true,
+        }),
+        contact("k2", {
+          fullName: "Trần Thị Lan",
+          position: "Customs Contact",
+          phone: "0918 234 567",
+          email: "lan.tran@example.com",
+        }),
+      ],
+      salesAssignments: [sales("s1", "E-006", "TRK-IN", "Inland Trucking"), sales("s2", "E-001")],
       customer: {
         creditTerms: [
           credit("c1", {
@@ -308,30 +343,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             status: "Scheduled",
           }),
         ],
-        contacts: [
-          contact("k1", {
-            serviceCode: "TRK-IN",
-            serviceName: "Inland Trucking",
-            fullName: "Nguyễn Văn Hùng",
-            identityNo: "079085001234",
-            telephone: "028 3822 4567",
-            mobile: "0909 123 456",
-            email: "hung.nguyen@example.com",
-            address: "12 Nguyễn Thị Minh Khai, TP.HCM",
-          }),
-          contact("k2", {
-            serviceCode: "CUS-IM",
-            serviceName: "Import Customs",
-            gender: "Ms.",
-            fullName: "Trần Thị Lan",
-            identityNo: "079190006789",
-            telephone: "028 3822 4568",
-            mobile: "0918 234 567",
-            contactRole: "Customs Contact",
-            email: "lan.tran@example.com",
-            address: "18 Tôn Đức Thắng, TP.HCM",
-          }),
-        ],
         banks: [
           {
             rid: "b1",
@@ -346,7 +357,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             currency: "VND",
           },
         ],
-        salesmen: [sales("s1", "TRK-IN", "Inland Trucking")],
       },
       vendor: {
         paymentTerms: [
@@ -363,9 +373,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             currency: "USD",
           }),
         ],
-        contacts: [],
         banks: [],
-        salesmen: [],
       },
     },
     "2026-07-20T03:00:00.000Z",

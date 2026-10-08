@@ -1,25 +1,33 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
-import { History, Info, Pencil, XCircle } from "lucide-react";
+import { History, Info, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
+import { EmptyState, Field, NativeSelect, Panel } from "@/components/movex/common";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
   FormPageHeader,
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
-import { FormGroup, ReadOnlyScope, S3, S6 } from "@/components/movex/general/FormParts";
+import { ReadOnlyScope } from "@/components/movex/general/FormParts";
+
+/** A third of the 12-column row (3 fields per row on wide screens, 2 on medium). */
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
-import { CustomerTab, DocumentsTab, VendorTab } from "@/components/movex/businessPartner/BpTabs";
+import {
+  ContactsTab,
+  CustomerTab,
+  DocumentsTab,
+  SalesAssignmentTab,
+  VendorTab,
+} from "@/components/movex/businessPartner/BpTabs";
+import { MultiSelect } from "@/components/movex/businessPartner/MultiSelect";
 import { useCollection } from "@/hooks/use-store";
 import { businessPartnerRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
@@ -28,26 +36,39 @@ import {
   businessPartnerService,
   draftOf,
   newBusinessPartnerDraft,
+  normalizeBusinessPartner,
   sanitizeBpCode,
+  taxCodeKey,
+  toEnglishAddress,
   type BusinessPartnerDraft,
 } from "@/services/businessPartnerService";
 import {
   BUSINESS_CATEGORIES,
   COUNTRIES,
   CURRENCIES,
-  FORMS,
   INVOICE_LANGUAGES,
   LEGAL_TYPES,
-  PARTNER_SCOPES,
+  PARTNER_GROUPS,
   PROVINCES,
   SERVICE_PROVIDER_TYPES,
+  TAX_OPTIONS,
 } from "@/mock-data/businessPartners";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { BP_ROLES, type BpRole } from "@/types";
+import { BP_ROLES, type BpRole, type BusinessPartnerRecord } from "@/types";
 
 type Mode = "view" | "edit";
-type Tab = "documents" | "customer" | "vendor";
+type Tab = "contacts" | "sales" | "documents" | "customer" | "vendor";
+
+/** Error key of a profile/role table → the tab that shows it. */
+const TAB_OF_ERROR: [string, Tab][] = [
+  ["contacts", "contacts"],
+  ["salesAssignments", "sales"],
+  ["documents", "documents"],
+  ["licenseAdjustments", "documents"],
+  ["customer.", "customer"],
+  ["vendor.", "vendor"],
+];
 
 export const Route = createFileRoute("/business-partner/$id")({
   validateSearch: (s: Record<string, unknown>): { mode?: Mode } =>
@@ -65,9 +86,10 @@ export const Route = createFileRoute("/business-partner/$id")({
 function BusinessPartnerPage() {
   const { t } = useT();
   const { id } = Route.useParams();
-  const { mode } = Route.useSearch();
   const all = useCollection(businessPartnerRepository);
-  const source = id === "new" ? null : (all.find((r) => r.id === id && !r.deleted) ?? null);
+  const raw = id === "new" ? null : (all.find((r) => r.id === id && !r.deleted) ?? null);
+  // Records saved by older versions are brought to the current shape before the form reads them.
+  const source = useMemo(() => (raw ? normalizeBusinessPartner(raw) : null), [raw]);
   if (id !== "new" && !source)
     return (
       <Panel>
@@ -82,23 +104,17 @@ function BusinessPartnerPage() {
         />
       </Panel>
     );
-  // `key` resets the form state when switching between records / modes.
+  // The detail is always an editable form; `key` resets it when switching records or after a save.
   return (
     <BpForm
-      key={`${source?.id ?? "new"}:${mode ?? "view"}`}
+      key={source ? `${source.id}:${JSON.stringify(source)}` : "new"}
       source={source}
-      readOnly={!!source && mode !== "edit"}
+      readOnly={false}
     />
   );
 }
 
-function BpForm({
-  source,
-  readOnly,
-}: {
-  source: ReturnType<typeof businessPartnerRepository.get> | null;
-  readOnly: boolean;
-}) {
+function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; readOnly: boolean }) {
   const { t } = useT();
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -110,7 +126,7 @@ function BpForm({
   const [d, setD] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("documents");
+  const [tab, setTab] = useState<Tab>("contacts");
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const dirty = !readOnly && JSON.stringify(d) !== JSON.stringify(initial);
@@ -126,11 +142,15 @@ function BpForm({
     setD((x) => ({ ...x, ...p }));
     clearErr(Object.keys(p));
   };
-  /** Table tabs report errors per table; editing any table clears that tab's messages. */
+  /** Table tabs report errors per table; editing a table clears that table's messages. */
   const patchTables = (p: Partial<BusinessPartnerDraft>) => {
     setD((x) => ({ ...x, ...p }));
-    const prefix = "customer" in p ? "customer." : "vendor" in p ? "vendor." : "documents";
-    setErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith(prefix))));
+    const keys = Object.keys(p);
+    setErrors((e) =>
+      Object.fromEntries(
+        Object.entries(e).filter(([k]) => !keys.some((t) => k === t || k.startsWith(t + "."))),
+      ),
+    );
   };
   const text = (k: keyof BusinessPartnerDraft) => ({
     value: String(d[k] ?? ""),
@@ -155,19 +175,53 @@ function BpForm({
     patch({ roles: on ? [...d.roles, r] : d.roles.filter((x) => x !== r) });
   const visibleTab: Tab =
     (tab === "customer" && !hasRole("Customer")) || (tab === "vendor" && !hasRole("Vendor"))
-      ? "documents"
+      ? "contacts"
       : tab;
+  /** Default currency always belongs to the partner's currencies: picking it adds it there. */
+  const setDefaultCurrency = (currency: string) => {
+    patch({
+      currency,
+      ...(currency && !d.currencies.includes(currency)
+        ? { currencies: CURRENCIES.filter((c) => c === currency || d.currencies.includes(c)) }
+        : {}),
+      ...(!d.creditLimitCurrency ? { creditLimitCurrency: currency } : {}),
+    });
+    clearErr(["currencies"]);
+  };
 
   const rolesChanged = !!source && source.roles.join() !== BP_ROLES.filter(hasRole).join();
 
-  const back = () =>
-    source
-      ? void navigate({
-          to: "/business-partner/$id",
-          params: { id: source.id },
-          search: { mode: "view" },
-        })
-      : void navigate({ to: "/business-partner" });
+  /** Individual → Citizen ID; otherwise Tax Code / Identity Number. */
+  const taxLabel = d.legalType === "Individual" ? "Citizen ID" : "Tax Code / Identity Number";
+  /** English Address follows the Local Address (transliterated) until the user edits it. */
+  const setLocalAddress = (v: string) => {
+    setD((x) => ({
+      ...x,
+      localAddress: v,
+      englishAddress:
+        !x.englishAddress || x.englishAddress === toEnglishAddress(x.localAddress)
+          ? toEnglishAddress(v)
+          : x.englishAddress,
+    }));
+    clearErr(["localAddress", "englishAddress"]);
+  };
+  /** Company tax code check (demo: format + not used by another partner; no tax-authority lookup). */
+  const verifyTaxCode = () => {
+    const key = taxCodeKey(d.taxCode);
+    if (!/^\d{10}(-?\d{3})?$/.test(key)) {
+      toast.error("Tax Code should be 10 digits, or 10 + 3 digits for a branch.");
+      return;
+    }
+    const dup = businessPartnerRepository
+      .all()
+      .find(
+        (b) => !b.deleted && b.id !== source?.id && taxCodeKey(String(b.taxCode ?? "")) === key,
+      );
+    if (dup) toast.error(`Tax Code is already used by ${dup.bpCode}.`);
+    else toast.success("Tax Code format is valid and not used by another partner.");
+  };
+
+  const back = () => void navigate({ to: "/business-partner" });
 
   const save = async () => {
     setFormError(null);
@@ -201,9 +255,10 @@ function BpForm({
         setFormError(t("Chưa thể lưu — vui lòng kiểm tra:", "Cannot save yet — please check:"));
         // Table errors live inside tabs: jump to the first tab that has one.
         const k = Object.keys(err.fieldErrors);
-        if (k.some((x) => x.startsWith("customer.")) && hasRole("Customer")) setTab("customer");
-        else if (k.some((x) => x.startsWith("vendor.")) && hasRole("Vendor")) setTab("vendor");
-        else if (k.includes("documents") && !k.some((x) => !x.includes("."))) setTab("documents");
+        const hit = TAB_OF_ERROR.find(([prefix]) =>
+          k.some((x) => x === prefix || (prefix.endsWith(".") && x.startsWith(prefix))),
+        );
+        if (hit) setTab(hit[1]);
       }
       toast.error(err instanceof Error ? err.message : t("Lưu thất bại", "Save failed"));
     }
@@ -227,7 +282,6 @@ function BpForm({
               : t(`Chỉnh sửa: ${source.englishName}`, `Edit: ${source.englishName}`)
         }
         subtitle={source ? source.bpCode : undefined}
-        badge={source ? <StatusBadge status={source.status} /> : undefined}
         dirty={dirty}
         readOnly={readOnly}
         onBack={() => (readOnly || isNew ? void navigate({ to: "/business-partner" }) : back())}
@@ -236,22 +290,30 @@ function BpForm({
         extra={
           source && (
             <>
+              <div className="relative">
+                <span
+                  className={cn(
+                    "absolute left-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full",
+                    d.status === "Active" ? "bg-success" : "bg-muted-foreground",
+                  )}
+                />
+                <select
+                  aria-label="Status"
+                  value={d.status}
+                  onChange={(e) => patch({ status: e.target.value as "Active" | "Inactive" })}
+                  className="h-11 appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm font-medium outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  ▾
+                </span>
+              </div>
               <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
                 <History className="h-4 w-4" />
                 {t("Lịch sử", "History")}
               </Button>
-              {readOnly && (
-                <Button asChild size="lg">
-                  <Link
-                    to="/business-partner/$id"
-                    params={{ id: source.id }}
-                    search={{ mode: "edit" }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </Link>
-                </Button>
-              )}
             </>
           )
         }
@@ -260,53 +322,44 @@ function BpForm({
 
       {/* View mode: everything inside is disabled natively and restyled to read like plain text. */}
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
-        <Panel title="General Information" bodyClassName="space-y-6">
-          <FormGroup title="Role" required>
-            <div className="col-span-full flex flex-wrap gap-3">
-              {(
-                [
-                  ["Customer", t("Công nợ phải thu · TK 131", "Receivable · account 131")],
-                  ["Vendor", t("Công nợ phải trả · TK 331", "Payable · account 331")],
-                ] as const
-              ).map(([r, hint]) => (
-                <label
-                  key={r}
-                  className={cn(
-                    "flex min-w-52 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 group-disabled:cursor-default",
-                    hasRole(r) ? "border-primary bg-accent" : "bg-card hover:border-primary/50",
+        <Panel title="General Information">
+          {/* Role first, then one 6-column grid: short values take one column, names/addresses take half. */}
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-6">
+            <Field
+              label="Role"
+              required
+              error={errors["roles"]}
+              className="sm:col-span-2 lg:col-span-6"
+            >
+              <div className="flex h-9 items-center gap-6">
+                {(["Customer", "Vendor"] as const).map((r) => (
+                  <label key={r} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={hasRole(r)}
+                      onCheckedChange={(on) => toggleRole(r, on === true)}
+                    />
+                    {r}
+                  </label>
+                ))}
+              </div>
+              {rolesChanged && (
+                <p className="mt-1 text-xs text-warning">
+                  {t(
+                    "Đổi vai trò chỉ áp dụng cho nghiệp vụ mới, không ảnh hưởng record/hoá đơn cũ.",
+                    "A role change only applies to new transactions; existing records/invoices are untouched.",
                   )}
-                >
-                  <Checkbox
-                    checked={hasRole(r)}
-                    onCheckedChange={(on) => toggleRole(r, on === true)}
-                  />
-                  <span className="leading-tight">
-                    <span className="block text-sm font-semibold">{r}</span>
-                    <span className="block text-xs text-muted-foreground">{hint}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            {errors["roles"] && (
-              <p className="mt-1.5 text-xs font-medium text-destructive">{errors["roles"]}</p>
-            )}
-            {rolesChanged && (
-              <p className="mt-1.5 text-xs text-warning">
-                {t(
-                  "Đổi vai trò chỉ áp dụng cho nghiệp vụ mới, không ảnh hưởng record/hoá đơn cũ.",
-                  "A role change only applies to new transactions; existing records/invoices are untouched.",
-                )}
-              </p>
-            )}
-          </FormGroup>
+                </p>
+              )}
+            </Field>
 
-          <FormGroup title={t("Định danh", "Identification")}>
+            <Field label="Legal Type" required error={errors["legalType"]}>
+              <NativeSelect {...select("legalType", LEGAL_TYPES, "Select Legal Type")} />
+            </Field>
             <Field
               label="BP Code"
               required
               error={errors["bpCode"]}
               hint={readOnly ? undefined : `${d.bpCode.length}/${BP_CODE_MAX}`}
-              className={S3}
             >
               <div className="relative">
                 <Input
@@ -330,102 +383,122 @@ function BpForm({
                 </Tooltip>
               </div>
             </Field>
-            <Field label="Legal Type" required error={errors["legalType"]} className={S3}>
-              <NativeSelect {...select("legalType", LEGAL_TYPES, "Select Legal Type")} />
-            </Field>
-            <Field label="Status" className={S3}>
-              <NativeSelect
-                value={d.status}
-                onChange={(v) => patch({ status: v as "Active" | "Inactive" })}
-                options={["Active", "Inactive"]}
-                className="w-full"
-              />
-            </Field>
-            <Field label="In-house Partner" className={S3}>
-              <div className="flex h-9 items-center gap-2">
-                <Switch checked={d.inHouse} onCheckedChange={(v) => patch({ inHouse: v })} />
-                <span className="text-sm">{d.inHouse ? "Yes" : "No"}</span>
+            <Field label={taxLabel} required error={errors["taxCode"]} className="sm:col-span-2">
+              <div className="flex gap-2">
+                <Input placeholder="Enter Tax Code" {...text("taxCode")} />
+                {d.legalType === "Company" && !readOnly && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 shrink-0 px-2.5"
+                    onClick={verifyTaxCode}
+                  >
+                    Verify
+                  </Button>
+                )}
               </div>
             </Field>
-            <Field label="Tax Code" required error={errors["taxCode"]} className={S3}>
-              <Input placeholder="Enter Tax Code" {...text("taxCode")} />
+            <Field label="Partner Group" required error={errors["partnerGroup"]}>
+              <NativeSelect {...select("partnerGroup", PARTNER_GROUPS, "Select Partner Group")} />
             </Field>
-            <Field label="Form" className={S3}>
-              <NativeSelect {...select("form", FORMS, "Select Form")} />
-            </Field>
-            <Field label="Invoice Serial" className={S3}>
-              <Input placeholder="Enter Invoice Serial" {...text("invoiceSerial")} />
-            </Field>
-          </FormGroup>
-
-          <FormGroup title={t("Tên & địa chỉ", "Name & Address")}>
-            <Field label="Local Name" required error={errors["localName"]} className={S6}>
-              <Textarea rows={2} placeholder="Enter Local Name" {...text("localName")} />
-            </Field>
-            <Field label="English Name" required error={errors["englishName"]} className={S6}>
-              <Textarea rows={2} placeholder="Enter English Name" {...text("englishName")} />
-            </Field>
-            <Field label="Local Address" required error={errors["localAddress"]} className={S6}>
-              <Textarea rows={2} placeholder="Enter Local Address" {...text("localAddress")} />
-            </Field>
-            <Field label="English Address" className={S6}>
-              <Textarea rows={2} placeholder="Enter English Address" {...text("englishAddress")} />
-            </Field>
-            <Field label="Country" required error={errors["country"]} className={S3}>
-              <NativeSelect {...select("country", COUNTRIES, "Select Country")} />
-            </Field>
-            <Field label="Province" className={S3}>
-              <NativeSelect {...select("province", PROVINCES, "Select Province")} />
-            </Field>
-            <Field label="Postcode" className={S3}>
-              <Input placeholder="Enter Postcode" {...text("postcode")} />
-            </Field>
-            <Field label="Fax" className={S3}>
-              <Input placeholder="Enter Fax" {...text("fax")} />
-            </Field>
-          </FormGroup>
-
-          <FormGroup title={t("Liên hệ & mặc định", "Contact & Defaults")}>
-            <Field label="Email" error={errors["email"]} className={S3}>
-              <Input placeholder="Enter Email" {...text("email")} />
-            </Field>
-            <Field label="Phone Number" className={S3}>
-              <Input placeholder="Enter Phone Number" {...text("phone")} />
-            </Field>
-            <Field label="Def Invoicing Language" className={S3}>
+            <Field label="Service Provider Type">
               <NativeSelect
-                {...select("invoiceLanguage", INVOICE_LANGUAGES, "Select Invoice Language")}
+                {...select("serviceProviderType", SERVICE_PROVIDER_TYPES, "Select Type")}
               />
             </Field>
-            <Field label="Def Currency" required error={errors["currency"]} className={S3}>
-              <NativeSelect {...select("currency", CURRENCIES, "Select Currency")} />
-            </Field>
-          </FormGroup>
 
-          <FormGroup title={t("Phân loại", "Classification")}>
             <Field
               label="Business Category"
               required
               error={errors["businessCategory"]}
-              className={S3}
+              className="sm:col-span-2 lg:col-span-3"
+            >
+              <MultiSelect
+                value={d.businessCategory}
+                onChange={(businessCategory) => patch({ businessCategory })}
+                options={BUSINESS_CATEGORIES}
+                placeholder="Select Business Category"
+                invalid={!!errors["businessCategory"]}
+              />
+            </Field>
+            <Field label="Tax">
+              <NativeSelect {...select("tax", TAX_OPTIONS, "Select Tax")} />
+            </Field>
+            <Field
+              label="Currency"
+              required
+              error={errors["currency"]}
+              info={t("Mặc định theo tiền tệ của tenant.", "Defaults to the tenant currency.")}
             >
               <NativeSelect
-                {...select("businessCategory", BUSINESS_CATEGORIES, "Select Business Category")}
+                {...select("currency", CURRENCIES, "Select Currency")}
+                onChange={setDefaultCurrency}
               />
             </Field>
-            <Field label="Partner Scope" required error={errors["partnerScope"]} className={S3}>
-              <NativeSelect {...select("partnerScope", PARTNER_SCOPES, "Select Partner Scope")} />
+            <Field label="Invoicing Language">
+              <NativeSelect {...select("invoiceLanguage", INVOICE_LANGUAGES, "Select Language")} />
             </Field>
-            <Field label="Service Provider Type" className={S3}>
-              <NativeSelect
-                {...select(
-                  "serviceProviderType",
-                  SERVICE_PROVIDER_TYPES,
-                  "Select Service Provider Type",
-                )}
+
+            <Field
+              label="Local Name"
+              required
+              error={errors["localName"]}
+              className="sm:col-span-2 lg:col-span-3"
+            >
+              <Input placeholder="Enter Local Name" {...text("localName")} />
+            </Field>
+            <Field
+              label="English Name"
+              required
+              error={errors["englishName"]}
+              className="sm:col-span-2 lg:col-span-3"
+            >
+              <Input placeholder="Enter English Name" {...text("englishName")} />
+            </Field>
+
+            <Field
+              label="Local Address"
+              required
+              error={errors["localAddress"]}
+              className="sm:col-span-2 lg:col-span-3"
+            >
+              <Textarea
+                rows={2}
+                placeholder="Enter Local Address"
+                value={d.localAddress}
+                onChange={(e) => setLocalAddress(e.target.value)}
+                aria-invalid={!!errors["localAddress"] || undefined}
               />
             </Field>
-          </FormGroup>
+            <Field
+              label="English Address"
+              required
+              error={errors["englishAddress"]}
+              info={t(
+                "Tự điền từ Local Address (bỏ dấu) — vui lòng kiểm tra lại.",
+                "Filled in from Local Address — please review.",
+              )}
+              className="sm:col-span-2 lg:col-span-3"
+            >
+              <Textarea rows={2} placeholder="Enter English Address" {...text("englishAddress")} />
+            </Field>
+
+            <Field label="Country" required error={errors["country"]}>
+              <NativeSelect {...select("country", COUNTRIES, "Select Country")} />
+            </Field>
+            <Field label="Province">
+              <NativeSelect {...select("province", PROVINCES, "Select Province")} />
+            </Field>
+            <Field label="Post Code">
+              <Input placeholder="Enter Post Code" {...text("postcode")} />
+            </Field>
+            <Field label="Email" error={errors["email"]} className="sm:col-span-2">
+              <Input placeholder="Enter Email" {...text("email")} />
+            </Field>
+            <Field label="Phone">
+              <Input placeholder="Enter Phone" {...text("phone")} />
+            </Field>
+          </div>
         </Panel>
       </ReadOnlyScope>
 
@@ -433,7 +506,9 @@ function BpForm({
         <TabsList className="h-auto w-full justify-start rounded-t-xl bg-card-header p-0">
           {(
             [
-              ["documents", "Documents", true],
+              ["contacts", "Contacts", true],
+              ["sales", "Sales Assignment", true],
+              ["documents", "Documents & License", true],
               ["customer", "Customer", hasRole("Customer")],
               ["vendor", "Vendor", hasRole("Vendor")],
             ] as const
@@ -447,6 +522,10 @@ function BpForm({
         </TabsList>
         <ReadOnlyScope readOnly={readOnly}>
           <div className="rounded-b-xl border border-t-0 bg-card p-4">
+            {visibleTab === "contacts" && <ContactsTab d={d} set={patchTables} errors={errors} />}
+            {visibleTab === "sales" && (
+              <SalesAssignmentTab d={d} set={patchTables} errors={errors} />
+            )}
             {visibleTab === "documents" && <DocumentsTab d={d} set={patchTables} errors={errors} />}
             {visibleTab === "customer" && <CustomerTab d={d} set={patchTables} errors={errors} />}
             {visibleTab === "vendor" && <VendorTab d={d} set={patchTables} errors={errors} />}

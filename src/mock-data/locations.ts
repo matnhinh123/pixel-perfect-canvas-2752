@@ -1,5 +1,5 @@
 import type { BaseRecord, LocationRecord } from "@/types";
-import { guessLocationType } from "./locationCatalog";
+import { guessLocationType, normalizeLocationType } from "./locationCatalog";
 
 const loc = (
   id: string,
@@ -209,27 +209,52 @@ export type LocationMasterRecord = LocationRecord &
   BaseRecord & {
     // Location fields. Optional: rows saved before these existed simply lack them.
     country?: string;
+    /** Port / Airport / Warehouse / Farm / Customer Site (legacy values are normalized on read). */
     locationType?: string;
+    /** Optional, Port only: Seaport / ICD / River Port. */
     locationSubType?: string;
-    serviceMode?: string;
     unLocode?: string;
     iataCode?: string;
+    remark?: string;
+    // Legacy fields (no longer in scope) — kept so older stored rows still type-check.
+    serviceMode?: string;
     externalCode?: string;
     operatorName?: string;
     customsControlled?: boolean;
     bonded?: boolean;
-    remark?: string;
   };
+
+/** "Standard" when the location carries an international code (UN/LOCODE or IATA), else "Internal". */
+export const locationOrigin = (
+  l: Pick<LocationMasterRecord, "unLocode" | "iataCode">,
+): "Standard" | "Internal" => (l.unLocode?.trim() || l.iataCode?.trim() ? "Standard" : "Internal");
+
+/** Brings a stored row (possibly saved before the scope sign-off) to the current model. */
+export function normalizeLocation(l: LocationMasterRecord): LocationMasterRecord {
+  const { type, sub } = normalizeLocationType(l.locationType, l.locationSubType);
+  const unLocode = type === "Port" ? (l.unLocode ?? "") : "";
+  const iataCode = type === "Airport" ? (l.iataCode ?? "") : "";
+  if (
+    type === (l.locationType ?? "") &&
+    sub === (l.locationSubType ?? "") &&
+    unLocode === (l.unLocode ?? "") &&
+    iataCode === (l.iataCode ?? "")
+  )
+    return l;
+  return { ...l, locationType: type, locationSubType: sub, unLocode, iataCode };
+}
 
 export const seedLocations = (): LocationMasterRecord[] =>
   LOCATIONS.map((l) => {
     const g = guessLocationType(l.name);
+    // Coded ports in the seed use their UN/LOCODE as the location code.
+    const unLocode = g.type === "Port" && l.code && /^VN[A-Z]{3}$/.test(l.code) ? l.code : "";
     return {
       ...l,
       country: "Vietnam",
       locationType: g.type,
       locationSubType: g.sub,
-      serviceMode: g.mode,
+      unLocode,
       status: "Active",
       createdAt: "2026-09-01T02:00:00.000Z",
       createdBy: "Nguyễn Minh Anh",

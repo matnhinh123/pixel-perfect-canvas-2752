@@ -32,6 +32,8 @@ import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { setLang, useT } from "@/lib/i18n";
 import { useConfirm } from "./general/ConfirmDialog";
+import { ExpiringDocumentsList } from "./vehicle/VehicleAlerts";
+import { useExpiringDocumentCount } from "./vehicle/useVehicleData";
 
 interface NavItem {
   to: string;
@@ -171,7 +173,9 @@ function UnreadCounter({ onUnread }: { onUnread: (n: number) => void }) {
   const audit = useCollection(auditRepository);
   const seenAt = readJson<string>(SEEN_KEY, "2026-10-01T00:00:00.000Z");
   const unread = audit.filter((e) => e.action !== "VIEW" && e.timestamp > seenAt).length;
-  useEffect(() => onUnread(unread), [unread, onUnread]);
+  // Expiring vehicle documents stay counted until they are renewed (not cleared by "seen").
+  const expiring = useExpiringDocumentCount();
+  useEffect(() => onUnread(unread + expiring), [unread, expiring, onUnread]);
   return null;
 }
 
@@ -207,6 +211,7 @@ function Notifications() {
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" side="right" className="w-96 p-0">
+        {open && <ExpiringDocumentsList onNavigate={() => setOpen(false)} />}
         <div className="border-b px-4 py-3 text-sm font-semibold">
           {t("Hoạt động gần đây", "Recent activity")}
         </div>

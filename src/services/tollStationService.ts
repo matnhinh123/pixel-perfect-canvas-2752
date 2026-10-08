@@ -2,36 +2,101 @@
 // Routing reads active stations from here and maps Vietmap tolls by `vietmapId`.
 import { routeRepository, tollStationRepository, uid } from "@/repositories";
 import type { MockTollGate, TollGateRecord } from "@/mock-data/tollCatalog";
-import type { FeeType } from "@/types";
+import type { FeeType, TollStation } from "@/types";
 import { auditService, type AuditInput } from "./auditService";
-import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
+import {
+  BusinessRuleError,
+  makeCrud,
+  stampCreate,
+  stampUpdate,
+  type EntityCrud,
+} from "./crudService";
 import type { ImportEntityConfig } from "./importExportService";
 
 export { activeTollGates, tollGateByVietmapId } from "./routing/tollGates";
 
 const live = () => tollStationRepository.all().filter((g) => !g.deleted);
 
-/** Routes whose calculated tolls include this station. */
-const routesUsing = (id: string) =>
+/** Does a route toll line point at this station? Matched by id, Vietmap ID or code. */
+const tollMatches = (g: TollGateRecord, t: TollStation) =>
+  t.id === g.id ||
+  (!!g.vietmapId && t.id === g.vietmapId) ||
+  (!!g.code && (t.code ?? "").toUpperCase() === g.code.toUpperCase());
+
+/** Routes whose tolls (selected legs, alternatives, custom return) include this station. */
+const routesUsing = (g: TollGateRecord) =>
   routeRepository
     .all()
     .filter(
       (r) =>
         !r.deleted &&
-        [...(r.outbound?.tollStations ?? []), ...(r.returnLeg?.tollStations ?? [])].some(
-          (t) => t.id === id,
-        ),
+        [
+          ...(r.outbound?.tollStations ?? []),
+          ...(r.returnLeg?.tollStations ?? []),
+          ...(r.alternatives ?? []).flatMap((a) => a?.tollStations ?? []),
+          ...(r.customReturn?.tollStations ?? []),
+        ].some((t) => tollMatches(g, t)),
     ).length;
 
-export const tollStationCrud = makeCrud<TollGateRecord>({
+/** Overall status shown on list / detail: Archived wins over Active / Inactive. */
+export type TollStationStatus = "Active" | "Inactive" | "Archived";
+export const TOLL_STATION_STATUSES: TollStationStatus[] = ["Active", "Inactive", "Archived"];
+export const tollStationStatus = (
+  g: Pick<TollGateRecord, "status" | "archived">,
+): TollStationStatus => (g.archived ? "Archived" : g.status === "Active" ? "Active" : "Inactive");
+
+const baseCrud = makeCrud<TollGateRecord>({
   entityType: "Toll Station",
   repo: tollStationRepository,
   labelOf: (g) => g.code,
   references: (g) => {
-    const n = routesUsing(g.id);
+    const n = routesUsing(g);
     return n ? `is used by ${n} route${n > 1 ? "s" : ""}` : null;
   },
 });
+
+export const tollStationCrud: EntityCrud<TollGateRecord> = {
+  ...baseCrud,
+  /** Activating an archived station restores it from the archive as well. */
+  setStatus(ids, status) {
+    if (status !== "Active") return baseCrud.setStatus(ids, status);
+    const archivedIds = ids.filter((id) => tollStationRepository.get(id)?.archived);
+    const restored = archiveTollStations(archivedIds, false);
+    const activated = baseCrud.setStatus(ids, status);
+    return Math.max(restored, activated);
+  },
+};
+
+/**
+ * Archive (or restore) stations. Archiving never deletes: data, rates and route references stay;
+ * the station becomes Inactive and is no longer offered to routing. Restore brings it back as
+ * Inactive so it can be reviewed before activation. Returns the number of records changed.
+ */
+export function archiveTollStations(ids: string[], archived: boolean): number {
+  let changed = 0;
+  for (const id of ids) {
+    const row = tollStationRepository.get(id);
+    if (!row || row.deleted || !!row.archived === archived) continue;
+    const next = stampUpdate({
+      ...row,
+      archived,
+      ...(archived ? { status: "Inactive" as const } : {}),
+    });
+    tollStationRepository.update(id, () => next);
+    auditService.log({
+      action: "UPDATE_STATUS",
+      entityType: "Toll Station",
+      entityId: id,
+      entityLabel: row.code,
+      field: "Status",
+      oldValue: tollStationStatus(row),
+      newValue: tollStationStatus(next),
+      note: archived ? "Archived" : "Restored from archive",
+    });
+    changed++;
+  }
+  return changed;
+}
 
 /** Vietnamese toll vehicle groups (fixed). Applied Vehicle is a read-only description. */
 export const TOLL_GROUPS = [
@@ -41,6 +106,13 @@ export const TOLL_GROUPS = [
   { group: 4, applied: "Truck < 18 t · tractor + container ≤ 20 ft" },
   { group: 5, applied: "Truck ≥ 18 t · tractor + container > 20 ft" },
 ] as const;
+
+/** Toll Groups with a fee > 0, as tokens "G1 G2 …" (list quick filter "Toll Group"). */
+export const tollGroupTokens = (g: Pick<TollGateRecord, "prices">) =>
+  (g.prices ?? [])
+    .map((p, i) => (Number(p) > 0 ? `G${i + 1}` : ""))
+    .filter(Boolean)
+    .join(" ");
 
 /** UI fee types: Road (stored as "Toll") and Bridge / Ferry. */
 export const FEE_TYPE_OPTIONS = ["Road", "Bridge / Ferry"] as const;
@@ -79,6 +151,7 @@ export const draftOf = (g: TollGateRecord): TollStationDraft => {
     id: _id,
     status: _s,
     deleted: _d,
+    archived: _ar,
     createdAt: _ca,
     createdBy: _cb,
     updatedAt: _ua,
@@ -137,7 +210,7 @@ const AUDIT_FIELDS: [keyof TollStationDraft, string][] = [
   ["locationId", "Location"],
   ["feeType", "Fee Type"],
   ["vietmapId", "Vietmap ID"],
-  ["remark", "Description"],
+  ["remark", "Remark"],
   ["lat", "Latitude"],
   ["lng", "Longitude"],
 ];
@@ -200,6 +273,13 @@ export const tollStationService = {
 
 // ---------------------------------------------------------------- import
 
+/** Import "Status" cell → overall status (case-insensitive); empty → Active, unknown → undefined. */
+const importStatus = (v: string): TollStationStatus | undefined => {
+  const t = v.trim().toLowerCase();
+  if (!t) return "Active";
+  return TOLL_STATION_STATUSES.find((x) => x.toLowerCase() === t);
+};
+
 export const tollStationImportConfig: ImportEntityConfig = {
   entityType: "Toll Station",
   screen: "toll-station",
@@ -217,6 +297,8 @@ export const tollStationImportConfig: ImportEntityConfig = {
     { key: "g3", header: "Group 3", required: true, example: "30000" },
     { key: "g4", header: "Group 4", required: true, example: "45000" },
     { key: "g5", header: "Group 5", required: true, example: "60000" },
+    { key: "status", header: "Status", example: "Active" },
+    { key: "remark", header: "Remark", example: "" },
   ],
   existingKeys: () => new Set(live().map((g) => g.code.toLowerCase())),
   referenceCheck: () => [],
@@ -226,11 +308,14 @@ export const tollStationImportConfig: ImportEntityConfig = {
       e.push({ field: "feeType", error: "Road or Bridge / Ferry" });
     for (const k of ["g1", "g2", "g3", "g4", "g5"])
       if (!(Number(r[k]) >= 0)) e.push({ field: k, error: "Fee must be a number ≥ 0" });
+    if (!importStatus(r["status"] ?? ""))
+      e.push({ field: "status", error: "Active, Inactive or Archived (empty = Active)" });
     return e;
   },
   commit: (rows) => {
     const recs: TollGateRecord[] = rows.map((r) => {
       const vietmapId = (r["vietmapId"] ?? "").trim();
+      const st = importStatus(r["status"] ?? "") ?? "Active";
       return {
         ...newTollStationDraft(),
         id: uid("T-"),
@@ -245,7 +330,9 @@ export const tollStationImportConfig: ImportEntityConfig = {
         prices: [r["g1"], r["g2"], r["g3"], r["g4"], r["g5"]].map(
           Number,
         ) as TollGateRecord["prices"],
-        status: "Active",
+        remark: (r["remark"] ?? "").trim(),
+        status: st === "Active" ? "Active" : "Inactive",
+        ...(st === "Archived" ? { archived: true } : {}),
         ...stampCreate(),
       };
     });
@@ -268,9 +355,12 @@ export const tollStationImportConfig: ImportEntityConfig = {
       "30000",
       "45000",
       "60000",
+      i % 5 === 4 ? "Inactive" : "Active",
+      "",
     ]);
     rows[1]![0] = "IMP-T01"; // duplicate
     rows[6]![2] = "Toll road"; // unknown fee type
+    rows[8]![12] = "Closed"; // unknown status
     return [header, ...rows];
   },
 };

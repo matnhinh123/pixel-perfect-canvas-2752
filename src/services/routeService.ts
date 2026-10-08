@@ -4,7 +4,7 @@ import { activeLocations, findLocationByName } from "@/services/routing/location
 import { findVehicle, routeVehicleFields, vehicleLabel, VEHICLES } from "@/mock-data/vehicles";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
-import { routeTotals } from "./cost/costMath";
+import { syncRouteTollsToMaster } from "./routing/tollMasterSync";
 import { formatDate, formatVnd, todayYmd } from "@/lib/format";
 
 /** An editor action (recalculate, pick an alternative…) recorded in the audit trail on Save. */
@@ -108,6 +108,8 @@ function diffRoute(prev: RouteRecord, next: RouteRecord): AuditInput[] {
     return v ? vehicleLabel(v) : "—";
   };
   upd("CHANGE_VEHICLE", "Vehicle", veh(prev.vehicleId), veh(next.vehicleId));
+  upd("CHANGE_VEHICLE", "Vehicle Group", prev.vehicleGroup ?? "—", next.vehicleGroup ?? "—");
+  upd("UPDATE", "Terrain", prev.terrain ?? "Plain", next.terrain ?? "Plain");
   upd(
     "CHANGE_DEPARTURE_TIME",
     "Departure Time",
@@ -159,16 +161,38 @@ function diffRoute(prev: RouteRecord, next: RouteRecord): AuditInput[] {
   return out;
 }
 
+/** Shown when the code of a route that is already used can't be changed. */
+export const routeCodeLockedHint = (n: number) =>
+  `Used by ${n} cost record${n === 1 ? "" : "s"} — code can't be changed`;
+
+/** After a save: store the route's map tolls in Toll Station master and link the toll lines to it. */
+function syncTolls(rec: RouteRecord): RouteRecord {
+  try {
+    const { route } = syncRouteTollsToMaster(rec);
+    if (route === rec || JSON.stringify(route) === JSON.stringify(rec)) return rec;
+    return routeRepository.update(rec.id, () => route);
+  } catch (e) {
+    // The route itself is saved; a toll master sync failure must not lose it.
+    console.error("Toll Station sync failed", e);
+    return rec;
+  }
+}
+
 export const routeService = {
   ...routeCrud,
   costReferences: costRefs,
 
   save(draft: RouteRecord, actions: RouteAuditAction[] = []): RouteRecord {
     const errors = validateRoute(draft);
+    const existing = draft.id ? routeRepository.get(draft.id) : undefined;
+    // Route Code is editable only while no Cost record uses the route.
+    if (existing && existing.code.toUpperCase() !== draft.code.trim().toUpperCase()) {
+      const n = costRefs(existing.id).length;
+      if (n) errors["code"] = `${routeCodeLockedHint(n)} (keep ${existing.code}).`;
+    }
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please fix the highlighted fields.", errors);
     const clean = { ...draft, code: draft.code.trim().toUpperCase(), name: draft.name.trim() };
-    const existing = draft.id ? routeRepository.get(draft.id) : undefined;
     if (!existing) {
       const rec: RouteRecord = { ...clean, id: uid("R-"), ...stampCreate() };
       routeRepository.insert(rec);
@@ -189,7 +213,7 @@ export const routeService = {
           newValue: `${m.reason} +${formatVnd(m.amount)}`,
         })),
       ]);
-      return rec;
+      return syncTolls(rec);
     }
     const next = stampUpdate({
       ...existing,
@@ -208,7 +232,7 @@ export const routeService = {
         entityLabel: next.code,
       })),
     ]);
-    return next;
+    return syncTolls(next);
   },
 };
 

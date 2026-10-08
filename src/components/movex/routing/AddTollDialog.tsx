@@ -14,13 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Field, NativeSelect } from "@/components/movex/common";
 import type { TollGateRecord } from "@/mock-data/tollCatalog";
 import { activeTollGates } from "@/services/routing/tollGates";
-import { tollClassLabel } from "@/services/routing/RouteProvider";
-import { BusinessRuleError } from "@/services/crudService";
-import {
-  newTollStationDraft,
-  tollStationService,
-  validateTollStation,
-} from "@/services/tollStationService";
+import { inferFeeType, tollClassLabel } from "@/services/routing/RouteProvider";
+import { uid } from "@/repositories";
 import type { TollStation } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -42,8 +37,8 @@ const toRouteToll = (g: TollGateRecord, cls: number): TollStation => ({
 });
 
 /**
- * "Add Toll" on the route: pick a station from Toll Station master, or type a new one
- * (it is saved to Toll Station master too).
+ * "Add Toll" on the route: pick a station from Toll Station master, or type a manual toll
+ * that is kept on this route only (no Toll Station master record).
  */
 export function AddTollDialog({
   open,
@@ -114,27 +109,30 @@ function AddTollBody({
     if (g) onAdd(toRouteToll(g, tollClass), leg);
   };
 
+  /** A manual toll lives on this route only — it is not added to Toll Station master. */
   const addNew = () => {
-    const draft = {
-      ...newTollStationDraft(),
-      code: d.code,
-      name: d.name,
-      province: d.location.trim(),
-    };
-    const e = validateTollStation(draft, undefined, { requireCoords: false });
-    if (e["code"])
-      e["code"] = d.code.trim()
-        ? `Toll Code ${d.code.trim().toUpperCase()} already exists.`
-        : "Toll Code is required.";
-    if (e["name"]) e["name"] = "Toll Name is required.";
+    const code = d.code.trim().toUpperCase();
+    const name = d.name.trim();
+    const e: Record<string, string> = {};
+    if (code && !/^[A-Z0-9._-]{1,30}$/.test(code)) e["code"] = "Use A–Z, 0–9, . - _ (max 30).";
+    if (!name) e["name"] = "Toll Name is required.";
     setErrors(e);
     if (Object.keys(e).length) return;
-    try {
-      const saved = tollStationService.save(draft, undefined, { requireCoords: false });
-      onAdd(toRouteToll(saved, tollClass), leg);
-    } catch (err) {
-      if (err instanceof BusinessRuleError) setErrors(err.fieldErrors);
-    }
+    onAdd(
+      {
+        id: uid("MT-"),
+        ...(code ? { code } : {}),
+        name,
+        address: d.location.trim(),
+        feeType: inferFeeType(name),
+        price: 0,
+        vehicleTollGroup: tollClassLabel(tollClass),
+        passCount: 1,
+        source: "Manual",
+        reconciled: false,
+      },
+      leg,
+    );
   };
 
   return (
@@ -216,7 +214,7 @@ function AddTollBody({
 
         <TabsContent value="new" className="mt-3">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Toll Code" required error={errors["code"]}>
+            <Field label="Toll Code" error={errors["code"]}>
               <Input
                 value={d.code}
                 onChange={(e) => setD({ ...d, code: e.target.value.toUpperCase() })}
@@ -234,7 +232,7 @@ function AddTollBody({
             </Field>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            The new toll is also saved to Toll Station.
+            The new toll is added to this route only — it is not saved to Toll Station.
           </p>
           <DialogFooter className="mt-3">
             <Button variant="outline" onClick={onCancel}>

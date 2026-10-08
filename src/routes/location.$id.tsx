@@ -6,7 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
+import {
+  EmptyState,
+  Field,
+  NativeSelect,
+  Panel,
+  StatusBadge,
+  Tag,
+} from "@/components/movex/common";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
@@ -22,10 +29,19 @@ import {
   draftOfLocation,
   locationService,
   newLocationDraft,
+  withLocationType,
   type LocationDraft,
 } from "@/services/locationService";
-import { LOCATION_COUNTRIES, LOCATION_TYPES, SERVICE_MODES } from "@/mock-data/locationCatalog";
-import type { LocationMasterRecord } from "@/mock-data/locations";
+import {
+  COUNTRY_ISO2,
+  LOCATION_COUNTRIES,
+  LOCATION_TYPES,
+  PORT_SUB_TYPES,
+  requiresIata,
+  requiresUnLocode,
+  VN_PROVINCES,
+} from "@/mock-data/locationCatalog";
+import { locationOrigin, type LocationMasterRecord } from "@/mock-data/locations";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -123,7 +139,13 @@ function LocationForm({
   });
 
   const hasCoords = Number.isFinite(d.lat) && Number.isFinite(d.lng);
-  const subTypes = LOCATION_TYPES[d.locationType] ?? [];
+  const isPort = requiresUnLocode(d.locationType);
+  const isAirport = requiresIata(d.locationType);
+  const origin = locationOrigin(d);
+  // Keep a stored province selectable even when it is not in the catalog.
+  const provinces =
+    d.province && !VN_PROVINCES.includes(d.province) ? [d.province, ...VN_PROVINCES] : VN_PROVINCES;
+  const isoPrefix = COUNTRY_ISO2[d.country] ?? "";
 
   const back = () =>
     source
@@ -223,33 +245,105 @@ function LocationForm({
             </Field>
             <Field label="Location Type" required error={errors["locationType"]} className={S3}>
               <NativeSelect
-                {...select("locationType", Object.keys(LOCATION_TYPES), "Select Location Type")}
-                onChange={(v) => patch({ locationType: v, locationSubType: "" })}
+                {...select("locationType", LOCATION_TYPES, "Select Location Type")}
+                onChange={(v) => {
+                  setD((x) => withLocationType(x, v));
+                  setErrors((e) => {
+                    const n = { ...e };
+                    for (const k of ["locationType", "locationSubType", "unLocode", "iataCode"])
+                      delete n[k];
+                    return n;
+                  });
+                }}
               />
             </Field>
-            <Field
-              label="Location Sub Type"
-              required
-              error={errors["locationSubType"]}
-              className={S3}
-            >
-              <NativeSelect
-                {...select(
-                  "locationSubType",
-                  subTypes,
-                  "Select Location Sub Type",
-                  !readOnly && !d.locationType,
+            {isPort && (
+              <Field
+                label="Port Sub Type"
+                error={errors["locationSubType"]}
+                className={S3}
+                info={t(
+                  "Không bắt buộc: Seaport, ICD (cảng cạn) hoặc River Port.",
+                  "Optional: Seaport, ICD (inland container depot) or River Port.",
                 )}
+              >
+                <NativeSelect
+                  {...select("locationSubType", PORT_SUB_TYPES, "Select Port Sub Type")}
+                />
+              </Field>
+            )}
+
+            <Field label="Country" required error={errors["country"]} className={S3}>
+              <NativeSelect
+                {...select("country", LOCATION_COUNTRIES, "Select Country")}
+                onChange={(v) => patch({ country: v, province: "" })}
               />
+            </Field>
+            <Field label="Province/City" error={errors["province"]} className={S3}>
+              {d.country === "Vietnam" ? (
+                <NativeSelect {...select("province", provinces, "Select Province/City")} />
+              ) : (
+                <Input placeholder="Enter Province/City" {...text("province")} />
+              )}
+            </Field>
+            {isPort && (
+              <Field
+                label="UN/LOCODE"
+                required
+                error={errors["unLocode"]}
+                className={S3}
+                info={t(
+                  "Mã địa điểm của Liên Hợp Quốc: 2 chữ quốc gia + 3 ký tự (VD: VNSGN). Bắt buộc với cảng / ICD.",
+                  "United Nations location code: 2-letter country + 3 characters (e.g. VNSGN). Required for a Port / ICD.",
+                )}
+              >
+                <Input
+                  placeholder={isoPrefix ? `${isoPrefix}XXX` : "Enter UN/LOCODE"}
+                  maxLength={5}
+                  value={d.unLocode}
+                  onChange={(e) =>
+                    patch({ unLocode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })
+                  }
+                  aria-invalid={!!errors["unLocode"] || undefined}
+                />
+              </Field>
+            )}
+            {isAirport && (
+              <Field
+                label="IATA Code"
+                required
+                error={errors["iataCode"]}
+                className={S3}
+                info={t(
+                  "Mã 3 chữ cái của sân bay theo IATA (VD: SGN). Bắt buộc với sân bay.",
+                  "3-letter IATA airport code (e.g. SGN). Required for an Airport.",
+                )}
+              >
+                <Input
+                  placeholder="Enter IATA Code"
+                  maxLength={3}
+                  value={d.iataCode}
+                  onChange={(e) =>
+                    patch({ iataCode: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })
+                  }
+                  aria-invalid={!!errors["iataCode"] || undefined}
+                />
+              </Field>
+            )}
+            <Field
+              label="Standard / Internal"
+              className={S3}
+              info={t(
+                "Tự xác định: Standard khi có UN/LOCODE hoặc IATA; còn lại là địa điểm nội bộ (Internal) do tenant tạo, vẫn dùng được trong Routing.",
+                "Derived: Standard when the location has a UN/LOCODE or IATA code; otherwise it is an Internal point created by the tenant, still usable in Routing.",
+              )}
+            >
+              <div className="flex h-9 items-center">
+                <Tag tone={origin === "Standard" ? "Auto" : origin}>{origin}</Tag>
+              </div>
             </Field>
 
-            <Field label="Service Mode" required error={errors["serviceMode"]} className={S3}>
-              <NativeSelect {...select("serviceMode", SERVICE_MODES, "Select Service Mode")} />
-            </Field>
-            <Field label="Country" required error={errors["country"]} className={S3}>
-              <NativeSelect {...select("country", LOCATION_COUNTRIES, "Select Country")} />
-            </Field>
-            <Field label="Longitude/Latitude" error={errors["coords"]} className={S6}>
+            <Field label="Latitude, Longitude" error={errors["coords"]} className={S6}>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -264,7 +358,7 @@ function LocationForm({
                   <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="truncate">
                     {hasCoords
-                      ? `${d.lng}, ${d.lat}`
+                      ? `${d.lat}, ${d.lng}`
                       : readOnly
                         ? "—"
                         : t("Click để chọn vị trí trên bản đồ", "Click to pick a spot on the map")}
@@ -284,72 +378,6 @@ function LocationForm({
                 )}
               </div>
             </Field>
-
-            <Field label="Address" required error={errors["address"]} className={S12}>
-              <Input placeholder="Enter Address" {...text("address")} />
-            </Field>
-          </FormGroup>
-
-          <FormGroup title={t("Mã & đơn vị vận hành", "Codes & Operator")}>
-            <Field
-              label="UN/LOCODE"
-              error={errors["unLocode"]}
-              className={S3}
-              info={t(
-                "Mã địa điểm của Liên Hợp Quốc: 2 chữ quốc gia + 3 ký tự (VD: VNSGN).",
-                "United Nations location code: 2-letter country + 3 characters (e.g. VNSGN).",
-              )}
-            >
-              <Input
-                placeholder="Enter UN/LOCODE"
-                maxLength={5}
-                value={d.unLocode}
-                onChange={(e) => patch({ unLocode: e.target.value.toUpperCase() })}
-                aria-invalid={!!errors["unLocode"] || undefined}
-              />
-            </Field>
-            <Field
-              label="IATA Code"
-              error={errors["iataCode"]}
-              className={S3}
-              info={t(
-                "Mã 3 chữ cái của sân bay theo IATA (VD: SGN).",
-                "3-letter IATA airport code (e.g. SGN).",
-              )}
-            >
-              <Input
-                placeholder="Enter IATA Code"
-                maxLength={3}
-                value={d.iataCode}
-                onChange={(e) => patch({ iataCode: e.target.value.toUpperCase() })}
-                aria-invalid={!!errors["iataCode"] || undefined}
-              />
-            </Field>
-            <Field label="External Code" className={S3}>
-              <Input placeholder="Enter External Code" {...text("externalCode")} />
-            </Field>
-            <Field label="Operator Name" className={S3}>
-              <Input placeholder="Enter Operator Name" {...text("operatorName")} />
-            </Field>
-          </FormGroup>
-
-          <FormGroup title={t("Kiểm soát & trạng thái", "Control & Status")}>
-            <Field label="Is Customs Controlled" className={S3}>
-              <SwitchRow
-                checked={d.customsControlled}
-                onChange={(v) => patch({ customsControlled: v })}
-                on="Yes"
-                off="No"
-              />
-            </Field>
-            <Field label="Is Bonded" className={S3}>
-              <SwitchRow
-                checked={d.bonded}
-                onChange={(v) => patch({ bonded: v })}
-                on="Yes"
-                off="No"
-              />
-            </Field>
             <Field label="Status" className={S3}>
               <SwitchRow
                 checked={d.status === "Active"}
@@ -357,6 +385,10 @@ function LocationForm({
                 on="Active"
                 off="Inactive"
               />
+            </Field>
+
+            <Field label="Address" required error={errors["address"]} className={S12}>
+              <Input placeholder="Enter Address" {...text("address")} />
             </Field>
             <Field label="Remark" className={S12}>
               <Textarea rows={2} placeholder="Enter Remark" {...text("remark")} />

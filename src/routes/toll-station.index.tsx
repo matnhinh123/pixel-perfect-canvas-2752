@@ -1,20 +1,28 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
+import { Archive, ArchiveRestore } from "lucide-react";
+import { toast } from "sonner";
 import { StatusBadge, Tag } from "@/components/movex/common";
-import { EntityListPage } from "@/components/movex/general/EntityListPage";
+import { EntityListPage, type ExtraRowAction } from "@/components/movex/general/EntityListPage";
+import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import type { ListColumn, QuickFilter } from "@/components/movex/general/types";
 import { useCollection } from "@/hooks/use-store";
 import { locationRepository, tollStationRepository } from "@/repositories";
 import type { TollGateRecord } from "@/mock-data/tollCatalog";
 import {
   FEE_TYPE_OPTIONS,
+  TOLL_GROUPS,
+  TOLL_STATION_STATUSES,
+  archiveTollStations,
   feeTypeName,
   locationLabel,
   sourceOf,
+  tollGroupTokens,
   tollStationCrud,
   tollStationImportConfig,
+  tollStationStatus,
 } from "@/services/tollStationService";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatNumber } from "@/lib/format";
 
 export const Route = createFileRoute("/toll-station/")({
   validateSearch: (s: Record<string, unknown>): { q?: string } =>
@@ -30,6 +38,11 @@ export const Route = createFileRoute("/toll-station/")({
 
 type Row = TollGateRecord;
 const SOURCES = ["Manual", "Vietmap"];
+/** Toll fee of group index i (0..4); null when missing / not a number. */
+const feeOf = (g: Row, i: number): number | null => {
+  const v = g.prices?.[i];
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+};
 
 function TollStationList() {
   const navigate = useNavigate();
@@ -89,9 +102,30 @@ function TollStationList() {
         key: "status",
         label: "Status",
         type: "enum",
-        options: ["Active", "Inactive"],
-        value: (g) => g.status,
-        render: (g) => <StatusBadge status={g.status} />,
+        options: [...TOLL_STATION_STATUSES],
+        value: (g) => tollStationStatus(g),
+        render: (g) => <StatusBadge status={tollStationStatus(g)} />,
+      },
+      // Toll Rates per group: hidden by default; can be shown, sorted, filtered and exported.
+      ...TOLL_GROUPS.map(({ group }, i): ListColumn<Row> => ({
+        key: `group${group}`,
+        label: `Group ${group}`,
+        type: "number",
+        defaultHidden: true,
+        className: "text-right",
+        value: (g) => feeOf(g, i),
+        render: (g) => {
+          const fee = feeOf(g, i);
+          return fee === null ? "—" : <span className="font-medium">{formatNumber(fee)}</span>;
+        },
+      })),
+      {
+        // Technical column behind the "Toll Group" quick filter ("G1 G2 …" = groups with a fee > 0).
+        key: "tollGroups",
+        label: "Toll Groups",
+        type: "text",
+        defaultHidden: true,
+        value: (g) => tollGroupTokens(g),
       },
       {
         key: "source",
@@ -155,9 +189,17 @@ function TollStationList() {
       })),
     },
     {
+      key: "tollGroup",
+      allLabel: "Toll Group: All",
+      options: TOLL_GROUPS.map(({ group }) => ({
+        label: `Toll Group: Group ${group}`,
+        conditions: [{ field: "tollGroups", operator: "contains", value: `G${group}` }],
+      })),
+    },
+    {
       key: "status",
       allLabel: "Status: All",
-      options: ["Active", "Inactive"].map((s) => ({
+      options: TOLL_STATION_STATUSES.map((s) => ({
         label: `Status: ${s}`,
         conditions: [{ field: "status", operator: "eq", value: s }],
       })),
@@ -172,11 +214,55 @@ function TollStationList() {
     },
   ];
 
+  const confirm = useConfirm();
+  const archive = async (g: Row, archived: boolean) => {
+    if (!!g.archived === archived) {
+      toast.info(`Toll station ${g.code} is already ${archived ? "archived" : "not archived"}.`);
+      return;
+    }
+    const r = await confirm(
+      archived
+        ? {
+            title: `Archive Toll Station ${g.code}?`,
+            description:
+              "The station is kept with its rates and history, set to Inactive and no longer used for route calculation. You can restore it later.",
+            cancelLabel: "Cancel",
+            confirmLabel: "Archive",
+            tone: "danger",
+          }
+        : {
+            title: `Restore Toll Station ${g.code}?`,
+            description:
+              "The station returns from the archive as Inactive. Activate it to use it for routing again.",
+            cancelLabel: "Cancel",
+            confirmLabel: "Restore",
+          },
+    );
+    if (r !== "confirm") return;
+    if (archiveTollStations([g.id], archived))
+      toast.success(`Toll station ${g.code} ${archived ? "archived" : "restored"}`);
+  };
+  // `hidden` shows Archive only for non-archived rows and Restore only for archived ones.
+  const extraRowActions: (ExtraRowAction<Row> & { hidden?: (g: Row) => boolean })[] = [
+    {
+      label: "Archive",
+      icon: <Archive className="h-4 w-4" />,
+      hidden: (g) => !!g.archived,
+      onClick: (g) => void archive(g, true),
+    },
+    {
+      label: "Restore",
+      icon: <ArchiveRestore className="h-4 w-4" />,
+      hidden: (g) => !g.archived,
+      onClick: (g) => void archive(g, false),
+    },
+  ];
+
   return (
     <EntityListPage<Row>
       key={q ?? ""}
       lang="en"
-      screen="toll-station.v2"
+      screen="toll-station.v3"
       entityType="Toll Station"
       entityLabel="Toll Station"
       title="Toll Station"
@@ -188,6 +274,7 @@ function TollStationList() {
       showRefresh={false}
       crud={tollStationCrud}
       allowDelete={false}
+      extraRowActions={extraRowActions}
       addLabel="Add Toll Station"
       onAdd={() => void navigate({ to: "/toll-station/$id", params: { id: "new" } })}
       onView={(g) =>

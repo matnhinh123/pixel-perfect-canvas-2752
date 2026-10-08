@@ -1,6 +1,12 @@
 // Location master: add / edit / deactivate / delete. Routing stop pickers read active locations.
-import { locationRepository, routeRepository, uid } from "@/repositories";
-import type { LocationMasterRecord } from "@/mock-data/locations";
+import { locationRepository, routeRepository, tollStationRepository, uid } from "@/repositories";
+import { normalizeLocation, type LocationMasterRecord } from "@/mock-data/locations";
+import {
+  COUNTRY_ISO2,
+  PORT_SUB_TYPES,
+  requiresIata,
+  requiresUnLocode,
+} from "@/mock-data/locationCatalog";
 import { tr } from "@/lib/i18n";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -21,15 +27,28 @@ const routesUsing = (id: string) =>
         ].some((p) => p.locationId === id),
     ).length;
 
+const tollStationsUsing = (id: string) =>
+  tollStationRepository.all().filter((g) => !g.deleted && g.locationId === id).length;
+
+const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
+
 export const locationCrud = makeCrud<LocationMasterRecord>({
   entityType: "Location",
   repo: locationRepository,
   labelOf: (l) => l.code ?? l.name,
   references: (l) => {
-    const n = routesUsing(l.id);
-    return n ? `is used by ${n} route${n > 1 ? "s" : ""}` : null;
+    const parts: string[] = [];
+    const routes = routesUsing(l.id);
+    if (routes) parts.push(plural(routes, "route"));
+    const gates = tollStationsUsing(l.id);
+    if (gates) parts.push(plural(gates, "toll station"));
+    return parts.length ? `is used by ${parts.join(" and ")}` : null;
   },
 });
+
+/** Non-deleted locations, normalized to the current model (legacy types / codes mapped on read). */
+export const listLocations = (rows: LocationMasterRecord[] = locationRepository.all()) =>
+  rows.filter((l) => !l.deleted).map(normalizeLocation);
 
 export type LocationDraft = Pick<
   LocationMasterRecord,
@@ -38,14 +57,10 @@ export type LocationDraft = Pick<
   code: string;
   country: string;
   locationType: string;
+  /** Optional, Port only. */
   locationSubType: string;
-  serviceMode: string;
   unLocode: string;
   iataCode: string;
-  externalCode: string;
-  operatorName: string;
-  customsControlled: boolean;
-  bonded: boolean;
   remark: string;
 };
 
@@ -70,35 +85,37 @@ export const newLocationDraft = (): LocationDraft => ({
   country: "",
   locationType: "",
   locationSubType: "",
-  serviceMode: "",
   unLocode: "",
   iataCode: "",
-  externalCode: "",
-  operatorName: "",
-  customsControlled: false,
-  bonded: false,
   remark: "",
 });
 
-export const draftOfLocation = (l: LocationMasterRecord): LocationDraft => ({
-  code: l.code ?? l.id.replace(/^LOC-/, ""),
-  name: l.name,
-  address: l.address,
-  province: l.province,
-  lat: Number.isFinite(l.lat) ? l.lat : NaN,
-  lng: Number.isFinite(l.lng) ? l.lng : NaN,
-  status: l.status === "Active" ? "Active" : "Inactive",
-  country: l.country ?? "",
-  locationType: l.locationType ?? "",
-  locationSubType: l.locationSubType ?? "",
-  serviceMode: l.serviceMode ?? "",
-  unLocode: l.unLocode ?? "",
-  iataCode: l.iataCode ?? "",
-  externalCode: l.externalCode ?? "",
-  operatorName: l.operatorName ?? "",
-  customsControlled: l.customsControlled ?? false,
-  bonded: l.bonded ?? false,
-  remark: l.remark ?? "",
+export const draftOfLocation = (raw: LocationMasterRecord): LocationDraft => {
+  const l = normalizeLocation(raw);
+  return {
+    code: l.code ?? l.id.replace(/^LOC-/, ""),
+    name: l.name,
+    address: l.address,
+    province: l.province ?? "",
+    lat: Number.isFinite(l.lat) ? l.lat : NaN,
+    lng: Number.isFinite(l.lng) ? l.lng : NaN,
+    status: l.status === "Active" ? "Active" : "Inactive",
+    country: l.country ?? "",
+    locationType: l.locationType ?? "",
+    locationSubType: l.locationSubType ?? "",
+    unLocode: l.unLocode ?? "",
+    iataCode: l.iataCode ?? "",
+    remark: l.remark ?? "",
+  };
+};
+
+/** Applies a Type change: clears the codes / sub type that do not belong to the new type. */
+export const withLocationType = (d: LocationDraft, locationType: string): LocationDraft => ({
+  ...d,
+  locationType,
+  locationSubType: locationType === "Port" ? d.locationSubType : "",
+  unLocode: requiresUnLocode(locationType) ? d.unLocode : "",
+  iataCode: requiresIata(locationType) ? d.iataCode : "",
 });
 
 export function validateLocation(d: LocationDraft, id?: string): Record<string, string> {
@@ -118,17 +135,44 @@ export function validateLocation(d: LocationDraft, id?: string): Record<string, 
   };
   req("name", "tên địa điểm", "Location name");
   req("locationType", "loại địa điểm", "Location type");
-  req("locationSubType", "loại địa điểm phụ", "Location sub type");
-  req("serviceMode", "phương thức dịch vụ", "Service mode");
   req("country", "quốc gia", "Country");
   req("address", "địa chỉ", "Address");
-  if (d.unLocode.trim() && !/^[A-Za-z]{2}[A-Za-z0-9]{3}$/.test(d.unLocode.trim()))
-    e["unLocode"] = tr(
-      "UN/LOCODE gồm 5 ký tự: 2 chữ quốc gia + 3 chữ/số (VD: VNSGN).",
-      "UN/LOCODE is 5 characters: 2-letter country + 3 letters/digits (e.g. VNSGN).",
-    );
-  if (d.iataCode.trim() && !/^[A-Za-z]{3}$/.test(d.iataCode.trim()))
-    e["iataCode"] = tr("IATA Code gồm 3 chữ cái (VD: SGN).", "IATA Code is 3 letters (e.g. SGN).");
+  if (
+    d.locationSubType &&
+    (d.locationType !== "Port" ||
+      !(PORT_SUB_TYPES as readonly string[]).includes(d.locationSubType))
+  )
+    e["locationSubType"] = tr("Loại phụ không hợp lệ.", "Invalid sub type.");
+
+  const unLocode = d.unLocode.trim().toUpperCase();
+  if (requiresUnLocode(d.locationType)) {
+    const iso = COUNTRY_ISO2[d.country.trim()];
+    if (!unLocode)
+      e["unLocode"] = tr(
+        "Nhập UN/LOCODE cho cảng / ICD.",
+        "UN/LOCODE is required for a Port / ICD.",
+      );
+    else if (!/^[A-Z]{2}[A-Z0-9]{3}$/.test(unLocode))
+      e["unLocode"] = tr(
+        "UN/LOCODE gồm 5 ký tự: 2 chữ quốc gia + 3 chữ/số (VD: VNSGN).",
+        "UN/LOCODE is 5 characters: 2-letter country + 3 letters/digits (e.g. VNSGN).",
+      );
+    else if (iso && unLocode.slice(0, 2) !== iso)
+      e["unLocode"] = tr(
+        `UN/LOCODE phải bắt đầu bằng mã quốc gia ${iso}.`,
+        `UN/LOCODE must start with the country code ${iso}.`,
+      );
+  }
+  const iata = d.iataCode.trim().toUpperCase();
+  if (requiresIata(d.locationType)) {
+    if (!iata)
+      e["iataCode"] = tr("Nhập IATA Code cho sân bay.", "IATA Code is required for an Airport.");
+    else if (!/^[A-Z]{3}$/.test(iata))
+      e["iataCode"] = tr(
+        "IATA Code gồm 3 chữ cái (VD: SGN).",
+        "IATA Code is 3 letters (e.g. SGN).",
+      );
+  }
   // Coordinates are optional, but if one is typed both must be valid.
   const hasLat = Number.isFinite(d.lat),
     hasLng = Number.isFinite(d.lng);
@@ -145,13 +189,11 @@ const FIELD_LABELS: [keyof LocationDraft, string][] = [
   ["name", "Name"],
   ["address", "Address"],
   ["country", "Country"],
+  ["province", "Province/City"],
   ["locationType", "Location Type"],
-  ["locationSubType", "Location Sub Type"],
-  ["serviceMode", "Service Mode"],
+  ["locationSubType", "Port Sub Type"],
   ["unLocode", "UN/LOCODE"],
   ["iataCode", "IATA Code"],
-  ["externalCode", "External Code"],
-  ["operatorName", "Operator Name"],
   ["remark", "Remark"],
 ];
 
@@ -163,19 +205,16 @@ export const locationService = {
         tr("Vui lòng kiểm tra các trường được đánh dấu.", "Please check the highlighted fields."),
         errors,
       );
-    const country = d.country.trim();
-    const clean = {
-      ...d,
+    const typed = withLocationType(d, d.locationType);
+    const clean: LocationDraft = {
+      ...typed,
       code: d.code.trim().toUpperCase(),
       name: d.name.trim(),
       address: d.address.trim(),
-      country,
-      // Routing shows `province` as the stop's address line; fall back to the country when unset.
-      province: d.province.trim() || country,
-      unLocode: d.unLocode.trim().toUpperCase(),
-      iataCode: d.iataCode.trim().toUpperCase(),
-      externalCode: d.externalCode.trim(),
-      operatorName: d.operatorName.trim(),
+      country: d.country.trim(),
+      province: d.province.trim(),
+      unLocode: typed.unLocode.trim().toUpperCase(),
+      iataCode: typed.iataCode.trim().toUpperCase(),
       remark: d.remark.trim(),
     };
     const existing = id ? locationRepository.get(id) : undefined;
@@ -190,7 +229,14 @@ export const locationService = {
       });
       return rec;
     }
-    const next = stampUpdate({ ...existing, ...clean });
+    // Out-of-scope legacy fields are dropped when a row is saved again.
+    const kept: LocationMasterRecord = { ...existing };
+    delete kept.serviceMode;
+    delete kept.externalCode;
+    delete kept.operatorName;
+    delete kept.customsControlled;
+    delete kept.bonded;
+    const next = stampUpdate({ ...kept, ...clean });
     locationRepository.update(existing.id, () => next);
     const base = { entityType: "Location" as const, entityId: next.id, entityLabel: clean.code };
     const out: AuditInput[] = [];
@@ -200,8 +246,6 @@ export const locationService = {
     const before = draftOfLocation(existing);
     for (const [k, label] of FIELD_LABELS) upd(label, String(before[k]), String(clean[k]));
     upd("Coordinates", `${before.lat}, ${before.lng}`, `${clean.lat}, ${clean.lng}`);
-    upd("Is Customs Controlled", String(before.customsControlled), String(clean.customsControlled));
-    upd("Is Bonded", String(before.bonded), String(clean.bonded));
     if (existing.status !== next.status)
       out.push({
         ...base,

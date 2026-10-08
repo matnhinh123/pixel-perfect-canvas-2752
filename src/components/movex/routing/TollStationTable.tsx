@@ -17,15 +17,18 @@ export interface TollRow {
   station: TollStation;
 }
 
-/** Tolls of the selected route (+ return leg). Fees are in View Details. */
+/** Tolls of the selected route (+ return leg) in route order; only the first `limit` are shown here. */
 export function TollStationTable({
   rows,
   showLeg,
   calculated,
+  limit,
 }: {
   rows: TollRow[];
   showLeg?: boolean;
   calculated: boolean;
+  /** Show only the first N rows (the rest are in View Details). */
+  limit?: number;
 }) {
   if (rows.length === 0)
     return (
@@ -52,13 +55,13 @@ export function TollStationTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((r, i) => {
+        {(limit ? rows.slice(0, limit) : rows).map((r, i) => {
           const t = r.station;
           return (
             <TableRow key={r.key}>
               <TableCell className="w-10 py-1.5 text-center">{i + 1}</TableCell>
               <TableCell className="py-1.5">
-                {t.code ? (
+                {t.code && t.reconciled !== false ? (
                   <Link
                     to="/toll-station"
                     search={{ q: t.code }}
@@ -67,7 +70,7 @@ export function TollStationTable({
                     {t.code}
                   </Link>
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground">{t.code || "—"}</span>
                 )}
               </TableCell>
               <TableCell className="py-1.5">

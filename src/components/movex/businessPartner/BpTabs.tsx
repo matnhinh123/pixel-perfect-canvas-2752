@@ -5,22 +5,20 @@ import { serviceRepository } from "@/repositories";
 import {
   APPROVERS,
   BANKS,
-  BRANCHES,
-  CONTACT_ROLES,
+  CONTACT_POSITIONS,
   COUNTRIES,
   CREDIT_TERMS,
   CURRENCIES,
-  DEPARTMENTS,
   DOC_TYPES,
-  GENDERS,
-  SALESMEN,
   WO_ACCESS_POLICIES,
 } from "@/mock-data/businessPartners";
+import { DEPARTMENTS as STAFF_DEPARTMENTS, EMPLOYEES, departmentName } from "@/mock-data/staff";
 import {
   blankBank,
   blankContact,
   blankCredit,
   blankDocument,
+  blankLicense,
   blankPayment,
   blankSalesman,
   woAccessState,
@@ -32,6 +30,7 @@ import type {
   BpContact,
   BpCreditTerm,
   BpDocument,
+  BpLicenseAdjustment,
   BpPaymentTerm,
   BpSalesman,
 } from "@/types";
@@ -41,6 +40,11 @@ import { EditableTable, type ColDef } from "./EditableTable";
 
 type Draft = BusinessPartnerDraft;
 type Errors = Record<string, string>;
+interface TabProps {
+  d: Draft;
+  set: (p: Partial<Draft>) => void;
+  errors: Errors;
+}
 
 /** Active services (code + name) offered by every "Service Code / Service Name" cell. */
 function useServiceOptions() {
@@ -75,17 +79,9 @@ const STATE_TONE: Record<WoAccessState, string> = {
   Default: "bg-muted text-muted-foreground",
 };
 
-// ---------------------------------------------------------------- Documents
+// ---------------------------------------------------------------- Documents & License
 
-export function DocumentsTab({
-  d,
-  set,
-  errors,
-}: {
-  d: Draft;
-  set: (p: Partial<Draft>) => void;
-  errors: Errors;
-}) {
+export function DocumentsTab({ d, set, errors }: TabProps) {
   const { t } = useT();
   const cols: ColDef<BpDocument>[] = [
     {
@@ -100,56 +96,139 @@ export function DocumentsTab({
     { key: "issueDate", label: "Issue Date", width: 140, kind: "date" },
     { key: "expiryDate", label: "Expiry Date", width: 140, kind: "date" },
     { key: "fileName", label: "Attachment", width: 170, kind: "text" },
-    { key: "remark", label: "Remark", width: 180, kind: "text" },
+    { key: "remark", label: "Notes", width: 180, kind: "text" },
+  ];
+  const licenseCols: ColDef<BpLicenseAdjustment>[] = [
+    { key: "adjustmentDate", label: "Adjustment Date", required: true, width: 160, kind: "date" },
+    { key: "changeContent", label: "Change Content", required: true, width: 360, kind: "text" },
+    { key: "documentNo", label: "Document No.", width: 180, kind: "text" },
+  ];
+  return (
+    <div className="space-y-4">
+      <EditableTable
+        title="Documents"
+        note={t(
+          "Giấy tờ pháp lý và hợp đồng của đối tác — luôn hiển thị.",
+          "Legal papers and contracts of the partner — always shown.",
+        )}
+        rows={d.documents}
+        onChange={(documents) => set({ documents })}
+        blank={blankDocument}
+        columns={cols}
+        error={errors["documents"]}
+      />
+      <EditableTable
+        title="License Adjustments"
+        note={t(
+          "Lịch sử điều chỉnh giấy phép kinh doanh: ngày điều chỉnh và nội dung thay đổi.",
+          "Business license change history: adjustment date and what changed.",
+        )}
+        rows={d.licenseAdjustments}
+        onChange={(licenseAdjustments) => set({ licenseAdjustments })}
+        blank={blankLicense}
+        columns={licenseCols}
+        error={errors["licenseAdjustments"]}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Contacts (profile)
+
+export function ContactsTab({ d, set, errors }: TabProps) {
+  const { t } = useT();
+  const cols: ColDef<BpContact>[] = [
+    { key: "fullName", label: "Name", required: true, width: 220, kind: "text" },
+    {
+      key: "position",
+      label: "Position",
+      width: 200,
+      kind: "select",
+      options: CONTACT_POSITIONS,
+    },
+    { key: "phone", label: "Phone", width: 160, kind: "text" },
+    { key: "email", label: "Email", width: 240, kind: "text" },
+    { key: "primaryContact", label: "Primary", width: 80, kind: "bool" },
   ];
   return (
     <EditableTable
-      title="Documents"
+      title="Contacts"
       note={t(
-        "Giấy tờ pháp lý và hợp đồng của đối tác — luôn hiển thị.",
-        "Legal papers and contracts of the partner — always shown.",
+        "Người liên hệ của đối tác, dùng chung cho mọi vai trò. Chỉ một liên hệ chính.",
+        "Contact persons of the partner, shared by every role. Only one primary contact.",
       )}
-      rows={d.documents}
-      onChange={(documents) => set({ documents })}
-      blank={blankDocument}
+      rows={d.contacts}
+      onChange={(contacts) => {
+        // Ticking "Primary" on one contact unticks the others.
+        const newly = contacts.find(
+          (c) => c.primaryContact && !d.contacts.find((x) => x.rid === c.rid)?.primaryContact,
+        );
+        set({
+          contacts: newly
+            ? contacts.map((c) => (c.rid === newly.rid ? c : { ...c, primaryContact: false }))
+            : contacts,
+        });
+      }}
+      blank={blankContact}
       columns={cols}
-      error={errors["documents"]}
+      error={errors["contacts"]}
     />
   );
 }
 
-// ---------------------------------------------------------------- Shared role tables
+// ---------------------------------------------------------------- Sales Assignment (profile)
 
-function RoleTables({
-  role,
-  d,
-  set,
-  errors,
-}: {
-  role: "customer" | "vendor";
-  d: Draft;
-  set: (p: Partial<Draft>) => void;
-  errors: Errors;
-}) {
+export function SalesAssignmentTab({ d, set, errors }: TabProps) {
   const { t } = useT();
   const svc = useServiceOptions();
-  const prof = d[role];
-  const patch = (p: Partial<typeof prof>) => set({ [role]: { ...prof, ...p } } as Partial<Draft>);
-
-  const contactCols: ColDef<BpContact>[] = [
+  const cols: ColDef<BpSalesman>[] = [
+    {
+      key: "staffName",
+      label: "Staff",
+      required: true,
+      width: 210,
+      kind: "select",
+      options: EMPLOYEES.map((e) => e.name),
+    },
+    {
+      key: "department",
+      label: "Department",
+      width: 170,
+      kind: "select",
+      options: STAFF_DEPARTMENTS.map((x) => x.name),
+    },
     { key: "serviceCode", label: "Service Code", width: 170, kind: "select", options: svc.codes },
     { key: "serviceName", label: "Service Name", width: 190, kind: "select", options: svc.names },
-    { key: "gender", label: "Gender", width: 100, kind: "select", options: GENDERS },
-    { key: "fullName", label: "Personal Contact", required: true, width: 200, kind: "text" },
-    { key: "identityNo", label: "National ID", width: 150, kind: "text" },
-    { key: "telephone", label: "Landline", width: 150, kind: "text" },
-    { key: "mobile", label: "Phone Number", required: true, width: 150, kind: "text" },
-    { key: "contactRole", label: "Role", width: 190, kind: "select", options: CONTACT_ROLES },
-    { key: "email", label: "Email", width: 210, kind: "text" },
-    { key: "address", label: "Address", width: 240, kind: "text" },
-    { key: "primaryContact", label: "Primary", width: 80, kind: "bool" },
-    { key: "status", label: "Status", width: 120, kind: "select", options: ["Active", "Inactive"] },
+    { key: "remark", label: "Notes", width: 220, kind: "text" },
   ];
+  return (
+    <EditableTable
+      title="Sales Assignment"
+      note={t(
+        "Nhân viên phụ trách đối tác (theo danh mục nhân viên). Dịch vụ không bắt buộc.",
+        "Staff in charge of the partner (from the staff master). Service is optional.",
+      )}
+      rows={d.salesAssignments}
+      onChange={(salesAssignments) => set({ salesAssignments })}
+      blank={blankSalesman}
+      columns={cols}
+      derive={(r, key, v) => {
+        if (key === "staffName") {
+          const e = EMPLOYEES.find((x) => x.name === v);
+          return { staffId: e?.id ?? "", department: e ? departmentName(e.departmentId) : "" };
+        }
+        return svc.derive(r, key, v);
+      }}
+      error={errors["salesAssignments"]}
+    />
+  );
+}
+
+// ---------------------------------------------------------------- Bank accounts (per role)
+
+function BankTable({ role, d, set, errors }: TabProps & { role: "customer" | "vendor" }) {
+  const { t } = useT();
+  const prof = d[role];
   const bankCols: ColDef<BpBankAccount>[] = [
     {
       key: "bankCode",
@@ -175,98 +254,31 @@ function RoleTables({
     { key: "accountHolder", label: "Account Holder", width: 200, kind: "text" },
     { key: "currency", label: "Currency", width: 110, kind: "select", options: CURRENCIES },
   ];
-  const salesCols: ColDef<BpSalesman>[] = [
-    {
-      key: "serviceCode",
-      label: "Service Code",
-      required: true,
-      width: 170,
-      kind: "select",
-      options: svc.codes,
-    },
-    {
-      key: "serviceName",
-      label: "Service Name",
-      required: true,
-      width: 190,
-      kind: "select",
-      options: svc.names,
-    },
-    {
-      key: "salesCode",
-      label: "Code Salesman",
-      width: 180,
-      kind: "select",
-      options: SALESMEN.map((s) => s.code),
-    },
-    {
-      key: "salesName",
-      label: "Name Salesman",
-      width: 200,
-      kind: "select",
-      options: SALESMEN.map((s) => s.name),
-    },
-    { key: "remark", label: "Remark", width: 200, kind: "text" },
-    { key: "branch", label: "Office/Branch", width: 150, kind: "select", options: BRANCHES },
-    { key: "department", label: "Department", width: 170, kind: "select", options: DEPARTMENTS },
-  ];
-
   return (
-    <>
-      <EditableTable
-        title="Contact Information"
-        rows={prof.contacts}
-        onChange={(contacts) => patch({ contacts })}
-        blank={blankContact}
-        columns={contactCols}
-        derive={svc.derive}
-        error={errors[`${role}.contacts`]}
-      />
-      <EditableTable
-        title="Bank Account"
-        rows={prof.banks}
-        onChange={(banks) => patch({ banks })}
-        blank={blankBank}
-        columns={bankCols}
-        derive={(_r, key, v) => {
-          const b = BANKS.find((x) => (key === "bankCode" ? x.code : x.name) === v);
-          return key === "bankCode" || key === "bankName"
-            ? { bankCode: b?.code ?? "", bankName: b?.name ?? "", swiftCode: b?.swift ?? "" }
-            : {};
-        }}
-        error={errors[`${role}.banks`]}
-      />
-      <EditableTable
-        title="Salesman"
-        note={t("Nhân viên kinh doanh phụ trách theo dịch vụ.", "Salesman in charge per service.")}
-        rows={prof.salesmen}
-        onChange={(salesmen) => patch({ salesmen })}
-        blank={blankSalesman}
-        columns={salesCols}
-        derive={(r, key, v) => {
-          if (key === "salesCode")
-            return { salesName: SALESMEN.find((s) => s.code === v)?.name ?? "" };
-          if (key === "salesName")
-            return { salesCode: SALESMEN.find((s) => s.name === v)?.code ?? "" };
-          return svc.derive(r, key, v);
-        }}
-        error={errors[`${role}.salesmen`]}
-      />
-    </>
+    <EditableTable
+      title="Bank Account"
+      note={t(
+        `Tài khoản ngân hàng riêng của vai trò ${role === "customer" ? "Customer" : "Vendor"} — Customer và Vendor không dùng chung tài khoản.`,
+        `Bank accounts of the ${role === "customer" ? "Customer" : "Vendor"} role only — Customer and Vendor do not share accounts.`,
+      )}
+      rows={prof.banks}
+      onChange={(banks) => set({ [role]: { ...prof, banks } } as Partial<Draft>)}
+      blank={blankBank}
+      columns={bankCols}
+      derive={(_r, key, v) => {
+        const b = BANKS.find((x) => (key === "bankCode" ? x.code : x.name) === v);
+        return key === "bankCode" || key === "bankName"
+          ? { bankCode: b?.code ?? "", bankName: b?.name ?? "", swiftCode: b?.swift ?? "" }
+          : {};
+      }}
+      error={errors[`${role}.banks`]}
+    />
   );
 }
 
 // ---------------------------------------------------------------- Customer (AR 131)
 
-export function CustomerTab({
-  d,
-  set,
-  errors,
-}: {
-  d: Draft;
-  set: (p: Partial<Draft>) => void;
-  errors: Errors;
-}) {
+export function CustomerTab({ d, set, errors }: TabProps) {
   const { t } = useT();
   const svc = useServiceOptions();
   const cols: ColDef<BpCreditTerm>[] = [
@@ -342,22 +354,14 @@ export function CustomerTab({
         }}
         error={errors["customer.creditTerms"]}
       />
-      <RoleTables role="customer" d={d} set={set} errors={errors} />
+      <BankTable role="customer" d={d} set={set} errors={errors} />
     </div>
   );
 }
 
 // ---------------------------------------------------------------- Vendor (AP 331)
 
-export function VendorTab({
-  d,
-  set,
-  errors,
-}: {
-  d: Draft;
-  set: (p: Partial<Draft>) => void;
-  errors: Errors;
-}) {
+export function VendorTab({ d, set, errors }: TabProps) {
   const { t } = useT();
   const svc = useServiceOptions();
   const cols: ColDef<BpPaymentTerm>[] = [
@@ -398,7 +402,7 @@ export function VendorTab({
         derive={svc.derive}
         error={errors["vendor.paymentTerms"]}
       />
-      <RoleTables role="vendor" d={d} set={set} errors={errors} />
+      <BankTable role="vendor" d={d} set={set} errors={errors} />
     </div>
   );
 }

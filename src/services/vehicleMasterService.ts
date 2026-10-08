@@ -1,6 +1,15 @@
-// Vehicle master: list/detail CRUD, validation and the derived "Max Distance".
-import { uid, vehicleMasterRepository } from "@/repositories";
-import type { VehicleMasterRecord } from "@/types";
+// Vehicle master: list/detail CRUD, validation, owner lookup, document expiry alerts and the
+// derived "Max Distance".
+import { businessPartnerRepository, uid, vehicleMasterRepository } from "@/repositories";
+import { readJson, writeJson } from "@/repositories/storage";
+import {
+  VEHICLE_GROUPS,
+  VEHICLE_MASTER_TYPES,
+  type BusinessPartnerRecord,
+  type VehicleMasterRecord,
+  type VehicleMasterType,
+  type VehicleOwnership,
+} from "@/types";
 import { tr } from "@/lib/i18n";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -13,6 +22,11 @@ export const vehicleCrud = makeCrud<VehicleMasterRecord>({
   references: () => null,
 });
 
+/** Real Vehicle Groups (basis for norms and prices); a legacy "DEFAULT" placeholder is never offered. */
+export const VEHICLE_GROUP_OPTIONS: readonly string[] = VEHICLE_GROUPS.filter(
+  (g) => String(g).toUpperCase() !== "DEFAULT",
+);
+
 export type VehicleDraft = Omit<
   VehicleMasterRecord,
   "id" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy" | "deleted"
@@ -23,14 +37,18 @@ export const newVehicleDraft = (): VehicleDraft => ({
   vehicleType: "",
   vehicleGroup: "",
   plateNumber: "",
+  ownership: "Own",
+  ownerId: "",
+  authorizedPayload: "",
   chassisNumber: "",
   engineNumber: "",
   productionYear: "",
   fuelRate: "",
   fuelCapacity: "",
-  registrationExpiry: "",
-  inspectionNo: "",
   inspectionExpiry: "",
+  inspectionNo: "",
+  insuranceExpiry: "",
+  badgeExpiry: "",
   lifetimeLimit: "",
   policyNumber: "",
   tradeMark: "",
@@ -39,7 +57,6 @@ export const newVehicleDraft = (): VehicleDraft => ({
   overallDimension: "",
   containerDimension: "",
   kerbMass: "",
-  authorizedPayload: "",
   rfidTag: "",
   acquisitionCost: "",
   acquisitionCurrency: "VND",
@@ -55,14 +72,113 @@ export const newVehicleDraft = (): VehicleDraft => ({
   telematics: false,
 });
 
+/* ------------------------------------------------------------------ legacy data */
+
+const LEGACY_TYPES: Record<string, VehicleMasterType> = {
+  HEAD: "Tractor",
+  TRACTOR: "Tractor",
+  TRAILER: "Trailer",
+  TRUCK: "Truck",
+  "5T": "Truck",
+  VAN: "Truck",
+};
+
+/** Maps any stored type (old TRUCK/HEAD/TRAILER/5T/VAN codes included) to Tractor / Trailer / Truck. */
+export function normalizeVehicleType(v: unknown): VehicleMasterType | "" {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s) return "";
+  if ((VEHICLE_MASTER_TYPES as readonly string[]).includes(s)) return s as VehicleMasterType;
+  return LEGACY_TYPES[s.toUpperCase()] ?? "Truck";
+}
+
+/**
+ * Upgrades a record stored by an older version of the app: legacy type codes, the fake "DEFAULT"
+ * group, missing ownership / insurance / badge fields, and the old separate "registration expiry"
+ * (folded into the registration (inspection) expiry when that one is empty).
+ */
+export function normalizeVehicle(r: VehicleMasterRecord): VehicleMasterRecord {
+  const raw = r as unknown as Record<string, unknown>;
+  const str = (k: string) => (typeof raw[k] === "string" ? (raw[k] as string) : "");
+  const vehicleType = normalizeVehicleType(raw["vehicleType"]);
+  const group = str("vehicleGroup");
+  const vehicleGroup = VEHICLE_GROUP_OPTIONS.includes(group) ? group : "";
+  const ownership: VehicleOwnership = raw["ownership"] === "Outsourced" ? "Outsourced" : "Own";
+  const inspectionExpiry = str("inspectionExpiry") || str("registrationExpiry");
+  if (
+    vehicleType === raw["vehicleType"] &&
+    vehicleGroup === group &&
+    ownership === raw["ownership"] &&
+    inspectionExpiry === raw["inspectionExpiry"] &&
+    typeof raw["ownerId"] === "string" &&
+    typeof raw["insuranceExpiry"] === "string" &&
+    typeof raw["badgeExpiry"] === "string" &&
+    typeof raw["authorizedPayload"] === "string" &&
+    !("registrationExpiry" in raw)
+  )
+    return r;
+  const { registrationExpiry: _legacy, ...rest } = raw;
+  void _legacy;
+  return {
+    ...newVehicleDraft(),
+    ...(rest as Partial<VehicleMasterRecord>),
+    vehicleType,
+    vehicleGroup,
+    ownership,
+    ownerId: ownership === "Outsourced" ? str("ownerId") : "",
+    inspectionExpiry,
+    insuranceExpiry: str("insuranceExpiry"),
+    badgeExpiry: str("badgeExpiry"),
+    authorizedPayload: str("authorizedPayload"),
+  } as VehicleMasterRecord;
+}
+
+/** Non-deleted vehicles, normalized. */
+export const listVehicles = (all = vehicleMasterRepository.all()): VehicleMasterRecord[] =>
+  all.filter((r) => !r.deleted).map(normalizeVehicle);
+
 /** Copies only the editable fields (the draft's keys) from a stored record. */
 export const draftOfVehicle = (r: VehicleMasterRecord): VehicleDraft => {
   const blank = newVehicleDraft();
-  const rec = r as unknown as Record<string, unknown>;
+  const rec = normalizeVehicle(r) as unknown as Record<string, unknown>;
   return Object.fromEntries(
     Object.entries(blank).map(([k, fallback]) => [k, rec[k] ?? fallback]),
   ) as unknown as VehicleDraft;
 };
+
+/* ------------------------------------------------------------------ owners */
+
+const bpName = (b: BusinessPartnerRecord) => b.englishName || b.localName || b.bpCode;
+/** "BPCODE · Name" */
+export const bpOwnerLabel = (b: BusinessPartnerRecord) => `${b.bpCode} · ${bpName(b)}`;
+
+/**
+ * Business Partners that can own an outsourced vehicle: active partners with the Vendor role,
+ * plus `keepId` (the current owner) so editing an existing record never loses its value.
+ */
+export function ownerCandidates(
+  bps: BusinessPartnerRecord[],
+  keepId = "",
+): BusinessPartnerRecord[] {
+  return bps
+    .filter(
+      (b) =>
+        !b.deleted &&
+        (b.id === keepId || (b.status === "Active" && (b.roles ?? []).includes("Vendor"))),
+    )
+    .sort((a, b) => a.bpCode.localeCompare(b.bpCode));
+}
+
+/** "Own" for the own fleet, otherwise the owner's "BPCODE · Name" (or its id if the partner is gone). */
+export function ownerLabel(
+  v: Pick<VehicleMasterRecord, "ownership" | "ownerId">,
+  bps: BusinessPartnerRecord[],
+): string {
+  if (v.ownership !== "Outsourced") return "Own";
+  const bp = bps.find((b) => b.id === v.ownerId);
+  return bp ? bpOwnerLabel(bp) : v.ownerId || "Outsourced";
+}
+
+/* ------------------------------------------------------------------ expiry */
 
 /** Max Distance (km) = Fuel Capacity (l) ÷ Fuel Rate (l/100km) × 100. Empty until both are set. */
 export function maxDistanceKm(fuelRate: string, fuelCapacity: string): string {
@@ -82,17 +198,86 @@ export function expiryState(ymd: string, now = new Date(), warnDays = 30): Expir
   return end.getTime() - now.getTime() <= warnDays * 86_400_000 ? "soon" : "ok";
 }
 
+/** Whole days left until the end of `ymd` (negative once expired). */
+export const daysUntil = (ymd: string, now = new Date()) =>
+  Math.ceil((new Date(`${ymd}T23:59:59`).getTime() - now.getTime()) / 86_400_000) - 1;
+
+/** localStorage key of the expiry alert threshold (days). */
+export const VEHICLE_ALERT_DAYS_KEY = "vehicle-alert-days";
+export const DEFAULT_ALERT_DAYS = 30;
+const clampDays = (n: unknown) => {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) && v >= 1 ? Math.min(v, 365) : DEFAULT_ALERT_DAYS;
+};
+export const getAlertDays = () =>
+  clampDays(readJson<number>(VEHICLE_ALERT_DAYS_KEY, DEFAULT_ALERT_DAYS));
+export const setAlertDays = (days: number) => writeJson(VEHICLE_ALERT_DAYS_KEY, clampDays(days));
+
+export type VehicleDocKind = "Registration" | "Insurance" | "Badge";
+export const VEHICLE_DOCS: {
+  kind: VehicleDocKind;
+  field: keyof VehicleMasterRecord;
+  label: string;
+}[] = [
+  { kind: "Registration", field: "inspectionExpiry", label: "Registration (inspection)" },
+  { kind: "Insurance", field: "insuranceExpiry", label: "Insurance" },
+  { kind: "Badge", field: "badgeExpiry", label: "Badge" },
+];
+
+export interface VehicleExpiryAlert {
+  vehicle: VehicleMasterRecord;
+  kind: VehicleDocKind;
+  label: string;
+  date: string;
+  state: "expired" | "soon";
+  daysLeft: number;
+}
+
+/** Documents of active, non-deleted vehicles that are expired or expire within `days`. Most urgent first. */
+export function vehicleExpiryAlerts(
+  vehicles: VehicleMasterRecord[],
+  days = getAlertDays(),
+  now = new Date(),
+): VehicleExpiryAlert[] {
+  const out: VehicleExpiryAlert[] = [];
+  for (const raw of vehicles) {
+    if (raw.deleted || raw.status !== "Active") continue;
+    const v = normalizeVehicle(raw);
+    for (const d of VEHICLE_DOCS) {
+      const date = String(v[d.field] ?? "");
+      const state = expiryState(date, now, days);
+      if (state === "expired" || state === "soon")
+        out.push({
+          vehicle: v,
+          kind: d.kind,
+          label: d.label,
+          date,
+          state,
+          daysLeft: daysUntil(date, now),
+        });
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/* ------------------------------------------------------------------ validation */
+
 const norm = (v: string) => v.trim().toUpperCase();
 const PLATE = /^[A-Z0-9][A-Z0-9.\- ]{2,14}$/;
 const VIN = /^[A-Z0-9]{11,17}$/;
+/** Capacity is mandatory for vehicles that carry / pull the load themselves. */
+export const capacityRequired = (t: string) => t === "Truck" || t === "Tractor";
 
 export function validateVehicle(d: VehicleDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
   const dup = (field: "plateNumber" | "chassisNumber", value: string) =>
     vehicleMasterRepository
       .all()
-      .some((x) => !x.deleted && x.id !== id && norm(x[field]) === value);
+      .some((x) => !x.deleted && x.id !== id && norm(x[field] ?? "") === value);
   if (!d.vehicleType) e["vehicleType"] = tr("Chọn loại xe.", "Vehicle type is required.");
+  if (!d.vehicleGroup) e["vehicleGroup"] = tr("Chọn nhóm xe.", "Vehicle group is required.");
+  else if (!VEHICLE_GROUP_OPTIONS.includes(d.vehicleGroup))
+    e["vehicleGroup"] = tr("Nhóm xe không hợp lệ.", "Unknown vehicle group.");
   const plate = norm(d.plateNumber);
   if (!plate) e["plateNumber"] = tr("Nhập biển số.", "Plate number is required.");
   else if (!PLATE.test(plate))
@@ -102,20 +287,26 @@ export function validateVehicle(d: VehicleDraft, id?: string): Record<string, st
     );
   else if (dup("plateNumber", plate))
     e["plateNumber"] = tr(`Biển số ${plate} đã tồn tại.`, `Plate number ${plate} already exists.`);
+  if (d.ownership === "Outsourced") {
+    if (!d.ownerId) e["ownerId"] = tr("Chọn chủ xe (đối tác).", "Owner is required.");
+    else if (!businessPartnerRepository.all().some((b) => b.id === d.ownerId && !b.deleted))
+      e["ownerId"] = tr("Đối tác không tồn tại.", "Owner business partner not found.");
+  }
+  if (capacityRequired(d.vehicleType) && !(Number(d.authorizedPayload) > 0))
+    e["authorizedPayload"] = tr("Nhập tải trọng (kg).", "Capacity (kg) is required.");
   const vin = norm(d.chassisNumber);
-  if (!vin) e["chassisNumber"] = tr("Nhập số khung (VIN).", "Chassis number (VIN) is required.");
-  else if (!VIN.test(vin))
-    e["chassisNumber"] = tr(
-      "Số khung gồm 11–17 chữ/số, không dấu cách.",
-      "Chassis number is 11–17 letters/digits, no spaces.",
-    );
-  else if (dup("chassisNumber", vin))
-    e["chassisNumber"] = tr(`Số khung ${vin} đã tồn tại.`, `Chassis number ${vin} already exists.`);
-  if (!d.inspectionReportNo.trim())
-    e["inspectionReportNo"] = tr(
-      "Nhập số biên bản kiểm định.",
-      "Inspection report no. is required.",
-    );
+  if (vin) {
+    if (!VIN.test(vin))
+      e["chassisNumber"] = tr(
+        "Số khung gồm 11–17 chữ/số, không dấu cách.",
+        "Chassis number is 11–17 letters/digits, no spaces.",
+      );
+    else if (dup("chassisNumber", vin))
+      e["chassisNumber"] = tr(
+        `Số khung ${vin} đã tồn tại.`,
+        `Chassis number ${vin} already exists.`,
+      );
+  }
   if (d.productionYear && !/^(19|20)\d{2}$/.test(d.productionYear))
     e["productionYear"] = tr("Năm sản xuất gồm 4 chữ số.", "Production year must be 4 digits.");
   for (const k of [
@@ -126,7 +317,7 @@ export function validateVehicle(d: VehicleDraft, id?: string): Record<string, st
     "engineDisplacement",
     "acquisitionCost",
   ] as const)
-    if (d[k] && !(Number(d[k]) >= 0)) e[k] = tr("Giá trị phải ≥ 0.", "Value must be ≥ 0.");
+    if (d[k] && !e[k] && !(Number(d[k]) >= 0)) e[k] = tr("Giá trị phải ≥ 0.", "Value must be ≥ 0.");
   return e;
 }
 
@@ -134,14 +325,18 @@ const LABELS: [keyof VehicleDraft, string][] = [
   ["vehicleType", "Vehicle Type"],
   ["vehicleGroup", "Vehicle Group"],
   ["plateNumber", "Plate Number"],
+  ["ownership", "Ownership"],
+  ["ownerId", "Owner"],
+  ["authorizedPayload", "Capacity (kg)"],
   ["chassisNumber", "Chassis Number (VIN)"],
   ["engineNumber", "Engine Number"],
   ["productionYear", "Production Year"],
   ["fuelRate", "Fuel Rate"],
   ["fuelCapacity", "Fuel Capacity"],
-  ["registrationExpiry", "Registration Expiration Date"],
+  ["inspectionExpiry", "Registration (Inspection) Expiry"],
   ["inspectionNo", "Vehicle Inspection No"],
-  ["inspectionExpiry", "Inspection Expiration Date"],
+  ["insuranceExpiry", "Insurance Expiry"],
+  ["badgeExpiry", "Badge Expiry"],
   ["lifetimeLimit", "Lifetime Limit"],
   ["policyNumber", "Comprehensive Policy Number"],
   ["tradeMark", "Trade Mark"],
@@ -150,7 +345,6 @@ const LABELS: [keyof VehicleDraft, string][] = [
   ["overallDimension", "Overall Dimension"],
   ["containerDimension", "Cargo Container Dimensions"],
   ["kerbMass", "Kerb Mass"],
-  ["authorizedPayload", "Authorized Payload"],
   ["rfidTag", "RFID / Barcode Tag"],
   ["acquisitionCost", "Acquisition Cost"],
   ["acquisitionCurrency", "Acquisition Currency"],
@@ -177,13 +371,14 @@ export const vehicleService = {
     const clean: VehicleDraft = {
       ...d,
       plateNumber: norm(d.plateNumber),
+      ownerId: d.ownership === "Outsourced" ? d.ownerId : "",
       chassisNumber: norm(d.chassisNumber),
       engineNumber: d.engineNumber.trim(),
       modelCode: d.modelCode.trim(),
       inspectionReportNo: d.inspectionReportNo.trim(),
     };
-    const existing = id ? vehicleMasterRepository.get(id) : undefined;
-    if (!existing) {
+    const stored = id ? vehicleMasterRepository.get(id) : undefined;
+    if (!stored) {
       const rec: VehicleMasterRecord = { ...clean, id: uid("VH-"), ...stampCreate() };
       vehicleMasterRepository.insert(rec);
       auditService.log({
@@ -194,6 +389,8 @@ export const vehicleService = {
       });
       return rec;
     }
+    // Normalizing first also drops legacy fields (e.g. the old separate registration expiry).
+    const existing = normalizeVehicle(stored);
     const next = stampUpdate({ ...existing, ...clean });
     vehicleMasterRepository.update(existing.id, () => next);
     const before = draftOfVehicle(existing);

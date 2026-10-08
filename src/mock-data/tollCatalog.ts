@@ -23,6 +23,11 @@ export interface MockTollGate {
   source?: TollStationSource;
   remark?: string;
   currency?: string;
+  /**
+   * Archived stations keep their data (history / routes still read them) but are hidden from
+   * routing and new selections. Missing on older stored data → treated as false.
+   */
+  archived?: boolean;
 }
 
 export type TollStationSource = "Manual" | "Vietmap";

@@ -1,6 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { CheckCircle2, History, Lock, Pencil, XCircle } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  CheckCircle2,
+  History,
+  Lock,
+  Pencil,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +37,7 @@ import {
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
 import { useEntityActions } from "@/components/movex/general/useEntityActions";
+import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { LocationAutocomplete } from "@/components/movex/routing/LocationAutocomplete";
 import { useCollection } from "@/hooks/use-store";
 import { locationRepository, tollStationRepository } from "@/repositories";
@@ -38,6 +47,7 @@ import { BusinessRuleError } from "@/services/crudService";
 import {
   FEE_TYPE_OPTIONS,
   TOLL_GROUPS,
+  archiveTollStations,
   draftOf,
   feeTypeFromLabel,
   feeTypeName,
@@ -46,6 +56,7 @@ import {
   sourceOf,
   tollStationCrud,
   tollStationService,
+  tollStationStatus,
   validateTollStation,
   type TollStationDraft,
 } from "@/services/tollStationService";
@@ -160,6 +171,31 @@ function TollStationView({ station }: { station: TollGateRecord }) {
   const locations = useCollection(locationRepository);
   const loc = station.locationId ? locations.find((l) => l.id === station.locationId) : undefined;
   const hasCoords = Number.isFinite(station.lat) && Number.isFinite(station.lng);
+  const confirm = useConfirm();
+
+  const archive = async (archived: boolean) => {
+    const r = await confirm(
+      archived
+        ? {
+            title: `Archive Toll Station ${station.code}?`,
+            description:
+              "The station is kept with its rates and history, set to Inactive and no longer used for route calculation. You can restore it later.",
+            cancelLabel: "Cancel",
+            confirmLabel: "Archive",
+            tone: "danger",
+          }
+        : {
+            title: `Restore Toll Station ${station.code}?`,
+            description:
+              "The station returns from the archive as Inactive. Activate it to use it for routing again.",
+            cancelLabel: "Cancel",
+            confirmLabel: "Restore",
+          },
+    );
+    if (r !== "confirm") return;
+    if (archiveTollStations([station.id], archived))
+      toast.success(`Toll station ${station.code} ${archived ? "archived" : "restored"}`);
+  };
 
   useEffect(() => {
     auditService.logView("Toll Station", station.id, station.code);
@@ -176,7 +212,7 @@ function TollStationView({ station }: { station: TollGateRecord }) {
             <span className="text-sm font-normal text-muted-foreground">{station.code}</span>
           </span>
         }
-        badge={<StatusBadge status={station.status} />}
+        badge={<StatusBadge status={tollStationStatus(station)} />}
         readOnly
         onBack={() => void navigate({ to: "/toll-station" })}
         extra={
@@ -185,7 +221,18 @@ function TollStationView({ station }: { station: TollGateRecord }) {
               <History className="h-4 w-4" />
               Change History
             </Button>
-            {station.status === "Inactive" ? (
+            {station.archived ? (
+              <Button variant="outline" size="lg" onClick={() => void archive(false)}>
+                <ArchiveRestore className="h-4 w-4" />
+                Restore
+              </Button>
+            ) : (
+              <Button variant="outline" size="lg" onClick={() => void archive(true)}>
+                <Archive className="h-4 w-4" />
+                Archive
+              </Button>
+            )}
+            {station.archived ? null : station.status === "Inactive" ? (
               <Button
                 variant="outline"
                 size="lg"
@@ -239,7 +286,7 @@ function TollStationView({ station }: { station: TollGateRecord }) {
             <InfoRow label="Latitude">{hasCoords ? station.lat : null}</InfoRow>
             <InfoRow label="Longitude">{hasCoords ? station.lng : null}</InfoRow>
             <div className="sm:col-span-3">
-              <InfoRow label="Description">{station.remark}</InfoRow>
+              <InfoRow label="Remark">{station.remark}</InfoRow>
             </div>
           </dl>
         </Panel>
@@ -344,7 +391,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
         rootLabel="Master Data"
         unsavedLabel="Unsaved"
         title={isNew ? "Add Toll Station" : `Edit: ${source.name}`}
-        badge={source ? <StatusBadge status={source.status} /> : undefined}
+        badge={source ? <StatusBadge status={tollStationStatus(source)} /> : undefined}
         dirty={dirty}
         onBack={back}
         onCancel={back}
@@ -439,7 +486,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 options={["Active", "Inactive"]}
               />
             </Field>
-            <Field label="Description" className="sm:col-span-3">
+            <Field label="Remark" className="sm:col-span-3">
               <Textarea
                 rows={2}
                 value={d.remark ?? ""}

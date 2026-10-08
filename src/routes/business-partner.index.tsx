@@ -5,17 +5,17 @@ import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
 import { useCollection } from "@/hooks/use-store";
 import { businessPartnerRepository } from "@/repositories";
-import { bpCrud } from "@/services/businessPartnerService";
+import { bpCrud, normalizeBusinessPartner } from "@/services/businessPartnerService";
 import { formatDateTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { BP_ROLES, type BusinessPartnerRecord } from "@/types";
-import { LEGAL_TYPES } from "@/mock-data/businessPartners";
+import { BUSINESS_CATEGORIES, LEGAL_TYPES } from "@/mock-data/businessPartners";
 
 export const Route = createFileRoute("/business-partner/")({
   head: () => ({
     meta: [
       { title: "Business Partner — MoveX" },
-      { name: "description", content: "Customers, vendors and employees master data." },
+      { name: "description", content: "Business partner master data: customers and vendors." },
     ],
   }),
   component: BusinessPartnerList,
@@ -162,9 +162,25 @@ const allColumns = (t: T): ListColumn<Row>[] => [
     key: "businessCategory",
     width: 160,
     truncate: true,
-    label: "Category",
+    label: "Business Category",
     type: "text",
-    value: (r) => r.businessCategory,
+    value: (r) => r.businessCategory.join(", "),
+    defaultHidden: true,
+  },
+  {
+    key: "currencies",
+    width: 140,
+    label: "Currencies",
+    type: "text",
+    value: (r) => r.currencies.join(", "),
+    defaultHidden: true,
+  },
+  {
+    key: "defaultPaymentTerm",
+    width: 130,
+    label: "Payment Term",
+    type: "text",
+    value: (r) => r.defaultPaymentTerm,
     defaultHidden: true,
   },
   {
@@ -248,7 +264,8 @@ function BusinessPartnerList() {
   const { t, lang } = useT();
   const navigate = useNavigate();
   const all = useCollection(businessPartnerRepository);
-  const rows = useMemo(() => all.filter((r) => !r.deleted), [all]);
+  // Records saved by older versions are normalized (e.g. single Business Category → list).
+  const rows = useMemo(() => all.filter((r) => !r.deleted).map(normalizeBusinessPartner), [all]);
   // `t` is recreated every render; the language is the real dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const columns = useMemo(() => columnsFor(t), [lang]);
@@ -280,6 +297,14 @@ function BusinessPartnerList() {
           options: BP_ROLES.map((role) => ({
             label: `${t("Vai trò", "Role")}: ${role}`,
             conditions: [{ field: "roles", operator: "contains", value: role }],
+          })),
+        },
+        {
+          key: "businessCategory",
+          allLabel: t("Ngành nghề: Tất cả", "Category: All"),
+          options: BUSINESS_CATEGORIES.map((c) => ({
+            label: `${t("Ngành nghề", "Category")}: ${c}`,
+            conditions: [{ field: "businessCategory", operator: "contains", value: c }],
           })),
         },
       ]}

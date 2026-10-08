@@ -53,10 +53,11 @@ export const tollStationRepository = createCollection<TollGateRecord>(
 );
 /** Vehicle master (one row per physical vehicle). */
 export const vehicleMasterRepository = createCollection<VehicleMasterRecord>(
-  "vehicle-masters",
+  // ".v2": vehicle type / owner / insurance & badge expiry were reworked — load the new demo seed.
+  "vehicle-masters.v2",
   seedVehicleMasters,
 );
-/** Business Partner master (customers, vendors, employees). */
+/** Business Partner master (customers and vendors — one partner, several roles). */
 export const businessPartnerRepository = createCollection<BusinessPartnerRecord>(
   "business-partners",
   seedBusinessPartners,

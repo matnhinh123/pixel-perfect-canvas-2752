@@ -20,14 +20,20 @@ import {
   S6,
 } from "@/components/movex/general/FormParts";
 import { DimensionInput, UnitInput } from "@/components/movex/vehicle/VehicleInputs";
+import { useVehicleAlertDays, useVehicles } from "@/components/movex/vehicle/useVehicleData";
 import { useCollection } from "@/hooks/use-store";
-import { vehicleMasterRepository } from "@/repositories";
+import { businessPartnerRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
+  bpOwnerLabel,
+  capacityRequired,
+  daysUntil,
   draftOfVehicle,
   expiryState,
   maxDistanceKm,
   newVehicleDraft,
+  ownerCandidates,
+  VEHICLE_GROUP_OPTIONS,
   vehicleService,
   type VehicleDraft,
 } from "@/services/vehicleMasterService";
@@ -38,7 +44,7 @@ import {
   TRADE_MARKS,
   VEHICLE_TYPES,
 } from "@/mock-data/vehicleMaster";
-import { VEHICLE_GROUPS, type VehicleMasterRecord } from "@/types";
+import { VEHICLE_OWNERSHIPS, type VehicleMasterRecord, type VehicleOwnership } from "@/types";
 import { formatDate } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -54,22 +60,15 @@ export const Route = createFileRoute("/vehicle/$id")({
   component: VehiclePage,
 });
 
-const GROUPS = ["DEFAULT", ...VEHICLE_GROUPS];
 // Fields that live inside the folded "Specifications" panel (to unfold it on errors).
-const SPEC_FIELDS = [
-  "inspectionReportNo",
-  "kerbMass",
-  "authorizedPayload",
-  "engineDisplacement",
-  "acquisitionCost",
-];
+const SPEC_FIELDS = ["kerbMass", "engineDisplacement", "acquisitionCost"];
 
 function VehiclePage() {
   const { t } = useT();
   const { id } = Route.useParams();
   const { mode } = Route.useSearch();
-  const all = useCollection(vehicleMasterRepository);
-  const source = id === "new" ? null : (all.find((r) => r.id === id && !r.deleted) ?? null);
+  const all = useVehicles();
+  const source = id === "new" ? null : (all.find((r) => r.id === id) ?? null);
   if (id !== "new" && !source)
     return (
       <Panel>
@@ -113,17 +112,15 @@ function SwitchRow({
   );
 }
 
-/** "Expired" / "Due in 12 days" note under an expiry date. */
+/** "Expired" / "Due in 12 days" note under an expiry date (same threshold as the list and alerts). */
 function ExpiryHint({ ymd }: { ymd: string }): ReactNode {
   const { t } = useT();
-  const s = expiryState(ymd);
+  const warnDays = useVehicleAlertDays();
+  const s = expiryState(ymd, new Date(), warnDays);
   if (s === "expired")
     return <span className="font-medium text-destructive">{t("Đã hết hạn", "Expired")}</span>;
   if (s === "soon") {
-    const days = Math.max(
-      0,
-      Math.ceil((new Date(`${ymd}T23:59:59`).getTime() - Date.now()) / 86_400_000),
-    );
+    const days = Math.max(0, daysUntil(ymd));
     return (
       <span className="font-medium text-warning">
         {t(`Còn ${days} ngày`, `Due in ${days} day${days === 1 ? "" : "s"}`)}
@@ -198,6 +195,13 @@ function VehicleForm({
     />
   );
 
+  const bps = useCollection(businessPartnerRepository);
+  const owners = useMemo(() => ownerCandidates(bps, initial.ownerId), [bps, initial.ownerId]);
+  const ownerLabels = useMemo(
+    () => Object.fromEntries(owners.map((b) => [b.id, bpOwnerLabel(b)])),
+    [owners],
+  );
+
   const maxDistance = maxDistanceKm(d.fuelRate, d.fuelCapacity);
   const specError = SPEC_FIELDS.some((k) => errors[k]);
 
@@ -244,7 +248,11 @@ function VehicleForm({
               : t(`Chỉnh sửa: ${source.plateNumber}`, `Edit: ${source.plateNumber}`)
         }
         subtitle={
-          source ? [source.vehicleType, source.modelCode].filter(Boolean).join(" · ") : undefined
+          source
+            ? [source.vehicleType, source.vehicleGroup, source.modelCode]
+                .filter(Boolean)
+                .join(" · ")
+            : undefined
         }
         badge={source ? <StatusBadge status={source.status} /> : undefined}
         dirty={dirty}
@@ -279,10 +287,58 @@ function VehicleForm({
             <Field label="Vehicle Type" required error={errors["vehicleType"]} className={S3}>
               <NativeSelect {...select("vehicleType", VEHICLE_TYPES, "Select vehicle type")} />
             </Field>
-            <Field label="Vehicle Group" className={S3}>
-              <NativeSelect {...select("vehicleGroup", GROUPS, "Select vehicle group")} />
+            <Field
+              label="Vehicle Group"
+              required
+              error={errors["vehicleGroup"]}
+              className={S3}
+              info={t(
+                "Mỗi xe thuộc đúng một nhóm — cơ sở cho định mức và giá.",
+                "Each vehicle belongs to exactly one group — the basis for norms and prices.",
+              )}
+            >
+              <NativeSelect
+                {...select("vehicleGroup", VEHICLE_GROUP_OPTIONS, "Select vehicle group")}
+              />
             </Field>
-            <div className="hidden lg:col-span-6 lg:block" />
+            <Field label="Ownership" required className={S3}>
+              <NativeSelect
+                value={d.ownership}
+                onChange={(v) =>
+                  patch(
+                    v === "Outsourced"
+                      ? { ownership: "Outsourced" }
+                      : { ownership: v as VehicleOwnership, ownerId: "" },
+                  )
+                }
+                options={VEHICLE_OWNERSHIPS}
+                labels={{ Own: "Own fleet", Outsourced: "Outsourced" }}
+                className="w-full"
+              />
+            </Field>
+            {d.ownership === "Outsourced" ? (
+              <Field
+                label="Owner"
+                required
+                error={errors["ownerId"]}
+                className={S3}
+                info={t(
+                  "Đối tác (Business Partner, vai trò Vendor) sở hữu xe thuê ngoài.",
+                  "Business Partner (Vendor role) that owns the outsourced vehicle.",
+                )}
+              >
+                <NativeSelect
+                  value={d.ownerId}
+                  onChange={(v) => patch({ ownerId: v })}
+                  options={["", ...owners.map((b) => b.id)]}
+                  labels={{ "": readOnly ? "—" : "Select owner", ...ownerLabels }}
+                  className="w-full"
+                  invalid={!!errors["ownerId"]}
+                />
+              </Field>
+            ) : (
+              <div className="hidden lg:col-span-3 lg:block" />
+            )}
 
             <Field
               label="Plate Number"
@@ -302,12 +358,11 @@ function VehicleForm({
             </Field>
             <Field
               label="Chassis Number (VIN)"
-              required
               error={errors["chassisNumber"]}
               className={S3}
               info={t(
                 "Số khung 11–17 ký tự chữ/số, duy nhất.",
-                "Chassis number, 11–17 letters/digits, unique.",
+                "Optional. Chassis number, 11–17 letters/digits, unique.",
               )}
             >
               <Input
@@ -330,6 +385,18 @@ function VehicleForm({
               />
             </Field>
 
+            <Field
+              label="Capacity (kg)"
+              required={capacityRequired(d.vehicleType)}
+              error={errors["authorizedPayload"]}
+              className={S3}
+              info={t(
+                "Tải trọng cho phép (kg). Bắt buộc với Truck / Tractor.",
+                "Authorized payload in kg. Required for Truck / Tractor.",
+              )}
+            >
+              {unit("authorizedPayload", "kg", "Enter capacity")}
+            </Field>
             <Field label="Fuel Rate" error={errors["fuelRate"]} className={S3}>
               {unit("fuelRate", "l/100km", "Enter Fuel Rate")}
             </Field>
@@ -348,13 +415,35 @@ function VehicleForm({
             </Field>
           </FormGroup>
 
-          <FormGroup title="Registration And Inspection Information">
+          <FormGroup title="Registration, Insurance And Badge">
             <Field
-              label="Registration Expiration Date"
+              label="Registration (Inspection) Expiry"
               className={S3}
-              hint={<ExpiryHint ymd={d.registrationExpiry} />}
+              info={t(
+                "Hạn đăng kiểm. Được cảnh báo khi sắp hết hạn.",
+                "Registration (inspection / đăng kiểm) expiry. Alerted when about to expire.",
+              )}
+              hint={<ExpiryHint ymd={d.inspectionExpiry} />}
             >
-              {dateInput("registrationExpiry")}
+              {dateInput("inspectionExpiry")}
+            </Field>
+            <Field
+              label="Insurance Expiry"
+              className={S3}
+              hint={<ExpiryHint ymd={d.insuranceExpiry} />}
+            >
+              {dateInput("insuranceExpiry")}
+            </Field>
+            <Field
+              label="Badge Expiry"
+              className={S3}
+              info={t("Hạn phù hiệu xe.", "Vehicle badge (phù hiệu) expiry.")}
+              hint={<ExpiryHint ymd={d.badgeExpiry} />}
+            >
+              {dateInput("badgeExpiry")}
+            </Field>
+            <Field label="Lifetime Limit" className={S3}>
+              {dateInput("lifetimeLimit")}
             </Field>
             <Field
               label="Vehicle Inspection No"
@@ -365,16 +454,6 @@ function VehicleForm({
               )}
             >
               <Input placeholder="Enter vehicle inspection number" {...text("inspectionNo")} />
-            </Field>
-            <Field
-              label="Inspection Expiration Date"
-              className={S3}
-              hint={<ExpiryHint ymd={d.inspectionExpiry} />}
-            >
-              {dateInput("inspectionExpiry")}
-            </Field>
-            <Field label="Lifetime Limit" className={S3}>
-              {dateInput("lifetimeLimit")}
             </Field>
           </FormGroup>
         </Panel>
@@ -405,7 +484,6 @@ function VehicleForm({
 
             <Field
               label="Inspection Report No"
-              required
               error={errors["inspectionReportNo"]}
               className={S3}
               info={t("Số biên bản kiểm định kỹ thuật.", "Technical inspection report number.")}
@@ -441,9 +519,6 @@ function VehicleForm({
             </Field>
             <Field label="Kerb Mass" error={errors["kerbMass"]} className={S3}>
               {unit("kerbMass", "kg", "Enter kerb mass")}
-            </Field>
-            <Field label="Authorized Payload" error={errors["authorizedPayload"]} className={S3}>
-              {unit("authorizedPayload", "kg", "Enter Authorized Payload")}
             </Field>
             <Field label="Fuel Type" className={S3}>
               <NativeSelect {...select("fuelType", FUEL_TYPES, "Select fuel type")} />

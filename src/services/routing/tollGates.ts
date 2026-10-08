@@ -9,5 +9,6 @@ export const tollGateByVietmapId = (vietmapId: string): TollGateRecord | undefin
     ? tollStationRepository.all().find((g) => !g.deleted && g.vietmapId === vietmapId)
     : undefined;
 
+/** Stations usable for routing: not deleted, not archived (missing flag = false) and Active. */
 export const activeTollGates = (): TollGateRecord[] =>
-  tollStationRepository.all().filter((g) => !g.deleted && g.status === "Active");
+  tollStationRepository.all().filter((g) => !g.deleted && !g.archived && g.status === "Active");

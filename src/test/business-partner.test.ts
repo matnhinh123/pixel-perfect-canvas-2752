@@ -4,7 +4,10 @@ import {
   validateBusinessPartner,
   newBusinessPartnerDraft,
   woAccessState,
+  normalizeBusinessPartner,
 } from "@/services/businessPartnerService";
+import { seedBusinessPartners } from "@/mock-data/businessPartners";
+import type { BusinessPartnerRecord } from "@/types";
 
 describe("BP Code convention", () => {
   it("uppercases, strips disallowed characters and caps at 50", () => {
@@ -29,5 +32,44 @@ describe("WO access window", () => {
   });
   it("falls back to the default credit policy without a window", () => {
     expect(woAccessState({ woAccessFrom: "", woAccessTo: "" })).toBe("Default");
+  });
+});
+
+describe("Profile rules", () => {
+  it("rejects a duplicate Tax Code (case/space-insensitive)", () => {
+    const d = { ...newBusinessPartnerDraft(), taxCode: " 0316 497684 " };
+    expect(validateBusinessPartner(d)["taxCode"]).toMatch(/QTL/);
+    expect(validateBusinessPartner(d, "BP-6")["taxCode"]).toBeUndefined();
+  });
+
+  it("defaults Currency to the tenant currency and requires it", () => {
+    const d = newBusinessPartnerDraft();
+    expect(d.currency).toBe("VND");
+    expect(validateBusinessPartner(d)["currency"]).toBeUndefined();
+    expect(validateBusinessPartner({ ...d, currency: "" })["currency"]).toBeTruthy();
+  });
+
+  it("normalizes records stored by older versions", () => {
+    const old = {
+      ...seedBusinessPartners()[0]!,
+      legalType: "Government",
+      businessCategory: "Trading",
+      currencies: undefined,
+      contacts: undefined,
+      salesAssignments: undefined,
+      customer: {
+        creditTerms: [],
+        banks: [],
+        contacts: [{ rid: "x", fullName: "A", mobile: "09", contactRole: "Sales Contact" }],
+        salesmen: [{ rid: "y", salesName: "Lê Thị Hoa", serviceCode: "", serviceName: "" }],
+      },
+    } as unknown as BusinessPartnerRecord;
+    const n = normalizeBusinessPartner(old);
+    expect(n.legalType).toBe("Company");
+    expect(n.businessCategory).toEqual(["Trading"]);
+    expect(n.currencies).toEqual(["VND"]);
+    expect(n.contacts[0]).toMatchObject({ fullName: "A", phone: "09", position: "Sales Contact" });
+    expect(n.salesAssignments[0]).toMatchObject({ staffId: "E-002", staffName: "Lê Thị Hoa" });
+    expect(n.customer).not.toHaveProperty("contacts");
   });
 });

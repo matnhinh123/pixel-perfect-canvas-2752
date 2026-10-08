@@ -9,17 +9,29 @@ import { routeRepository } from "@/repositories";
 import { routeCrud, routeImportConfig } from "@/services/routeService";
 import { routeTotals } from "@/services/cost/costMath";
 import { allLocations } from "@/services/routing/locationStore";
-import { formatDateTime, formatDuration, formatVnd } from "@/lib/format";
+import { formatDateTime, formatDuration } from "@/lib/format";
 import { useT } from "@/lib/i18n";
-import { VEHICLE_PROFILES, type RoutePoint, type RouteRecord, type VehicleProfile } from "@/types";
+import {
+  VEHICLE_GROUPS,
+  VEHICLE_PROFILES,
+  type RoutePoint,
+  type RouteRecord,
+  type RouteType,
+  type Terrain,
+  type VehicleProfile,
+} from "@/types";
+
+const ROUTE_TYPES: RouteType[] = ["Single Trip", "Round Trip"];
+const TERRAINS: Terrain[] = ["Plain", "Highland"];
+const VEHICLE_GROUP_OPTIONS: string[] = VEHICLE_GROUPS.filter((g) => (g as string) !== "DEFAULT");
 
 export const Route = createFileRoute("/routing/")({
   head: () => ({
     meta: [
       { title: "Routing — MoveX" },
-      { name: "description", content: "Manage MoveX routes, distances and toll costs." },
+      { name: "description", content: "Manage MoveX routes, distances and toll stations." },
       { property: "og:title", content: "Routing — MoveX" },
-      { property: "og:description", content: "Manage MoveX routes, distances and toll costs." },
+      { property: "og:description", content: "Manage MoveX routes, distances and toll stations." },
     ],
   }),
   component: RoutingList,
@@ -55,14 +67,14 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
     },
     {
       key: "originCode",
-      label: t("Mã đi", "Origin code"),
+      label: t("Mã đi", "Departure code"),
       type: "text",
       value: (r) => codeOf(r.origin),
       render: (r) => <span className="font-medium text-primary">{codeOf(r.origin) || "—"}</span>,
     },
     {
       key: "origin",
-      label: t("Điểm đi", "Origin"),
+      label: t("Điểm đi", "Departure"),
       type: "text",
       value: (r) => r.origin.name,
       className: "max-w-40 truncate text-muted-foreground",
@@ -85,7 +97,7 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
     },
     {
       key: "waypoints",
-      label: t("Điểm dừng", "Waypoints"),
+      label: t("Số điểm dừng", "Number of stops"),
       type: "text",
       value: (r) => r.waypoints.map((w) => w.name).join(" → "),
       render: (r) =>
@@ -101,12 +113,46 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
         ),
     },
     {
-      key: "vehicleProfile",
+      key: "type",
+      label: t("Loại tuyến", "Route Type"),
+      type: "enum",
+      options: ROUTE_TYPES,
+      value: (r) => r.type,
+      render: (r) => <Tag>{r.type}</Tag>,
+    },
+    {
+      key: "terrain",
+      label: t("Địa hình", "Terrain"),
+      type: "enum",
+      options: TERRAINS,
+      value: (r) => r.terrain ?? "Plain",
+    },
+    {
+      key: "vehicleGroup",
       label: t("Phương tiện", "Vehicle"),
+      type: "enum",
+      options: VEHICLE_GROUP_OPTIONS,
+      value: (r) => r.vehicleGroup ?? "",
+      render: (r) => (
+        <span className="whitespace-nowrap">
+          {r.vehicleGroup || "—"}
+          {r.vehicleProfile && (
+            <span className="text-muted-foreground">
+              {" · "}
+              {PROFILE_LABEL[r.vehicleProfile] ?? r.vehicleProfile}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "vehicleProfile",
+      label: t("Loại xe", "Truck / Container"),
       type: "enum",
       options: VEHICLE_PROFILES,
       value: (r) => r.vehicleProfile,
       render: (r) => <Tag>{PROFILE_LABEL[r.vehicleProfile]}</Tag>,
+      defaultHidden: true,
     },
     {
       key: "distance",
@@ -128,17 +174,8 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
       render: (r) => (r.outbound ? formatDuration(routeTotals(r).estimatedTimeMin) : "—"),
     },
     {
-      key: "toll",
-      label: t("Phí cầu đường (₫)", "Toll fees (₫)"),
-      type: "number",
-      value: (r) => routeTotals(r).totalRouteCost,
-      render: (r) => (
-        <span className="font-medium">{formatVnd(routeTotals(r).totalRouteCost)}</span>
-      ),
-    },
-    {
       key: "description",
-      label: t("Ghi chú", "Notes"),
+      label: t("Ghi chú", "Note"),
       type: "text",
       value: (r) => r.description ?? "",
       className: "max-w-56 truncate text-muted-foreground",
@@ -171,10 +208,34 @@ const quickFiltersFor = (t: T): QuickFilter[] => {
   return [
     {
       key: "vehicle",
-      allLabel: t("Phương tiện: Tất cả", "Vehicle: All"),
+      allLabel: t("Loại xe: Tất cả", "Truck / Container: All"),
       options: VEHICLE_PROFILES.map((v) => ({
-        label: `${t("Phương tiện", "Vehicle")}: ${PROFILE_LABEL[v]}`,
+        label: `${t("Loại xe", "Truck / Container")}: ${PROFILE_LABEL[v]}`,
         conditions: [{ field: "vehicleProfile", operator: "eq", value: v }],
+      })),
+    },
+    {
+      key: "type",
+      allLabel: t("Loại tuyến: Tất cả", "Route Type: All"),
+      options: ROUTE_TYPES.map((v) => ({
+        label: `${t("Loại tuyến", "Route Type")}: ${v}`,
+        conditions: [{ field: "type", operator: "eq", value: v }],
+      })),
+    },
+    {
+      key: "terrain",
+      allLabel: t("Địa hình: Tất cả", "Terrain: All"),
+      options: TERRAINS.map((v) => ({
+        label: `${t("Địa hình", "Terrain")}: ${v}`,
+        conditions: [{ field: "terrain", operator: "eq", value: v }],
+      })),
+    },
+    {
+      key: "vehicleGroup",
+      allLabel: t("Nhóm xe: Tất cả", "Vehicle Group: All"),
+      options: VEHICLE_GROUP_OPTIONS.map((v) => ({
+        label: `${t("Nhóm xe", "Vehicle Group")}: ${v}`,
+        conditions: [{ field: "vehicleGroup", operator: "eq", value: v }],
       })),
     },
     {
@@ -226,7 +287,7 @@ function RoutingList() {
       columns={columns}
       searchPlaceholder={t(
         "Tìm route code, tên, mã/điểm đi/đến, ghi chú...",
-        "Search route code, name, origin/destination code or name, notes...",
+        "Search route code, name, departure/destination code or name, notes...",
       )}
       searchValues={(r) => [
         r.code,
