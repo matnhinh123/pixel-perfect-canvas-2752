@@ -33,6 +33,8 @@ import {
   normalizeBusinessPartner,
   sanitizeBpCode,
   lookupTaxPayer,
+  sanitizePhone,
+  sanitizePostcode,
   taxCodeKey,
   taxIdLabel,
   taxIdRequired,
@@ -46,7 +48,7 @@ import {
   INVOICE_LANGUAGES,
   LEGAL_TYPES,
   PARTNER_GROUPS,
-  PROVINCES,
+  provincesOf,
   SERVICE_PROVIDER_TYPES,
   TAX_OPTIONS,
 } from "@/mock-data/businessPartners";
@@ -505,19 +507,49 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
             </Field>
 
             <Field label="Country" required error={errors["country"]}>
-              <NativeSelect {...select("country", COUNTRIES, "Select Country")} />
+              <NativeSelect
+                {...select("country", COUNTRIES, "Select Country")}
+                onChange={(country) => {
+                  // A Province of another Country no longer applies.
+                  patch({
+                    country,
+                    ...(provincesOf(country).includes(d.province) ? {} : { province: "" }),
+                  });
+                  clearErr(["province"]);
+                }}
+              />
             </Field>
-            <Field label="Province">
-              <NativeSelect {...select("province", PROVINCES, "Select Province")} />
+            <Field label="Province" error={errors["province"]}>
+              <NativeSelect
+                {...select(
+                  "province",
+                  provincesOf(d.country),
+                  d.country ? "Select Province" : "Select Country first",
+                )}
+                disabled={!d.country}
+              />
             </Field>
-            <Field label="Post Code">
-              <Input placeholder="Enter Post Code" {...text("postcode")} />
+            <Field label="Post Code" error={errors["postcode"]}>
+              <Input
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="Enter Post Code"
+                value={d.postcode}
+                onChange={(e) => patch({ postcode: sanitizePostcode(e.target.value) })}
+                aria-invalid={!!errors["postcode"] || undefined}
+              />
             </Field>
             <Field label="Email" error={errors["email"]} className="sm:col-span-2">
               <Input placeholder="Enter Email" {...text("email")} />
             </Field>
-            <Field label="Phone">
-              <Input placeholder="Enter Phone" {...text("phone")} />
+            <Field label="Phone" error={errors["phone"]}>
+              <Input
+                inputMode="tel"
+                placeholder="Enter Phone"
+                value={d.phone}
+                onChange={(e) => patch({ phone: sanitizePhone(e.target.value) })}
+                aria-invalid={!!errors["phone"] || undefined}
+              />
             </Field>
           </div>
         </Panel>

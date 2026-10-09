@@ -109,3 +109,41 @@ describe("Profile rules", () => {
     ).toBeTruthy();
   });
 });
+
+describe("Change History", () => {
+  it("logs each table change with the field, old value and new value", async () => {
+    const { businessPartnerRepository, auditRepository } = await import("@/repositories");
+    const { businessPartnerService, draftOf } = await import("@/services/businessPartnerService");
+    const bp = businessPartnerRepository.get("BP-6")!;
+    const d = draftOf(bp);
+    const hung = d.customer.contacts.find((c) => c.fullName === "Nguyễn Văn Hùng")!;
+    hung.mobilePhone = "0909 999 999";
+    d.customer.contacts = d.customer.contacts.filter((c) => c.fullName !== "Trần Thị Lan");
+    d.documents = [{ ...d.documents[0]!, docType: "Contract", docNo: "HD-01" }];
+    const before = auditRepository.all().length;
+    businessPartnerService.save(d, "BP-6");
+    const fields = auditRepository
+      .all()
+      .slice(before)
+      .map((e) => [e.field, e.oldValue, e.newValue]);
+    expect(fields).toContainEqual([
+      "Customer › Contact Info › Nguyễn Văn Hùng › Mobile Phone",
+      "0909 123 456",
+      "0909 999 999",
+    ]);
+    expect(
+      fields.some(
+        ([f, o]) => f === "Customer › Contact Info › Row removed" && o?.includes("Trần Thị Lan"),
+      ),
+    ).toBe(true);
+    expect(
+      fields.some(
+        ([f, , n]) => f === "Documents & License › Documents › Row added" && n?.includes("HD-01"),
+      ),
+    ).toBe(true);
+    // Saving again without changes logs nothing.
+    const after = auditRepository.all().length;
+    businessPartnerService.save(draftOf(businessPartnerRepository.get("BP-6")!), "BP-6");
+    expect(auditRepository.all().length).toBe(after);
+  });
+});

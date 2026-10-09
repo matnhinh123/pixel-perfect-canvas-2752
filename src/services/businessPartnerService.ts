@@ -21,6 +21,7 @@ import {
   LEGAL_TYPES,
   PARTNER_GROUPS,
   PARTNER_SCOPES,
+  provincesOf,
   SERVICE_PROVIDER_TYPES,
   TAX_REGISTRY,
   TENANT_DEFAULT_CURRENCY,
@@ -51,31 +52,13 @@ export const sanitizeBpCode = (v: string) =>
     .slice(0, BP_CODE_MAX);
 
 /** Tax code comparison key: case- and whitespace-insensitive. */
-/** English Address pre-fill: strip Vietnamese accents and translate admin words (mock until a real service). */
+/** English Address pre-fill: the Local Address written without Vietnamese accents (no translation). */
 export function toEnglishAddress(local: string): string {
-  const words: [RegExp, string][] = [
-    [/\bThành phố\b|\bTP\.\s*/gi, "City "],
-    [/\bTỉnh\b/gi, "Province"],
-    [/\bQuận\b/gi, "District"],
-    [/\bHuyện\b/gi, "District"],
-    [/\bThị xã\b/gi, "Town"],
-    [/\bPhường\b/gi, "Ward"],
-    [/\bXã\b/gi, "Commune"],
-    [/\bĐường\b/gi, "Street"],
-    [/\bQuốc lộ\b/gi, "National Road"],
-    [/\bKCN\b/g, "Industrial Park"],
-    [/\bLô\b/gi, "Lot"],
-  ];
-  let out = local;
-  for (const [re, en] of words) out = out.replace(re, en);
-  return out
+  return local
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d")
-    .replace(/Đ/g, "D")
-    .replace(/\s+/g, " ")
-    .replace(/\s+,/g, ",")
-    .trim();
+    .replace(/Đ/g, "D");
 }
 
 export const taxCodeKey = (v: string) => v.replace(/\s+/g, "").toUpperCase();
@@ -406,6 +389,11 @@ const isBlankRow = <T extends { rid: string }>(row: T, blank: () => T) => {
   return Object.entries(row).every(([k, v]) => k === "rid" || v === b[k]);
 };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE = /^\+?[\d ]+$/;
+const POSTCODE = /^\d{1,10}$/;
+/** Typing filters: Phone keeps digits, spaces and a leading +; Post Code keeps digits (max 10). */
+export const sanitizePhone = (v: string) => v.replace(/[^\d+ ]/g, "").replace(/(?!^)\+/g, "");
+export const sanitizePostcode = (v: string) => v.replace(/\D/g, "").slice(0, 10);
 
 /** Row checks for one table → first problem, e.g. "Row 2: Service Code is required." */
 function checkRows<T extends { rid: string }>(
@@ -486,6 +474,20 @@ export function validateBusinessPartner(
 
   if (d.email.trim() && !EMAIL.test(d.email.trim()))
     e["email"] = tr("Email không hợp lệ.", "Invalid email.");
+  // Province must belong to the chosen Country.
+  if (d.province && !provincesOf(d.country).includes(d.province))
+    e["province"] = tr(
+      `Province "${d.province}" không thuộc ${d.country || "Country đã chọn"}.`,
+      `Province "${d.province}" is not in ${d.country || "the selected Country"}.`,
+    );
+  // Numbers only (Phone may start with + and use spaces as separators).
+  if (d.phone.trim() && !PHONE.test(d.phone.trim()))
+    e["phone"] = tr(
+      "Phone chỉ gồm số (có thể bắt đầu bằng +).",
+      "Phone may only contain digits (optionally starting with +).",
+    );
+  if (d.postcode.trim() && !POSTCODE.test(d.postcode.trim()))
+    e["postcode"] = tr("Post Code chỉ gồm số.", "Post Code may only contain digits.");
   if (d.roles.length === 0)
     e["roles"] = tr("Chọn ít nhất một vai trò.", "Select at least one role.");
 
@@ -647,6 +649,194 @@ const SCALARS: [keyof BusinessPartnerRecord, string][] = [
 ];
 const fmt = (v: unknown) => (Array.isArray(v) ? v.join(", ") : String(v ?? ""));
 
+// ---------------------------------------------------------------- Change History of the tables
+
+type Cols = [string, string][];
+interface TableSpec {
+  /** "Tab › Table", e.g. "Customer › Contact Info". */
+  title: string;
+  rows: (r: BusinessPartnerRecord) => { rid: string }[];
+  cols: Cols;
+  /** Column that names a row in the history, e.g. the contact's Full Name. */
+  nameKey: string;
+}
+const SERVICE: Cols = [
+  ["serviceCode", "Service Code"],
+  ["serviceName", "Service Name"],
+];
+const CONTACT_COLS: Cols = [
+  ...SERVICE,
+  ["gender", "Gender"],
+  ["fullName", "Full Name"],
+  ["identityNo", "Identity No."],
+  ["telephone", "Telephone"],
+  ["mobilePhone", "Mobile Phone"],
+  ["contactRole", "Contact Role"],
+  ["email", "Email"],
+  ["address", "Address"],
+  ["primaryContact", "Primary Contact"],
+  ["status", "Status"],
+];
+const BANK_COLS: Cols = [
+  ["bankCode", "Bank Code"],
+  ["bankName", "Bank Name"],
+  ["swiftCode", "SWIFT Code"],
+  ["bankBranch", "Bank Branch"],
+  ["bankAddress", "Bank Address"],
+  ["bankCountry", "Bank Country"],
+  ["accountNo", "Account No."],
+  ["accountHolder", "Account Holder"],
+  ["currency", "Currency"],
+];
+const SALES_COLS: Cols = [
+  ["staffName", "Staff"],
+  ["department", "Department"],
+  ...SERVICE,
+  ["remark", "Notes"],
+];
+const TABLES: TableSpec[] = [
+  {
+    title: "Documents & License › Documents",
+    rows: (r) => r.documents,
+    nameKey: "docType",
+    cols: [
+      ["docType", "Document Type"],
+      ["docNo", "Document No."],
+      ["issueDate", "Issue Date"],
+      ["expiryDate", "Expiry Date"],
+      ["fileName", "Attachment"],
+      ["remark", "Notes"],
+    ],
+  },
+  {
+    title: "Documents & License › License Adjustments",
+    rows: (r) => r.licenseAdjustments,
+    nameKey: "adjustmentDate",
+    cols: [
+      ["adjustmentDate", "Adjustment Date"],
+      ["changeContent", "Change Content"],
+      ["documentNo", "Document No."],
+    ],
+  },
+  {
+    title: "Customer › Credit Term",
+    rows: (r) => r.customer.creditTerms,
+    nameKey: "serviceCode",
+    cols: [
+      ...SERVICE,
+      ["creditTerm", "Credit Term"],
+      ["creditDays", "Credit Days"],
+      ["creditLimit", "Credit Limit"],
+      ["currency", "Currency"],
+      ["woAccessFrom", "WO Access From"],
+      ["woAccessTo", "WO Access To"],
+      ["woAccessPolicy", "WO Access Policy"],
+      ["autoLockAfterExpiry", "Auto Lock After Expiry"],
+      ["approvedBy", "Approved By"],
+      ["status", "Status"],
+    ],
+  },
+  {
+    title: "Customer › Contact Info",
+    rows: (r) => r.customer.contacts,
+    nameKey: "fullName",
+    cols: CONTACT_COLS,
+  },
+  {
+    title: "Customer › Bank Account",
+    rows: (r) => r.customer.banks,
+    nameKey: "accountNo",
+    cols: BANK_COLS,
+  },
+  {
+    title: "Customer › Sales Assignment",
+    rows: (r) => r.customer.salesmen,
+    nameKey: "staffName",
+    cols: SALES_COLS,
+  },
+  {
+    title: "Vendor › Payment Term",
+    rows: (r) => r.vendor.paymentTerms,
+    nameKey: "serviceCode",
+    cols: [
+      ...SERVICE,
+      ["paymentTerm", "Payment Term"],
+      ["currency", "Currency"],
+      ["effectiveFrom", "Effective From"],
+      ["effectiveTo", "Effective To"],
+      ["status", "Status"],
+    ],
+  },
+  {
+    title: "Vendor › Contact Info",
+    rows: (r) => r.vendor.contacts,
+    nameKey: "fullName",
+    cols: CONTACT_COLS,
+  },
+  {
+    title: "Vendor › Bank Account",
+    rows: (r) => r.vendor.banks,
+    nameKey: "accountNo",
+    cols: BANK_COLS,
+  },
+  {
+    title: "Vendor › Sales Assignment",
+    rows: (r) => r.vendor.salesmen,
+    nameKey: "staffName",
+    cols: SALES_COLS,
+  },
+];
+
+const cell = (v: unknown) => (typeof v === "boolean" ? (v ? "Yes" : "No") : fmt(v).trim());
+const EMPTY = "—";
+
+/**
+ * One history line per change inside the tables, matched by row id:
+ * a new row ("… › Row added", its values), a removed row ("… › Row removed"), or a changed cell
+ * ("… › {row name} › {column}", old value → new value).
+ */
+function tableChanges(
+  before: BusinessPartnerRecord,
+  after: BusinessPartnerRecord,
+): { field: string; oldValue: string; newValue: string }[] {
+  const out: { field: string; oldValue: string; newValue: string }[] = [];
+  for (const t of TABLES) {
+    const get = (row: { rid: string }, k: string) => cell((row as unknown as Loose)[k]);
+    const summary = (row: { rid: string }) =>
+      t.cols
+        .map(([k, label]) => [label, get(row, k)] as const)
+        .filter(([, v]) => v && v !== "No")
+        .map(([label, v]) => `${label}: ${v}`)
+        .join(" · ") || EMPTY;
+    const oldRows = t.rows(before);
+    const newRows = t.rows(after);
+    const oldById = new Map(oldRows.map((r) => [r.rid, r]));
+    const newIds = new Set(newRows.map((r) => r.rid));
+    for (const r of newRows) {
+      const o = oldById.get(r.rid);
+      if (!o) {
+        out.push({ field: `${t.title} › Row added`, oldValue: EMPTY, newValue: summary(r) });
+        continue;
+      }
+      const name = get(r, t.nameKey) || get(o, t.nameKey) || `Row ${newRows.indexOf(r) + 1}`;
+      for (const [k, label] of t.cols) {
+        const a = get(o, k);
+        const b = get(r, k);
+        if (a !== b)
+          out.push({
+            field: `${t.title} › ${name} › ${label}`,
+            oldValue: a || EMPTY,
+            newValue: b || EMPTY,
+          });
+      }
+    }
+    for (const o of oldRows)
+      if (!newIds.has(o.rid))
+        out.push({ field: `${t.title} › Row removed`, oldValue: summary(o), newValue: EMPTY });
+  }
+  return out;
+}
+
 function pruned<T extends { rid: string }>(rows: T[], blank: () => T) {
   return rows.filter((r) => !isBlankRow(r, blank));
 }
@@ -736,17 +926,13 @@ export const businessPartnerService = {
         oldValue: existing.roles.join(", "),
         newValue: next.roles.join(", "),
       });
-    const tables = (r: BusinessPartnerRecord) =>
-      JSON.stringify([r.licenseAdjustments, r.documents, r.customer, r.vendor]);
-    if (tables(existing) !== tables(next))
+    for (const c of tableChanges(existing, next))
       diffs.push({
         ...base,
         action: "UPDATE",
         entityId: next.id,
         entityLabel: next.bpCode,
-        field: "Tables (Documents / License / Customer / Vendor)",
-        oldValue: "",
-        newValue: "Updated",
+        ...c,
       });
     auditService.logMany(diffs);
     return next;
@@ -840,7 +1026,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
     },
     { key: "englishAddress", header: "English Address", example: "" },
     { key: "country", header: "Country", required: true, example: "Vietnam" },
-    { key: "province", header: "Province", example: "TP. Hồ Chí Minh" },
+    { key: "province", header: "Province", example: "Ho Chi Minh City" },
     { key: "postcode", header: "Postcode", example: "" },
     { key: "email", header: "Email", example: "contact@abc.vn" },
     { key: "phone", header: "Phone", example: "028 3823 0000" },
@@ -918,7 +1104,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
         `${i + 1} Lê Lợi, Quận 1, TP. Hồ Chí Minh`,
         "",
         "Vietnam",
-        "TP. Hồ Chí Minh",
+        "Ho Chi Minh City",
         "",
         `contact${n}@sample.vn`,
         "",

@@ -20,6 +20,26 @@ export const PROVINCES = [
   "Dong Nai",
   "Can Tho",
 ];
+/** Province / state options per Country (the Province select only offers those of the chosen Country). */
+export const PROVINCES_BY_COUNTRY: Record<string, string[]> = {
+  Vietnam: PROVINCES,
+  Singapore: ["Central Region", "East Region", "North Region", "North-East Region", "West Region"],
+  China: [
+    "Beijing",
+    "Shanghai",
+    "Tianjin",
+    "Guangdong",
+    "Zhejiang",
+    "Jiangsu",
+    "Shandong",
+    "Fujian",
+  ],
+  Japan: ["Tokyo", "Osaka", "Kanagawa", "Aichi", "Hyogo", "Fukuoka", "Hokkaido"],
+  Korea: ["Seoul", "Busan", "Incheon", "Gyeonggi", "Daegu", "Ulsan"],
+  Thailand: ["Bangkok", "Chon Buri", "Samut Prakan", "Rayong", "Chiang Mai", "Songkhla"],
+  USA: ["California", "New York", "Texas", "Washington", "Illinois", "Florida", "New Jersey"],
+};
+export const provincesOf = (country: string) => PROVINCES_BY_COUNTRY[country] ?? [];
 export const CURRENCIES = ["VND", "USD", "EUR", "SGD", "JPY", "CNY"];
 export const INVOICE_LANGUAGES = ["Vietnamese", "English", "Bilingual"];
 export const BUSINESS_CATEGORIES = [
@@ -171,13 +191,20 @@ type Seed = Partial<Omit<BusinessPartnerRecord, "customer" | "vendor">> &
     vendor?: Partial<BusinessPartnerRecord["vendor"]>;
   };
 
+/** Same as the form's English Address pre-fill: the Local Address without Vietnamese accents. */
+const noAccents = (v: string) =>
+  v
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+
 const bp = (s: Seed, at = SEED_TIME): BusinessPartnerRecord => ({
   status: "Active",
   legalType: "Company",
   inHouse: false,
   form: "01GTKT",
   localAddress: "",
-  englishAddress: "",
   country: "Vietnam",
   province: "Ho Chi Minh City",
   postcode: "",
@@ -200,6 +227,7 @@ const bp = (s: Seed, at = SEED_TIME): BusinessPartnerRecord => ({
   documents: [],
   ...meta(at),
   ...s,
+  englishAddress: s.englishAddress || noAccents(s.localAddress ?? ""),
   customer: { creditTerms: [], contacts: [], banks: [], salesmen: [], ...s.customer },
   vendor: { paymentTerms: [], contacts: [], banks: [], salesmen: [], ...s.vendor },
 });
@@ -242,6 +270,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-2",
+      localAddress: "27 Đường số 9, Phường Linh Tây, TP. Thủ Đức, TP. Hồ Chí Minh",
       bpCode: "NPA",
       taxCode: "0319054826",
       invoiceSerial: "C25NPA",
@@ -268,6 +297,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-3",
+      localAddress: "15 Lê Hồng Phong, Quận Ngô Quyền, Hải Phòng",
       bpCode: "HPLAL",
       taxCode: "0109982743",
       invoiceSerial: "C25HPL",
@@ -282,6 +312,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-4",
+      localAddress: "102 Nguyễn Văn Linh, Quận 7, TP. Hồ Chí Minh",
       bpCode: "DONGMINH",
       taxCode: "0318846207",
       invoiceSerial: "C25DMT",
@@ -305,6 +336,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-5",
+      localAddress: "8 Phạm Ngọc Thạch, Quận 3, TP. Hồ Chí Minh",
       bpCode: "DEMO01",
       taxCode: "0315471258",
       invoiceSerial: "C26/DEM",
@@ -318,6 +350,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
   bp(
     {
       id: "BP-6",
+      localAddress: "12 Nguyễn Thị Minh Khai, Quận 1, TP. Hồ Chí Minh",
       bpCode: "QTL",
       taxCode: "0316497684",
       invoiceSerial: "C26TRK",
