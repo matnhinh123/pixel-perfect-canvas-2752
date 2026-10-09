@@ -1,12 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
-import { History, Pencil, Save, X, XCircle } from "lucide-react";
+import { Pencil, Plus, Power, Save, Trash2, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
-import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
+import {
+  EmptyState,
+  Field,
+  NativeSelect,
+  Panel,
+  StatusBadge,
+  Tag,
+} from "@/components/movex/common";
+import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import {
   FormErrorBanner,
   FormPageHeader,
@@ -21,19 +28,19 @@ import {
 } from "@/components/movex/general/FormParts";
 import { DimensionInput, UnitInput } from "@/components/movex/vehicle/VehicleInputs";
 import { useVehicleAlertDays, useVehicles } from "@/components/movex/vehicle/useVehicleData";
-import { useCollection } from "@/hooks/use-store";
-import { businessPartnerRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
-  bpOwnerLabel,
-  capacityRequired,
+  blankMapping,
   daysUntil,
   draftOfVehicle,
   expiryState,
+  fieldsLostOnTypeChange,
   maxDistanceKm,
   newVehicleDraft,
-  ownerCandidates,
+  showsField,
+  SPEC_FIELDS,
   VEHICLE_GROUP_OPTIONS,
+  vehicleCrud,
   vehicleService,
   type VehicleDraft,
 } from "@/services/vehicleMasterService";
@@ -42,12 +49,18 @@ import {
   FUEL_TYPES,
   PRODUCTION_COUNTRIES,
   TRADE_MARKS,
+  TRUCK_TYPES,
+  VEHICLE_TYPE_LABELS,
   VEHICLE_TYPES,
 } from "@/mock-data/vehicleMaster";
-import { VEHICLE_OWNERSHIPS, type VehicleMasterRecord, type VehicleOwnership } from "@/types";
+import {
+  TRAILER_TYPES,
+  type ContainerSizeMapping,
+  type VehicleMasterRecord,
+  type VehicleMasterType,
+} from "@/types";
 import { formatDate } from "@/lib/format";
 import { useT } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
 
 type Mode = "view" | "edit";
 
@@ -59,9 +72,6 @@ export const Route = createFileRoute("/vehicle/$id")({
   }),
   component: VehiclePage,
 });
-
-// Fields that live inside the folded "Specifications" panel (to unfold it on errors).
-const SPEC_FIELDS = ["kerbMass", "engineDisplacement", "acquisitionCost"];
 
 function VehiclePage() {
   const { t } = useT();
@@ -86,7 +96,7 @@ function VehiclePage() {
   // `key` resets the form state when switching between records / modes.
   return (
     <VehicleForm
-      key={`${source?.id ?? "new"}:${mode ?? "view"}`}
+      key={`${source?.id ?? "new"}:${mode ?? "view"}:${source?.updatedAt ?? ""}:${source?.status ?? ""}`}
       source={source}
       readOnly={!!source && mode !== "edit"}
     />
@@ -130,6 +140,26 @@ function ExpiryHint({ ymd }: { ymd: string }): ReactNode {
   return undefined;
 }
 
+/** Specifications has data worth showing unfolded when editing. */
+const SPEC_DATA: (keyof VehicleDraft)[] = [
+  "policyNumber",
+  "tradeMark",
+  "modelCode",
+  "buyingDate",
+  "overallDimension",
+  "containerDimension",
+  "kerbMass",
+  "authorizedPayload",
+  "rfidTag",
+  "acquisitionCost",
+  "contractNumber",
+  "liabilityInsuranceNumber",
+  "fuelType",
+  "engineDisplacement",
+  "authorizedTowedMass",
+  "productionCountry",
+];
+
 function VehicleForm({
   source,
   readOnly,
@@ -139,6 +169,7 @@ function VehicleForm({
 }) {
   const { t } = useT();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const isNew = !source;
   const initial = useMemo<VehicleDraft>(
     () => (source ? draftOfVehicle(source) : newVehicleDraft()),
@@ -147,10 +178,10 @@ function VehicleForm({
   const [d, setD] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
 
   const dirty = !readOnly && JSON.stringify(d) !== JSON.stringify(initial);
   const guard = useUnsavedChangesGuard(dirty);
+  const shows = (k: keyof VehicleDraft) => showsField(d.vehicleType, k);
 
   const patch = (p: Partial<VehicleDraft>) => {
     setD((x) => ({ ...x, ...p }));
@@ -178,10 +209,10 @@ function VehicleForm({
     className: "w-full",
     invalid: !!errors[k],
   });
-  /** Native date picker while editing; plain dd/mm/yyyy text (blank when empty) when viewing. */
+  /** Native date picker while editing; plain dd/mm/yyyy text when viewing. */
   const dateInput = (k: keyof VehicleDraft) =>
     readOnly ? (
-      <Input disabled value={d[k] ? formatDate(String(d[k])) : ""} />
+      <Input disabled value={d[k] ? formatDate(String(d[k])) : ""} placeholder="—" />
     ) : (
       <Input type="date" {...text(k)} />
     );
@@ -195,15 +226,36 @@ function VehicleForm({
     />
   );
 
-  const bps = useCollection(businessPartnerRepository);
-  const owners = useMemo(() => ownerCandidates(bps, initial.ownerId), [bps, initial.ownerId]);
-  const ownerLabels = useMemo(
-    () => Object.fromEntries(owners.map((b) => [b.id, bpOwnerLabel(b)])),
-    [owners],
-  );
+  /** SR-VEH-02 / 17: leaving a type whose filled fields would be hidden asks first. */
+  const changeType = async (next: VehicleMasterType | "") => {
+    const lost = fieldsLostOnTypeChange(d, next);
+    if (lost.length) {
+      const r = await confirm({
+        title: t("Đổi loại xe?", "Change vehicle type?"),
+        description: t(
+          `Các trường sau sẽ bị ẩn và xoá giá trị khi lưu: ${lost.join(", ")}.`,
+          `These fields will be hidden and their values cleared on save: ${lost.join(", ")}.`,
+        ),
+        confirmLabel: t("Đổi loại xe", "Change type"),
+      });
+      if (r !== "confirm") return;
+    }
+    // Choosing HEAD with no mapping yet starts the table with one empty row (SR-VEH-15).
+    patch({
+      vehicleType: next,
+      ...(next === "HEAD" && d.containerMappings.length === 0
+        ? { containerMappings: [blankMapping()] }
+        : {}),
+    });
+  };
+
+  const setMappings = (containerMappings: ContainerSizeMapping[]) => patch({ containerMappings });
+  const setMapping = (rid: string, p: Partial<ContainerSizeMapping>) =>
+    setMappings(d.containerMappings.map((m) => (m.rid === rid ? { ...m, ...p } : m)));
 
   const maxDistance = maxDistanceKm(d.fuelRate, d.fuelCapacity);
   const specError = SPEC_FIELDS.some((k) => errors[k]);
+  const specHasData = SPEC_DATA.some((k) => String(initial[k] ?? "").trim() !== "");
 
   const back = () =>
     source
@@ -220,15 +272,51 @@ function VehicleForm({
           ? t(`Đã thêm xe ${saved.plateNumber}`, `Vehicle ${saved.plateNumber} added`)
           : t(`Đã lưu xe ${saved.plateNumber}`, `Vehicle ${saved.plateNumber} saved`),
       );
-      void navigate({ to: "/vehicle/$id", params: { id: saved.id }, search: { mode: "view" } });
+      // Create → back to the list; Edit → the vehicle's view.
+      if (isNew) void navigate({ to: "/vehicle" });
+      else
+        void navigate({ to: "/vehicle/$id", params: { id: saved.id }, search: { mode: "view" } });
     } catch (err) {
       if (err instanceof BusinessRuleError) {
         setErrors(err.fieldErrors);
         setFormError(t("Chưa thể lưu — vui lòng kiểm tra:", "Cannot save yet — please check:"));
+        // SR-VEH-18: scroll to and focus the first invalid field (after the folded panel opens).
+        setTimeout(() => {
+          const el = document.querySelector<HTMLElement>("[aria-invalid='true']");
+          el?.scrollIntoView({ block: "center", behavior: "smooth" });
+          el?.focus({ preventScroll: true });
+        }, 50);
       }
       toast.error(err instanceof Error ? err.message : t("Lưu thất bại", "Save failed"));
     }
   };
+
+  /** Deactivate / Activate from the view header. */
+  const toggleStatus = async () => {
+    if (!source) return;
+    const next = source.status === "Active" ? "Inactive" : "Active";
+    const verb = next === "Active" ? "Activate" : "Deactivate";
+    const r = await confirm({
+      title: `${verb} ${source.plateNumber}?`,
+      description:
+        next === "Inactive"
+          ? t(
+              "Xe Inactive bị ẩn khỏi danh sách chọn khi điều phối, vẫn giữ trong dữ liệu chuyến đã chạy.",
+              "An inactive vehicle is hidden from dispatch pickers but kept in past trips.",
+            )
+          : t(
+              "Xe sẽ được chọn lại khi điều phối.",
+              "The vehicle becomes available for dispatch again.",
+            ),
+      confirmLabel: verb,
+      ...(next === "Inactive" ? { tone: "danger" as const } : {}),
+    });
+    if (r !== "confirm") return;
+    vehicleCrud.setStatus([source.id], next);
+    toast.success(`${source.plateNumber} ${next === "Active" ? "activated" : "deactivated"}`);
+  };
+
+  const typeTag = (type: string) => (type ? <Tag>{type}</Tag> : null);
 
   return (
     <div>
@@ -244,17 +332,17 @@ function VehicleForm({
           isNew
             ? "Create Vehicle"
             : readOnly
-              ? source.plateNumber
-              : t(`Chỉnh sửa: ${source.plateNumber}`, `Edit: ${source.plateNumber}`)
+              ? `Vehicle #${source.plateNumber}`
+              : `Edit Vehicle #${source.plateNumber}`
         }
-        subtitle={
-          source
-            ? [source.vehicleType, source.vehicleGroup, source.modelCode]
-                .filter(Boolean)
-                .join(" · ")
-            : undefined
+        badge={
+          source ? (
+            <span className="flex items-center gap-2">
+              {typeTag(source.vehicleType)}
+              <StatusBadge status={source.status} />
+            </span>
+          ) : undefined
         }
-        badge={source ? <StatusBadge status={source.status} /> : undefined}
         dirty={dirty}
         readOnly={readOnly}
         onBack={() => (readOnly || isNew ? void navigate({ to: "/vehicle" }) : back())}
@@ -263,17 +351,27 @@ function VehicleForm({
         extra={
           source && (
             <>
-              <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
-                <History className="h-4 w-4" />
-                {t("Lịch sử", "History")}
-              </Button>
               {readOnly && (
-                <Button asChild size="lg">
-                  <Link to="/vehicle/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </Link>
-                </Button>
+                <>
+                  <Button variant="outline" size="lg" onClick={() => void toggleStatus()}>
+                    <Power className="h-4 w-4" />
+                    {source.status === "Active" ? "Deactivate" : "Activate"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => void navigate({ to: "/vehicle" })}
+                  >
+                    <X className="h-4 w-4" />
+                    Cancel
+                  </Button>
+                  <Button asChild size="lg">
+                    <Link to="/vehicle/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Link>
+                  </Button>
+                </>
               )}
             </>
           )
@@ -285,60 +383,32 @@ function VehicleForm({
         <Panel title="General Information" bodyClassName="space-y-6">
           <FormGroup title="Vehicle Identification">
             <Field label="Vehicle Type" required error={errors["vehicleType"]} className={S3}>
-              <NativeSelect {...select("vehicleType", VEHICLE_TYPES, "Select vehicle type")} />
-            </Field>
-            <Field
-              label="Vehicle Group"
-              required
-              error={errors["vehicleGroup"]}
-              className={S3}
-              info={t(
-                "Mỗi xe thuộc đúng một nhóm — cơ sở cho định mức và giá.",
-                "Each vehicle belongs to exactly one group — the basis for norms and prices.",
-              )}
-            >
               <NativeSelect
-                {...select("vehicleGroup", VEHICLE_GROUP_OPTIONS, "Select vehicle group")}
-              />
-            </Field>
-            <Field label="Ownership" required className={S3}>
-              <NativeSelect
-                value={d.ownership}
-                onChange={(v) =>
-                  patch(
-                    v === "Outsourced"
-                      ? { ownership: "Outsourced" }
-                      : { ownership: v as VehicleOwnership, ownerId: "" },
-                  )
-                }
-                options={VEHICLE_OWNERSHIPS}
-                labels={{ Own: "Own fleet", Outsourced: "Outsourced" }}
+                value={d.vehicleType}
+                onChange={(v) => void changeType(v as VehicleMasterType | "")}
+                options={["", ...VEHICLE_TYPES]}
+                labels={{ "": readOnly ? "—" : "Chọn loại phương tiện", ...VEHICLE_TYPE_LABELS }}
                 className="w-full"
+                invalid={!!errors["vehicleType"]}
               />
             </Field>
-            {d.ownership === "Outsourced" ? (
-              <Field
-                label="Owner"
-                required
-                error={errors["ownerId"]}
-                className={S3}
-                info={t(
-                  "Đối tác (Business Partner, vai trò Vendor) sở hữu xe thuê ngoài.",
-                  "Business Partner (Vendor role) that owns the outsourced vehicle.",
-                )}
-              >
-                <NativeSelect
-                  value={d.ownerId}
-                  onChange={(v) => patch({ ownerId: v })}
-                  options={["", ...owners.map((b) => b.id)]}
-                  labels={{ "": readOnly ? "—" : "Select owner", ...ownerLabels }}
-                  className="w-full"
-                  invalid={!!errors["ownerId"]}
-                />
+            {shows("trailerType") && (
+              <Field label="Trailer Type" error={errors["trailerType"]} className={S3}>
+                <NativeSelect {...select("trailerType", TRAILER_TYPES, "Chọn cỡ rơ-moóc")} />
               </Field>
-            ) : (
-              <div className="hidden lg:col-span-3 lg:block" />
             )}
+            {shows("vehicleGroup") && (
+              <Field label="Vehicle Group" error={errors["vehicleGroup"]} className={S3}>
+                <NativeSelect {...select("vehicleGroup", VEHICLE_GROUP_OPTIONS, "Chọn nhóm xe")} />
+              </Field>
+            )}
+            {shows("truckType") && (
+              <Field label="Truck Type" required error={errors["truckType"]} className={S3}>
+                <NativeSelect {...select("truckType", TRUCK_TYPES, "Chọn hạng tải xe")} />
+              </Field>
+            )}
+            {/* Keep the next fields on a new row. */}
+            <div className="hidden lg:col-span-12 lg:block" />
 
             <Field
               label="Plate Number"
@@ -346,195 +416,167 @@ function VehicleForm({
               error={errors["plateNumber"]}
               className={S3}
               info={t(
-                "Biển số đăng ký, duy nhất. Tự viết hoa. VD: 51D-123.45",
-                "Registered plate, unique. Auto-uppercase. e.g. 51D-123.45",
+                "Biển số Việt Nam, duy nhất. VD: 51C-123.45, 30A-12345, 29LD-123.45",
+                "Vietnamese plate, unique. e.g. 51C-123.45, 30A-12345, 29LD-123.45",
               )}
             >
-              <Input
-                placeholder="Enter plate number"
-                maxLength={15}
-                {...text("plateNumber", true)}
-              />
+              <Input placeholder="VD: 51C-123.45" maxLength={12} {...text("plateNumber", true)} />
             </Field>
             <Field
               label="Chassis Number (VIN)"
+              required
               error={errors["chassisNumber"]}
               className={S3}
               info={t(
-                "Số khung 11–17 ký tự chữ/số, duy nhất.",
-                "Optional. Chassis number, 11–17 letters/digits, unique.",
+                "Số khung, chỉ chữ và số, duy nhất.",
+                "Chassis number: letters and digits only, unique.",
               )}
             >
               <Input
-                placeholder="Enter Chassis Number (VIN)"
+                placeholder="Nhập số khung (chỉ chữ và số)"
                 maxLength={17}
                 {...text("chassisNumber", true)}
               />
             </Field>
-            <Field label="Engine Number" className={S3}>
-              <Input placeholder="Enter engine number" {...text("engineNumber")} />
-            </Field>
+            {shows("engineNumber") && (
+              <Field label="Engine Number" className={S3}>
+                <Input placeholder="Nhập số máy" {...text("engineNumber")} />
+              </Field>
+            )}
             <Field label="Production Year" error={errors["productionYear"]} className={S3}>
               <Input
                 inputMode="numeric"
                 maxLength={4}
-                placeholder="yyyy"
+                placeholder="YYYY"
                 value={d.productionYear}
                 aria-invalid={!!errors["productionYear"] || undefined}
                 onChange={(e) => patch({ productionYear: e.target.value.replace(/\D/g, "") })}
               />
             </Field>
 
-            <Field
-              label="Capacity (kg)"
-              required={capacityRequired(d.vehicleType)}
-              error={errors["authorizedPayload"]}
-              className={S3}
-              info={t(
-                "Tải trọng cho phép (kg). Bắt buộc với Truck / Tractor.",
-                "Authorized payload in kg. Required for Truck / Tractor.",
-              )}
-            >
-              {unit("authorizedPayload", "kg", "Enter capacity")}
-            </Field>
-            <Field label="Fuel Rate" error={errors["fuelRate"]} className={S3}>
-              {unit("fuelRate", "l/100km", "Enter Fuel Rate")}
-            </Field>
-            <Field label="Fuel Capacity" error={errors["fuelCapacity"]} className={S3}>
-              {unit("fuelCapacity", "liter", "Enter Fuel Capacity")}
-            </Field>
-            <Field
-              label="Max Distance"
-              className={S3}
-              info={t(
-                "Tự tính: Fuel Capacity ÷ Fuel Rate × 100 (km).",
-                "Calculated: Fuel Capacity ÷ Fuel Rate × 100 (km).",
-              )}
-            >
-              <UnitInput readOnly unit="km" value={maxDistance} placeholder="Enter max distance" />
-            </Field>
+            {shows("fuelRate") && (
+              <>
+                <Field label="Fuel Rate" error={errors["fuelRate"]} className={S3}>
+                  {unit("fuelRate", "l/100km", "Nhập định mức tiêu hao")}
+                </Field>
+                <Field label="Fuel Capacity" error={errors["fuelCapacity"]} className={S3}>
+                  {unit("fuelCapacity", "liter", "Nhập dung tích bình dầu")}
+                </Field>
+                <Field
+                  label="Quãng đường tối đa"
+                  className={S3}
+                  info={
+                    maxDistance
+                      ? "Fuel Capacity ÷ Fuel Rate × 100"
+                      : "Cần Fuel Rate và Fuel Capacity"
+                  }
+                >
+                  <UnitInput
+                    readOnly
+                    unit="km"
+                    value={maxDistance}
+                    placeholder="Cần Fuel Rate và Fuel Capacity"
+                  />
+                </Field>
+              </>
+            )}
           </FormGroup>
 
-          <FormGroup title="Registration, Insurance And Badge">
+          <FormGroup title="Registration & Inspection Information">
             <Field
-              label="Registration (Inspection) Expiry"
+              label="Registration Expiration Date"
+              className={S3}
+              hint={<ExpiryHint ymd={d.registrationExpiry} />}
+            >
+              {dateInput("registrationExpiry")}
+            </Field>
+            <Field
+              label="Vehicle Inspection No"
+              error={errors["inspectionNo"]}
               className={S3}
               info={t(
-                "Hạn đăng kiểm. Được cảnh báo khi sắp hết hạn.",
-                "Registration (inspection / đăng kiểm) expiry. Alerted when about to expire.",
+                "Số quản lý phương tiện: chữ, số, gạch nối.",
+                "Vehicle inspection number: letters, digits, hyphens.",
               )}
+            >
+              <Input placeholder="Nhập số quản lý phương tiện" {...text("inspectionNo")} />
+            </Field>
+            <Field
+              label="Inspection Expiration Date"
+              className={S3}
               hint={<ExpiryHint ymd={d.inspectionExpiry} />}
             >
               {dateInput("inspectionExpiry")}
             </Field>
-            <Field
-              label="Insurance Expiry"
-              className={S3}
-              hint={<ExpiryHint ymd={d.insuranceExpiry} />}
-            >
-              {dateInput("insuranceExpiry")}
-            </Field>
-            <Field
-              label="Badge Expiry"
-              className={S3}
-              info={t("Hạn phù hiệu xe.", "Vehicle badge (phù hiệu) expiry.")}
-              hint={<ExpiryHint ymd={d.badgeExpiry} />}
-            >
-              {dateInput("badgeExpiry")}
-            </Field>
             <Field label="Lifetime Limit" className={S3}>
               {dateInput("lifetimeLimit")}
-            </Field>
-            <Field
-              label="Vehicle Inspection No"
-              className={S3}
-              info={t(
-                "Số giấy chứng nhận kiểm định (đăng kiểm).",
-                "Vehicle inspection certificate number.",
-              )}
-            >
-              <Input placeholder="Enter vehicle inspection number" {...text("inspectionNo")} />
             </Field>
           </FormGroup>
         </Panel>
 
-        <CollapsiblePanel title="Specifications" forceOpen={specError}>
-          <FormGroup title={t("Model & giấy tờ", "Model & Documents")}>
+        <CollapsiblePanel
+          title="Specifications"
+          defaultOpen={readOnly || (!isNew && specHasData)}
+          forceOpen={specError}
+        >
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-6 lg:grid-cols-12">
+            <Field label="Comprehensive Policy Number" className={S3}>
+              <Input placeholder="Nhập số bảo hiểm vật chất" {...text("policyNumber")} />
+            </Field>
             <Field label="Trade Mark" className={S3}>
-              <NativeSelect {...select("tradeMark", TRADE_MARKS, "Select trade mark")} />
+              <NativeSelect {...select("tradeMark", TRADE_MARKS, "Chọn hãng sản xuất")} />
             </Field>
             <Field
               label="Model Code"
+              error={errors["modelCode"]}
               className={S3}
               info={t(
-                "Mã model của nhà sản xuất, VD: HINO-XZU730L.",
-                "Manufacturer model code, e.g. HINO-XZU730L.",
+                "Chữ, số và gạch nối. VD: HD210-2018",
+                "Letters, digits, hyphens. e.g. HD210-2018",
               )}
             >
-              <Input placeholder="Enter model code" {...text("modelCode")} />
-            </Field>
-            <Field label="Production Country" className={S3}>
-              <NativeSelect
-                {...select("productionCountry", PRODUCTION_COUNTRIES, "Select production country")}
-              />
+              <Input placeholder="VD: HD210-2018" {...text("modelCode")} />
             </Field>
             <Field label="Buying Date" className={S3}>
               {dateInput("buyingDate")}
             </Field>
 
-            <Field
-              label="Inspection Report No"
-              error={errors["inspectionReportNo"]}
-              className={S3}
-              info={t("Số biên bản kiểm định kỹ thuật.", "Technical inspection report number.")}
-            >
-              <Input placeholder="Enter inspection report number" {...text("inspectionReportNo")} />
-            </Field>
-            <Field label="Comprehensive Policy Number" className={S3}>
-              <Input placeholder="Enter comprehensive policy number" {...text("policyNumber")} />
-            </Field>
-            <Field label="Liability Insurance Number" className={S3}>
-              <Input
-                placeholder="Enter liability insurance number"
-                {...text("liabilityInsuranceNumber")}
-              />
-            </Field>
-            <Field label="Contract Number" className={S3}>
-              <Input placeholder="Enter contract number" {...text("contractNumber")} />
-            </Field>
-          </FormGroup>
-
-          <FormGroup title={t("Kích thước & tải trọng", "Dimensions & Weight")}>
             <Field label="Overall Dimension" className={S6}>
               <DimensionInput
                 value={d.overallDimension}
                 onChange={(v) => patch({ overallDimension: v })}
               />
             </Field>
-            <Field label="Cargo Container Dimensions" className={S6}>
+            <Field label="Cargo / Container Dimensions" className={S6}>
               <DimensionInput
                 value={d.containerDimension}
                 onChange={(v) => patch({ containerDimension: v })}
               />
             </Field>
-            <Field label="Kerb Mass" error={errors["kerbMass"]} className={S3}>
-              {unit("kerbMass", "kg", "Enter kerb mass")}
-            </Field>
-            <Field label="Fuel Type" className={S3}>
-              <NativeSelect {...select("fuelType", FUEL_TYPES, "Select fuel type")} />
-            </Field>
-            <Field label="Engine Displacement" error={errors["engineDisplacement"]} className={S3}>
-              {unit("engineDisplacement", "cm3", "Enter engine displacement")}
-            </Field>
-          </FormGroup>
 
-          <FormGroup title={t("Tài sản & thiết bị", "Asset & Equipment")}>
+            <Field label="Kerb Mass" error={errors["kerbMass"]} className={S3}>
+              {unit("kerbMass", "kg", "Nhập khối lượng bản thân")}
+            </Field>
+            <Field
+              label="Authorized Payload"
+              error={errors["authorizedPayload"]}
+              className={S3}
+              info={t(
+                "Tải trọng cho phép theo đăng kiểm (kg), độc lập với Truck Type.",
+                "Legal payload per inspection (kg), independent of Truck Type.",
+              )}
+            >
+              {unit("authorizedPayload", "kg", "Nhập tải trọng cho phép")}
+            </Field>
+            <Field label="RFID / Barcode Tag" className={S3}>
+              <Input placeholder="Nhập mã định danh điện tử" {...text("rfidTag")} />
+            </Field>
             <Field label="Acquisition Cost" error={errors["acquisitionCost"]} className={S3}>
               <div className="flex">
                 <Input
                   inputMode="decimal"
                   className="rounded-r-none"
-                  placeholder="Enter acquisition cost"
+                  placeholder="Nhập giá mua xe"
                   value={d.acquisitionCost}
                   aria-invalid={!!errors["acquisitionCost"] || undefined}
                   onChange={(e) =>
@@ -549,15 +591,51 @@ function VehicleForm({
                 />
               </div>
             </Field>
-            <Field label="RFID / Barcode Tag" className={S3}>
-              <Input placeholder="Enter RFID / barcode tag" {...text("rfidTag")} />
+
+            <Field label="Contract Number" className={S3}>
+              <Input placeholder="Nhập số hợp đồng" {...text("contractNumber")} />
             </Field>
-            <Field label="Status" className={S3}>
-              <SwitchRow
-                checked={d.status === "Active"}
-                onChange={(v) => patch({ status: v ? "Active" : "Inactive" })}
-                on="Active"
-                off="Inactive"
+            <Field
+              label="Inspection Report No"
+              required
+              error={errors["inspectionReportNo"]}
+              className={S3}
+              info={t(
+                "Số chứng nhận kiểm định: chữ, số, gạch nối.",
+                "Inspection report number: letters, digits, hyphens.",
+              )}
+            >
+              <Input placeholder="Nhập số chứng nhận kiểm định" {...text("inspectionReportNo")} />
+            </Field>
+            <Field label="Liability Insurance Number" className={S3}>
+              <Input placeholder="Nhập số bảo hiểm TNDS" {...text("liabilityInsuranceNumber")} />
+            </Field>
+            {shows("fuelType") && (
+              <Field label="Fuel Type" className={S3}>
+                <NativeSelect {...select("fuelType", FUEL_TYPES, "Chọn loại nhiên liệu")} />
+              </Field>
+            )}
+            {shows("engineDisplacement") && (
+              <Field
+                label="Engine Displacement"
+                error={errors["engineDisplacement"]}
+                className={S3}
+              >
+                {unit("engineDisplacement", "cm3", "Nhập dung tích xi lanh")}
+              </Field>
+            )}
+            {shows("authorizedTowedMass") && (
+              <Field
+                label="Authorized Towed Mass"
+                error={errors["authorizedTowedMass"]}
+                className={S3}
+              >
+                {unit("authorizedTowedMass", "kg", "Nhập khối lượng kéo theo cho phép")}
+              </Field>
+            )}
+            <Field label="Production Country" className={S3}>
+              <NativeSelect
+                {...select("productionCountry", PRODUCTION_COUNTRIES, "Chọn nước sản xuất")}
               />
             </Field>
 
@@ -566,7 +644,7 @@ function VehicleForm({
                 checked={d.renovated}
                 onChange={(v) => patch({ renovated: v })}
                 on="Renovated"
-                off="Not renovated"
+                off="Unrenovated"
               />
             </Field>
             <Field label="Transportation Business" className={S3}>
@@ -577,7 +655,7 @@ function VehicleForm({
                 off="No"
               />
             </Field>
-            <Field label="Equipped With Tachograph" className={S3}>
+            <Field label="Equipped with Tachograph" className={S3}>
               <SwitchRow
                 checked={d.tachograph}
                 onChange={(v) => patch({ tachograph: v })}
@@ -593,8 +671,109 @@ function VehicleForm({
                 off="No"
               />
             </Field>
-          </FormGroup>
+          </div>
         </CollapsiblePanel>
+
+        {shows("containerMappings") && (
+          <Panel
+            title="Container Size Mapping"
+            actions={
+              !readOnly && (
+                <Button
+                  size="sm"
+                  type="button"
+                  disabled={d.containerMappings.length >= TRAILER_TYPES.length}
+                  title={
+                    d.containerMappings.length >= TRAILER_TYPES.length
+                      ? t("Đã khai đủ các Trailer Type.", "Every Trailer Type is already mapped.")
+                      : undefined
+                  }
+                  onClick={() => setMappings([...d.containerMappings, blankMapping()])}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              )
+            }
+          >
+            {d.containerMappings.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                {readOnly ? "Chưa khai tổ hợp nào" : "Chưa khai tổ hợp nào. Bấm Add để thêm."}
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-muted/60 text-left text-xs font-semibold">
+                      <th className="w-12 px-3 py-2">No.</th>
+                      <th className="px-3 py-2">Head</th>
+                      <th className="px-3 py-2">
+                        Trailer Type<span className="ml-0.5 text-destructive">*</span>
+                      </th>
+                      <th className="px-3 py-2">
+                        Vehicle Group<span className="ml-0.5 text-destructive">*</span>
+                      </th>
+                      {!readOnly && <th className="w-12 px-3 py-2" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.containerMappings.map((m, i) => (
+                      <tr key={m.rid} className="border-t">
+                        <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
+                        <td className="px-3 py-2">
+                          <Input disabled value={d.plateNumber} placeholder="Head" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <NativeSelect
+                            value={m.trailerType}
+                            onChange={(v) =>
+                              setMapping(m.rid, {
+                                trailerType: v as ContainerSizeMapping["trailerType"],
+                              })
+                            }
+                            options={["", ...TRAILER_TYPES]}
+                            labels={{ "": readOnly ? "—" : "Chọn cỡ rơ-moóc" }}
+                            className="w-full"
+                            invalid={!!errors["containerMappings"] && !m.trailerType}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <NativeSelect
+                            value={m.vehicleGroup}
+                            onChange={(v) => setMapping(m.rid, { vehicleGroup: v })}
+                            options={["", ...VEHICLE_GROUP_OPTIONS]}
+                            labels={{ "": readOnly ? "—" : "Chọn nhóm xe" }}
+                            className="w-full"
+                            invalid={!!errors["containerMappings"] && !m.vehicleGroup}
+                          />
+                        </td>
+                        {!readOnly && (
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              type="button"
+                              aria-label={t("Xoá dòng", "Delete row")}
+                              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                              onClick={() =>
+                                setMappings(d.containerMappings.filter((x) => x.rid !== m.rid))
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {errors["containerMappings"] && (
+              <p className="mt-2 text-xs font-medium text-destructive">
+                {errors["containerMappings"]}
+              </p>
+            )}
+          </Panel>
+        )}
       </ReadOnlyScope>
 
       {!readOnly && (
@@ -613,16 +792,6 @@ function VehicleForm({
             Save
           </Button>
         </div>
-      )}
-
-      {source && (
-        <AuditHistoryDrawer
-          open={historyOpen}
-          onOpenChange={setHistoryOpen}
-          entityType="Vehicle"
-          entityId={source.id}
-          title={source.plateNumber}
-        />
       )}
     </div>
   );

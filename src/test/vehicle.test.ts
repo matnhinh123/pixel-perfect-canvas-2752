@@ -1,17 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
   expiryState,
+  fieldsLostOnTypeChange,
   maxDistanceKm,
   newVehicleDraft,
   normalizeVehicle,
+  showsField,
   validateVehicle,
   vehicleExpiryAlerts,
+  vehicleService,
+  type VehicleDraft,
 } from "@/services/vehicleMasterService";
 import type { VehicleMasterRecord } from "@/types";
 
+const valid = (p: Partial<VehicleDraft> = {}): VehicleDraft => ({
+  ...newVehicleDraft(),
+  vehicleType: "TRAILER",
+  plateNumber: "99R-123.45",
+  chassisNumber: "TESTVIN0001",
+  inspectionReportNo: "KD-2026-0001",
+  ...p,
+});
+
 describe("Vehicle master", () => {
-  it("derives Max Distance from fuel capacity and rate", () => {
-    expect(maxDistanceKm("25", "200")).toBe("800");
+  it("derives Max Distance = capacity ÷ rate × 100, rounded down", () => {
+    expect(maxDistanceKm("22", "200")).toBe("909");
+    expect(maxDistanceKm("38", "400")).toBe("1052");
     expect(maxDistanceKm("", "200")).toBe("");
     expect(maxDistanceKm("0", "200")).toBe("");
   });
@@ -25,30 +39,75 @@ describe("Vehicle master", () => {
     expect(expiryState("", now)).toBe("none");
   });
 
-  it("requires type, group, plate (VIN and inspection report are optional); rejects a duplicate plate", () => {
+  it("requires exactly Vehicle Type, Plate Number, VIN and Inspection Report No", () => {
     const empty = validateVehicle(newVehicleDraft());
-    expect(Object.keys(empty).sort()).toEqual(["plateNumber", "vehicleGroup", "vehicleType"]);
-    const dup = validateVehicle({
-      ...newVehicleDraft(),
-      vehicleType: "Trailer",
-      vehicleGroup: "Medium Truck",
-      plateNumber: "51d-846.32",
-      chassisNumber: "ABCDEFGH123456789",
-    });
-    expect(dup["plateNumber"]).toMatch(/exist|tồn tại/i);
-    expect(dup["chassisNumber"]).toBeUndefined();
+    expect(Object.keys(empty).sort()).toEqual([
+      "chassisNumber",
+      "inspectionReportNo",
+      "plateNumber",
+      "vehicleType",
+    ]);
+    expect(validateVehicle(valid())).toEqual({});
   });
 
-  it("requires capacity for Truck / Tractor and an owner when outsourced", () => {
-    const e = validateVehicle({
-      ...newVehicleDraft(),
-      vehicleType: "Truck",
-      vehicleGroup: "Light Truck",
-      plateNumber: "99Z-000.01",
-      ownership: "Outsourced",
-    });
-    expect(e["authorizedPayload"]).toBeDefined();
-    expect(e["ownerId"]).toBeDefined();
+  it("requires Truck Type for a TRUCK only", () => {
+    expect(validateVehicle(valid({ vehicleType: "TRUCK" }))["truckType"]).toBeDefined();
+    expect(validateVehicle(valid({ vehicleType: "TRUCK", truckType: "5 tấn" }))).toEqual({});
+    expect(validateVehicle(valid({ vehicleType: "HEAD" }))["truckType"]).toBeUndefined();
+  });
+
+  it("checks plate / VIN / code formats and uniqueness", () => {
+    expect(validateVehicle(valid({ plateNumber: "ABC" }))["plateNumber"]).toBeDefined();
+    for (const p of ["61C-123.45", "30A-12345", "29LD-123.45"])
+      expect(validateVehicle(valid({ plateNumber: p }))["plateNumber"]).toBeUndefined();
+    expect(validateVehicle(valid({ plateNumber: "51c-123.45" }))["plateNumber"]).toMatch(
+      /exist|tồn tại/i,
+    );
+    expect(validateVehicle(valid({ chassisNumber: "VIN-01" }))["chassisNumber"]).toBeDefined();
+    expect(validateVehicle(valid({ modelCode: "HD 210" }))["modelCode"]).toBeDefined();
+    expect(validateVehicle(valid({ productionYear: "1850" }))["productionYear"]).toBeDefined();
+  });
+
+  it("shows fields by vehicle type", () => {
+    expect(showsField("TRUCK", "truckType")).toBe(true);
+    expect(showsField("HEAD", "vehicleGroup")).toBe(false);
+    expect(showsField("HEAD", "containerMappings")).toBe(true);
+    expect(showsField("TRAILER", "engineNumber")).toBe(false);
+    expect(showsField("TRAILER", "trailerType")).toBe(true);
+    expect(showsField("", "truckType")).toBe(false);
+    const truck = valid({ vehicleType: "TRUCK", truckType: "5 tấn", fuelRate: "20" });
+    expect(fieldsLostOnTypeChange(truck, "TRAILER")).toEqual(["Truck Type", "Fuel Rate"]);
+  });
+
+  it("validates the head's Container Size Mapping rows", () => {
+    const head = (rows: VehicleDraft["containerMappings"]) =>
+      validateVehicle(valid({ vehicleType: "HEAD", containerMappings: rows }));
+    expect(head([])).toEqual({});
+    expect(
+      head([{ rid: "a", trailerType: "20 ft", vehicleGroup: "" }])["containerMappings"],
+    ).toBeDefined();
+    expect(
+      head([
+        { rid: "a", trailerType: "20 ft", vehicleGroup: "Group 02" },
+        { rid: "b", trailerType: "20 ft", vehicleGroup: "Group 04" },
+      ])["containerMappings"],
+    ).toMatch(/already|đã được/);
+  });
+
+  it("clears the fields a type hides when saving", () => {
+    const saved = vehicleService.save(
+      valid({
+        plateNumber: "98R-111.22",
+        chassisNumber: "TESTVIN0002",
+        vehicleType: "TRAILER",
+        trailerType: "40 ft",
+        truckType: "5 tấn",
+        fuelRate: "22",
+      }),
+    );
+    expect(saved.trailerType).toBe("40 ft");
+    expect(saved.truckType).toBe("");
+    expect(saved.fuelRate).toBe("");
   });
 
   it("normalizes legacy stored records", () => {
@@ -59,41 +118,36 @@ describe("Vehicle master", () => {
       createdBy: "",
       updatedAt: "",
       updatedBy: "",
-      vehicleType: "HEAD",
-      vehicleGroup: "DEFAULT",
-      inspectionExpiry: "",
-      registrationExpiry: "2027-01-01",
+      vehicleType: "Tractor",
+      vehicleGroup: "Medium Truck",
+      ownership: "Outsourced",
     } as unknown as VehicleMasterRecord;
     const n = normalizeVehicle(legacy);
-    expect(n.vehicleType).toBe("Tractor");
+    expect(n.vehicleType).toBe("HEAD");
     expect(n.vehicleGroup).toBe("");
-    expect(n.inspectionExpiry).toBe("2027-01-01");
-    expect(n.ownership).toBe("Own");
+    expect(n).not.toHaveProperty("ownership");
     expect(
-      normalizeVehicle({ ...legacy, vehicleType: "5T" } as unknown as VehicleMasterRecord)
+      normalizeVehicle({ ...legacy, vehicleType: "Truck" } as unknown as VehicleMasterRecord)
         .vehicleType,
-    ).toBe("Truck");
+    ).toBe("TRUCK");
   });
 
-  it("lists expiring documents of active vehicles", () => {
+  it("lists expiring registration / inspection dates of active vehicles", () => {
     const now = new Date("2026-10-07T10:00:00");
     const v = {
-      ...newVehicleDraft(),
+      ...valid({ vehicleType: "TRUCK", truckType: "5 tấn" }),
       id: "VH-Y",
       createdAt: "",
       createdBy: "",
       updatedAt: "",
       updatedBy: "",
-      vehicleType: "Truck",
-      plateNumber: "51A-1",
+      registrationExpiry: "2026-10-01",
       inspectionExpiry: "2026-10-20",
-      insuranceExpiry: "2026-10-01",
-      badgeExpiry: "2027-10-01",
     } as VehicleMasterRecord;
     const alerts = vehicleExpiryAlerts([v], 30, now);
     expect(alerts.map((a) => [a.kind, a.state])).toEqual([
-      ["Insurance", "expired"],
-      ["Registration", "soon"],
+      ["Registration", "expired"],
+      ["Inspection", "soon"],
     ]);
     expect(vehicleExpiryAlerts([{ ...v, status: "Inactive" }], 30, now)).toEqual([]);
   });

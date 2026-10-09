@@ -1,41 +1,46 @@
 import type { BaseRecord } from "./common";
 
-/** Vehicle type per the signed scope: Tractor (đầu kéo) / Trailer (rơ moóc) / Truck (xe tải). */
-export type VehicleMasterType = "Tractor" | "Trailer" | "Truck";
-export const VEHICLE_MASTER_TYPES: readonly VehicleMasterType[] = ["Tractor", "Trailer", "Truck"];
+/** SR-VEH-01: three fixed vehicle types (Common Code VH022 / VH023 / VH024). */
+export type VehicleMasterType = "TRUCK" | "HEAD" | "TRAILER";
+export const VEHICLE_MASTER_TYPES: readonly VehicleMasterType[] = ["TRUCK", "HEAD", "TRAILER"];
 
-/** Own fleet, or outsourced (owned by a Business Partner, usually a Vendor). */
-export type VehicleOwnership = "Own" | "Outsourced";
-export const VEHICLE_OWNERSHIPS: readonly VehicleOwnership[] = ["Own", "Outsourced"];
+/** SR-VEH-21: trailer size, also the key of a head's Container Size Mapping rows. */
+export type TrailerType = "20 ft" | "40 ft";
+export const TRAILER_TYPES: readonly TrailerType[] = ["20 ft", "40 ft"];
+
+/** SR-VEH-15: what group a head belongs to when it pulls a trailer of the given size. */
+export interface ContainerSizeMapping {
+  rid: string;
+  trailerType: TrailerType | "";
+  vehicleGroup: string;
+}
 
 /**
- * Vehicle master (one row per physical vehicle, keyed by plate). Not to be confused with the routing
- * "Vehicle Group / Vehicle Profile" mapping used by Routing, which stays in `mock-data/vehicles.ts`.
+ * Vehicle master: one row per physical vehicle (trucks, heads and trailers alike), keyed by plate.
+ * Not to be confused with the routing "Vehicle Group / Vehicle Profile" mapping used by Routing.
  * Dates are `YYYY-MM-DD`; numeric fields are kept as the text the user typed.
  */
 export interface VehicleMasterRecord extends BaseRecord {
   // Vehicle identification
   vehicleType: VehicleMasterType | "";
-  /** Exactly one Vehicle Group (basis for norms and prices), from VEHICLE_GROUPS. */
+  /** TRUCK only (Group 01 → Group 05). */
   vehicleGroup: string;
+  /** TRUCK only, required: commercial load class (Common Code TRUCK_TYPE). */
+  truckType: string;
+  /** TRAILER only: 20 ft / 40 ft. */
+  trailerType: TrailerType | "";
   plateNumber: string;
-  ownership: VehicleOwnership;
-  /** Business Partner id; required when `ownership` is Outsourced, empty otherwise. */
-  ownerId: string;
-  /** Capacity (tải trọng) in kg. */
-  authorizedPayload: string;
   chassisNumber: string;
+  /** Not for TRAILER. */
   engineNumber: string;
   productionYear: string;
-  fuelRate: string; // l/100km
-  fuelCapacity: string; // liter
-  // Documents (expiry alerts)
-  /** Registration (inspection / đăng kiểm) expiry. */
-  inspectionExpiry: string;
+  fuelRate: string; // l/100km — not for TRAILER
+  fuelCapacity: string; // liter — not for TRAILER
+  // Registration & inspection
+  registrationExpiry: string;
   inspectionNo: string;
-  insuranceExpiry: string;
-  /** Badge (phù hiệu) expiry. */
-  badgeExpiry: string;
+  /** Inspection (đăng kiểm) expiry. */
+  inspectionExpiry: string;
   lifetimeLimit: string;
   // Specifications
   policyNumber: string;
@@ -45,17 +50,24 @@ export interface VehicleMasterRecord extends BaseRecord {
   overallDimension: string; // "L×W×H" in mm
   containerDimension: string; // "L×W×H" in mm
   kerbMass: string; // kg
+  /** Authorized payload (kg, legal), independent of Truck Type. */
+  authorizedPayload: string;
   rfidTag: string;
   acquisitionCost: string;
   acquisitionCurrency: string;
   contractNumber: string;
+  /** Required for every vehicle. */
   inspectionReportNo: string;
   liabilityInsuranceNumber: string;
-  fuelType: string;
-  engineDisplacement: string; // cm3
+  fuelType: string; // not for TRAILER
+  engineDisplacement: string; // cm3 — not for TRAILER
+  /** HEAD only (kg). */
+  authorizedTowedMass: string;
   productionCountry: string;
   renovated: boolean;
   transportationBusiness: boolean;
   tachograph: boolean;
   telematics: boolean;
+  /** HEAD only. */
+  containerMappings: ContainerSizeMapping[];
 }

@@ -25,7 +25,7 @@ export function useVehicles(): VehicleMasterRecord[] {
   return useMemo(() => listVehicles(all), [all]);
 }
 
-/** Registration / insurance / badge documents expired or expiring within the threshold. */
+/** Registration / inspection dates expired or expiring within the threshold. */
 export function useVehicleExpiryAlerts(): VehicleExpiryAlert[] {
   const all = useCollection(vehicleMasterRepository);
   const days = useVehicleAlertDays();

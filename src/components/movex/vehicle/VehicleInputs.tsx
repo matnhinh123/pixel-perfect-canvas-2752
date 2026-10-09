@@ -63,7 +63,7 @@ export function DimensionInput({
             <input
               inputMode="numeric"
               aria-label={DIM_LABELS[i]}
-              placeholder={DIM_LABELS[i]}
+              placeholder="9999"
               value={p}
               onChange={(e) => set(i, e.target.value)}
               className={cn(

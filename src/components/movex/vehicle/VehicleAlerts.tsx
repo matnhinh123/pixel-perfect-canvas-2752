@@ -23,8 +23,8 @@ export function AlertDaysControl() {
     <label
       className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
       title={t(
-        "Cảnh báo khi đăng kiểm / bảo hiểm / phù hiệu sắp hết hạn trong số ngày này.",
-        "Warn when registration / insurance / badge expires within this many days.",
+        "Cảnh báo khi hạn đăng ký / đăng kiểm sắp hết trong số ngày này.",
+        "Warn when registration / inspection expires within this many days.",
       )}
     >
       <BellRing className="h-4 w-4 text-warning" />
