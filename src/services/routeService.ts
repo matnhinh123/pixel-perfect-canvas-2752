@@ -1,12 +1,10 @@
 import {
-  VEHICLE_GROUPS,
   VEHICLE_PROFILES,
   profileNeedsCapacity,
   type RouteRecord,
   type RoutePoint,
   type RouteType,
   type Terrain,
-  type VehicleGroup,
   type VehicleProfile,
 } from "@/types";
 import { costRepository, routeRepository, uid } from "@/repositories";
@@ -15,6 +13,7 @@ import { findVehicle, routeVehicleFields, vehicleLabel, VEHICLES } from "@/mock-
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { syncRouteTollsToMaster } from "./routing/tollMasterSync";
+import { vehicleGroupFor } from "./routing/RouteProvider";
 import { formatDate, formatVnd, todayYmd } from "@/lib/format";
 
 /** An editor action (recalculate, pick an alternative…) recorded in the audit trail on Save. */
@@ -205,7 +204,13 @@ export const routeService = {
     }
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please fix the highlighted fields.", errors);
-    const clean = { ...draft, code: draft.code.trim().toUpperCase(), name: draft.name.trim() };
+    const clean = {
+      ...draft,
+      code: draft.code.trim().toUpperCase(),
+      name: draft.name.trim(),
+      // Vehicle Group always follows the vehicle chosen on the route map (no separate input).
+      vehicleGroup: vehicleGroupFor(draft.vehicleProfile, draft.vehicleClass, draft.capacityKg),
+    };
     if (!existing) {
       const rec: RouteRecord = { ...clean, id: uid("R-"), ...stampCreate() };
       routeRepository.insert(rec);
@@ -290,15 +295,10 @@ export const routeImportConfig: ImportEntityConfig = {
       header: "Vehicle Profile",
       required: true,
       example: "Truck",
-      aliases: ["Truck / Container", "Loại xe"],
+      // Older exports have both "Truck / Container" and a Vehicle (group) column: prefer the former.
+      aliases: ["Truck / Container", "Loại xe", "Vehicle", "Phương tiện"],
     },
-    {
-      key: "vehicleGroup",
-      header: "Vehicle Group",
-      required: true,
-      example: "Medium Truck",
-      aliases: ["Vehicle", "Phương tiện", "Nhóm xe"],
-    },
+    // No Vehicle Group column: it follows Vehicle Profile + Capacity (the toll vehicle class).
     { key: "capacityKg", header: "Capacity (kg)", example: "8000", aliases: ["Tải trọng (kg)"] },
     { key: "type", header: "Route Type", example: "Single Trip", aliases: ["Loại tuyến"] },
     { key: "terrain", header: "Terrain", example: "Plain", aliases: ["Địa hình"] },
@@ -324,8 +324,6 @@ export const routeImportConfig: ImportEntityConfig = {
     const profile = pick(r["vehicleProfile"], VEHICLE_PROFILES);
     if (!profile)
       e.push({ field: "vehicleProfile", error: `Use one of: ${VEHICLE_PROFILES.join(", ")}` });
-    if (!pick(r["vehicleGroup"], VEHICLE_GROUPS))
-      e.push({ field: "vehicleGroup", error: `Use one of: ${VEHICLE_GROUPS.join(", ")}` });
     if (pick(r["type"], ROUTE_TYPES) === undefined)
       e.push({ field: "type", error: "Single Trip or Round Trip (empty = Single Trip)" });
     if (pick(r["terrain"], TERRAINS) === undefined)
@@ -340,8 +338,9 @@ export const routeImportConfig: ImportEntityConfig = {
       const o = findLocationByName(r["origin"]!)!,
         d = findLocationByName(r["destination"]!)!;
       const kg = Number(r["capacityKg"] || 0);
-      const group = pick(r["vehicleGroup"], VEHICLE_GROUPS) as VehicleGroup;
-      // Imported rows name a vehicle group; link the first matching vehicle from Vehicle Master.
+      const profile = pick(r["vehicleProfile"], VEHICLE_PROFILES) as VehicleProfile;
+      const group = vehicleGroupFor(profile, undefined, kg || undefined);
+      // Link the first vehicle of that group from Vehicle Master.
       const vehicle = VEHICLES.find((v) => v.group === group);
       return {
         ...newRouteDraft(),
@@ -353,7 +352,7 @@ export const routeImportConfig: ImportEntityConfig = {
         terrain: pick(r["terrain"], TERRAINS) || "Plain",
         origin: { name: o.name, address: o.address, lat: o.lat, lng: o.lng, locationId: o.id },
         destination: { name: d.name, address: d.address, lat: d.lat, lng: d.lng, locationId: d.id },
-        vehicleProfile: pick(r["vehicleProfile"], VEHICLE_PROFILES) as VehicleProfile,
+        vehicleProfile: profile,
         vehicleGroup: group,
         ...(kg > 0 ? { capacityKg: kg } : {}),
         ...(vehicle ? { vehicleId: vehicle.id } : {}),
@@ -385,8 +384,7 @@ export const routeImportConfig: ImportEntityConfig = {
         o.name,
         d.name,
         container ? "Container" : "Truck",
-        container ? "Tractor / Container Truck" : i % 2 ? "Light Truck" : "Medium Truck",
-        container ? "28000" : "6000",
+        container ? "28000" : i % 2 ? "3000" : "6000",
         i % 3 === 0 ? "Round Trip" : "Single Trip",
         i % 5 === 0 ? "Highland" : "Plain",
         "",

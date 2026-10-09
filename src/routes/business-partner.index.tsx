@@ -217,7 +217,7 @@ function BusinessPartnerList() {
           key: "status",
           allLabel: t("Trạng thái: Tất cả", "Status: All"),
           options: ["Active", "Inactive"].map((s) => ({
-            label: `${t("Trạng thái", "Status")}: ${s}`,
+            label: s,
             conditions: [{ field: "status", operator: "eq", value: s }],
           })),
         },
@@ -225,7 +225,7 @@ function BusinessPartnerList() {
           key: "role",
           allLabel: t("Vai trò: Tất cả", "Role: All"),
           options: BP_ROLES.map((role) => ({
-            label: `${t("Vai trò", "Role")}: ${role}`,
+            label: role,
             conditions: [{ field: "roles", operator: "contains", value: role }],
           })),
         },
@@ -233,7 +233,7 @@ function BusinessPartnerList() {
           key: "businessCategory",
           allLabel: t("Ngành nghề: Tất cả", "Category: All"),
           options: BUSINESS_CATEGORIES.map((c) => ({
-            label: `${t("Ngành nghề", "Category")}: ${c}`,
+            label: c,
             conditions: [{ field: "businessCategory", operator: "contains", value: c }],
           })),
         },

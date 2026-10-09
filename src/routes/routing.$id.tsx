@@ -14,14 +14,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  EmptyState,
-  Field,
-  NativeSelect,
-  Panel,
-  StatusBadge,
-  Tag,
-} from "@/components/movex/common";
+import { EmptyState, Field, Panel, StatusBadge, Tag } from "@/components/movex/common";
 import { RouteMapPanel, type MapToll } from "@/components/movex/RouteMapPanel";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
@@ -37,7 +30,7 @@ import {
 import { TollStationTable, type TollRow } from "@/components/movex/routing/TollStationTable";
 import { AddTollDialog, type TollLeg } from "@/components/movex/routing/AddTollDialog";
 import { TollDetailsSheet } from "@/components/movex/routing/TollDetailsSheet";
-import { vehicleClassFor } from "@/services/routing/RouteProvider";
+import { vehicleClassFor, vehicleGroupFor } from "@/services/routing/RouteProvider";
 import { VehicleClassPicker } from "@/components/movex/routing/VehicleClassPicker";
 import { useCollection } from "@/hooks/use-store";
 import {
@@ -50,7 +43,7 @@ import {
 } from "@/services/routeService";
 import {
   returnSequence,
-  reverseLeg,
+  deriveReturnLeg,
   routingService,
   validateRouteInput,
 } from "@/services/routing/routingService";
@@ -67,9 +60,7 @@ import {
   type RouteType,
   type Status,
   type Terrain,
-  type VehicleGroup,
   type VehicleProfile,
-  VEHICLE_GROUPS,
 } from "@/types";
 import { cn } from "@/lib/utils";
 import { nearestVertex } from "@/services/routing/geo";
@@ -121,7 +112,9 @@ const normalize = (r: RouteRecord): RouteRecord => ({
   alternatives: r.alternatives ?? (r.outbound ? [r.outbound] : []),
   selectedRouteId: r.selectedRouteId ?? r.outbound?.id ?? null,
   // Same route reversed = the outbound leg driven back (records saved before were re-routed B → A).
-  ...(r.returnMode !== "custom" && r.outbound ? { returnLeg: reverseLeg(r.outbound) } : {}),
+  ...(r.returnMode !== "custom" && r.outbound
+    ? { returnLeg: deriveReturnLeg(r.outbound, r.returnLeg) }
+    : {}),
 });
 
 /** Signature of inputs that affect the routing result — used to flag a stale calculation. */
@@ -171,8 +164,6 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const costsAll = useCollection(costRepository);
   /** Cost records using this route: its Route Code is then locked. */
   const usedBy = source ? costsAll.filter((c) => !c.deleted && c.routeId === source.id).length : 0;
-  const vehicleGroups: string[] = VEHICLE_GROUPS.filter((g) => (g as string) !== "DEFAULT");
-  if (r.vehicleGroup && !vehicleGroups.includes(r.vehicleGroup)) vehicleGroups.push(r.vehicleGroup);
   const [addTollOpen, setAddTollOpen] = useState(false);
   const [tollDetailsOpen, setTollDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -302,7 +293,10 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       ...p,
       type,
       ...(type === "Round Trip"
-        ? { returnMode: "auto" as const, returnLeg: p.outbound ? reverseLeg(p.outbound) : null }
+        ? {
+            returnMode: "auto" as const,
+            returnLeg: p.outbound ? deriveReturnLeg(p.outbound, p.returnLeg) : null,
+          }
         : {}),
     }));
   };
@@ -362,7 +356,12 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   const vehicleClass = vehicleClassFor(r.vehicleProfile, r.vehicleClass, r.capacityKg);
   const changeVehicle = (profile: VehicleProfile, cls: number) => {
     if (profile === r.vehicleProfile && cls === vehicleClass) return;
-    const next = { ...r, vehicleProfile: profile, vehicleClass: cls };
+    const next = {
+      ...r,
+      vehicleProfile: profile,
+      vehicleClass: cls,
+      vehicleGroup: vehicleGroupFor(profile, cls),
+    };
     setR(next);
     setPending((q) => [
       ...q,
@@ -445,14 +444,15 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       ...p,
       selectedRouteId: id,
       outbound: alt,
-      ...(p.returnMode !== "custom" ? { returnLeg: reverseLeg(alt) } : {}),
+      ...(p.returnMode !== "custom" ? { returnLeg: deriveReturnLeg(alt, p.returnLeg) } : {}),
     }));
   };
 
-  /** Add a toll (from Toll Station or typed in). Same route reversed: it applies to both legs. */
+  /** Add a toll (from Toll Station or typed in) to the direction the user picked only. */
   const addToll = (toll: TollStation, leg: TollLeg) => {
+    const tagged: TollStation = { ...toll, addedTo: leg };
     const withToll = (c: RouteCalculation): RouteCalculation => {
-      const tollStations = [...c.tollStations.filter((t) => t.id !== toll.id), toll];
+      const tollStations = [...c.tollStations.filter((t) => t.id !== toll.id), tagged];
       return {
         ...c,
         tollStations,
@@ -460,8 +460,7 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       };
     };
     setR((p) => {
-      if (leg === "Return" && p.returnMode === "custom")
-        return { ...p, returnLeg: p.returnLeg && withToll(p.returnLeg) };
+      if (leg === "Return") return { ...p, returnLeg: p.returnLeg && withToll(p.returnLeg) };
       const outbound = p.outbound && withToll(p.outbound);
       return {
         ...p,
@@ -469,7 +468,9 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
         alternatives: p.alternatives.map((a, j) =>
           altId(a, j) === p.selectedRouteId ? withToll(a) : a,
         ),
-        ...(p.returnMode !== "custom" && outbound ? { returnLeg: reverseLeg(outbound) } : {}),
+        ...(p.returnMode !== "custom" && outbound
+          ? { returnLeg: deriveReturnLeg(outbound, p.returnLeg) }
+          : {}),
       };
     });
     setPending((q) => [
@@ -663,14 +664,6 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                       </label>
                     ))}
                   </div>
-                </Field>
-                <Field label="Vehicle Group" error={errors["vehicleGroup"]}>
-                  <NativeSelect
-                    className="h-10"
-                    value={r.vehicleGroup ?? ""}
-                    onChange={(v) => set("vehicleGroup", v as VehicleGroup)}
-                    options={vehicleGroups}
-                  />
                 </Field>
                 <Field label="Note" className="col-span-2">
                   <Textarea
@@ -922,7 +915,6 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
             )}
             <TollStationTable
               rows={tollRows}
-              showLeg={round}
               calculated={totals.calculated}
               limit={TOLL_PREVIEW_LIMIT}
             />
@@ -941,8 +933,11 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
         open={addTollOpen}
         onOpenChange={setAddTollOpen}
         tollClass={vehicleClass - 1}
-        existingIds={new Set(tollRows.map((x) => x.station.id))}
-        legs={round && r.returnMode === "custom" ? ["Outbound", "Return"] : ["Outbound"]}
+        existingIds={{
+          Outbound: new Set((outbound?.tollStations ?? []).map((t) => t.id)),
+          Return: new Set((ret?.tollStations ?? []).map((t) => t.id)),
+        }}
+        roundTrip={round}
         onAdd={addToll}
       />
       <AuditHistoryDrawer

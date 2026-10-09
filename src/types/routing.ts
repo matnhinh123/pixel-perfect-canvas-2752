@@ -63,7 +63,9 @@ export interface LocationRecord extends GeoPoint {
   province: string;
 }
 
-export type FeeType = "Toll" | "Bridge" | "Ferry";
+/** "Gate" = custom / gate fee (e.g. port or industrial-park gate), entered on a route by the user. */
+export type FeeType = "Toll" | "Bridge" | "Ferry" | "Gate";
+export const FEE_TYPES: FeeType[] = ["Toll", "Bridge", "Ferry", "Gate"];
 export type TollSource = "Vietmap" | "Mock" | "Manual";
 
 /** Normalized toll station (MoveX model), produced by any RouteProvider. */
@@ -85,6 +87,8 @@ export interface TollStation {
   positionApproximate?: boolean;
   /** Matched against Toll Station master data ("Đã đối chiếu"). */
   reconciled?: boolean;
+  /** Added by the user via "Add Toll" for one direction only (not mirrored to the other leg). */
+  addedTo?: "Outbound" | "Return";
 }
 
 export interface RouteInstruction {

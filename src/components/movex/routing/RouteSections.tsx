@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
+import { GripVertical, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,13 +21,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Field, NativeSelect, Tag, thClass } from "@/components/movex/common";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { LocationAutocomplete } from "./LocationAutocomplete";
 import { stationsTotal, type LegFigures } from "@/services/cost/costMath";
 import { uid } from "@/repositories/storage";
@@ -47,6 +40,7 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
   Toll: "Toll",
   Bridge: "Bridge",
   Ferry: "Ferry",
+  Gate: "Custom / Gate Fee",
 };
 
 // ---------- Stop list ----------
@@ -157,8 +151,8 @@ export function StopList({
               className={cn(
                 "h-10 text-sm font-semibold text-foreground",
                 (i === 0 || i === 4) && "text-center",
-                // Line up with the text inside the cells (select / input start 17px in).
-                (i === 1 || i === 2) && "pl-[17px]",
+                // Line up with the code input text (starts 17px in); Location starts with its badge.
+                i === 2 && "pl-[17px]",
               )}
             >
               {h}
@@ -212,19 +206,26 @@ export function StopList({
                 </span>
               </TableCell>
               <TableCell className="py-1.5">
-                {/* First / last rows are always Departure / Destination. */}
-                {kind === "origin" ? (
-                  <span className="px-[9px] text-sm">Departure</span>
-                ) : kind === "destination" ? (
-                  <span className="px-[9px] text-sm">Destination</span>
-                ) : (
-                  <NativeSelect
-                    value={stopTypeOf(p)}
-                    onChange={(v) => update(i, { ...p, stopType: v })}
-                    options={STOP_TYPES}
-                    className="h-8 w-full px-2"
+                {/* Badge (A / stop number / B) next to the row's role. First / last rows are always
+                    Departure / Destination; locked endpoints = return leg, which runs B → A. */}
+                <span className="flex items-center gap-2">
+                  <StopBadge
+                    kind={locked ? (kind === "origin" ? "destination" : "origin") : kind}
+                    index={i}
                   />
-                )}
+                  {kind === "stop" ? (
+                    <NativeSelect
+                      value={stopTypeOf(p)}
+                      onChange={(v) => update(i, { ...p, stopType: v })}
+                      options={STOP_TYPES}
+                      className="h-8 min-w-0 flex-1 px-2"
+                    />
+                  ) : (
+                    <span className="text-sm">
+                      {kind === "origin" ? "Departure" : "Destination"}
+                    </span>
+                  )}
+                </span>
               </TableCell>
               <TableCell className="py-1.5">
                 {locked ? (
@@ -244,80 +245,40 @@ export function StopList({
                 )}
               </TableCell>
               <TableCell className="py-1.5">
-                <span className="flex items-center gap-2">
-                  {/* Locked endpoints = return leg, which runs B → A. */}
-                  <StopBadge
-                    kind={locked ? (kind === "origin" ? "destination" : "origin") : kind}
-                    index={i}
+                {locked ? (
+                  <span className="block px-2 text-sm">{p.name || "—"}</span>
+                ) : (
+                  <LocationAutocomplete
+                    inline
+                    locations={locations}
+                    value={p.locationId ?? null}
+                    {...(p.locationId ? {} : { fallbackLabel: p.name })}
+                    onChange={(l) => update(i, { ...(l ? toPoint(l) : emptyStop()), ...extras(p) })}
+                    invalid={invalid}
+                    placeholder="Search location…"
                   />
-                  <span className="min-w-0 flex-1">
-                    {locked ? (
-                      <span className="block px-2 text-sm">{p.name || "—"}</span>
-                    ) : (
-                      <LocationAutocomplete
-                        inline
-                        locations={locations}
-                        value={p.locationId ?? null}
-                        {...(p.locationId ? {} : { fallbackLabel: p.name })}
-                        onChange={(l) =>
-                          update(i, { ...(l ? toPoint(l) : emptyStop()), ...extras(p) })
-                        }
-                        invalid={invalid}
-                        placeholder="Search location…"
-                      />
-                    )}
-                  </span>
-                </span>
+                )}
               </TableCell>
               <TableCell className="text-center">
                 {locked ? (
                   <span className="text-muted-foreground">--</span>
                 ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        aria-label="Stop actions"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {kind === "stop" ? (
-                        <>
-                          <DropdownMenuItem disabled={i <= 1} onSelect={() => move(i, i - 1)}>
-                            <ArrowUp className="h-4 w-4" />
-                            Move up
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={i >= last - 1}
-                            onSelect={() => move(i, i + 1)}
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                            Move down
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onSelect={() => onChange(seq.filter((_, j) => j !== i))}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Remove
-                          </DropdownMenuItem>
-                        </>
-                      ) : (
-                        <DropdownMenuItem
-                          disabled={!p.name}
-                          onSelect={() => update(i, { ...emptyStop(), ...extras(p) })}
-                        >
-                          <X className="h-4 w-4" />
-                          Clear location
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  // One click: a stop is removed; Departure / Destination (always kept) are cleared.
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:bg-danger-soft hover:text-destructive"
+                    disabled={kind !== "stop" && !p.name}
+                    title={kind === "stop" ? "Remove stop" : "Clear location"}
+                    aria-label={kind === "stop" ? "Remove stop" : "Clear location"}
+                    onClick={() =>
+                      kind === "stop"
+                        ? onChange(seq.filter((_, j) => j !== i))
+                        : update(i, { ...emptyStop(), ...extras(p) })
+                    }
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 )}
               </TableCell>
             </TableRow>
@@ -326,14 +287,18 @@ export function StopList({
         {returnPoint && (
           <TableRow className="bg-muted/30 hover:bg-muted/30">
             <TableCell className="text-center text-muted-foreground">{seq.length + 1}</TableCell>
-            <TableCell className="pl-[17px] text-sm">Return</TableCell>
+            <TableCell className="py-1.5">
+              <span className="flex items-center gap-2" title="Same as Departure">
+                <StopBadge kind="origin" index={0} />
+                <span className="text-sm">Return</span>
+              </span>
+            </TableCell>
             <TableCell className="pl-[17px] text-sm text-muted-foreground">
               {locations.find((l) => l.id === returnPoint.locationId)?.code ?? "—"}
             </TableCell>
             <TableCell className="py-1.5">
-              <span className="flex items-center gap-2" title="Same as Departure">
-                <StopBadge kind="origin" index={0} />
-                <span className="truncate px-2 text-sm">{returnPoint.name || "—"}</span>
+              <span className="block truncate px-2 text-sm" title="Same as Departure">
+                {returnPoint.name || "—"}
               </span>
             </TableCell>
             <TableCell className="text-center text-muted-foreground">—</TableCell>

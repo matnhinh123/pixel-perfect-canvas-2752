@@ -12,18 +12,15 @@ import { allLocations } from "@/services/routing/locationStore";
 import { formatDateTime, formatDuration } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import {
-  VEHICLE_GROUPS,
   VEHICLE_PROFILES,
   type RoutePoint,
   type RouteRecord,
   type RouteType,
   type Terrain,
-  type VehicleProfile,
 } from "@/types";
 
 const ROUTE_TYPES: RouteType[] = ["Single Trip", "Round Trip"];
 const TERRAINS: Terrain[] = ["Plain", "Highland"];
-const VEHICLE_GROUP_OPTIONS: string[] = VEHICLE_GROUPS.filter((g) => (g as string) !== "DEFAULT");
 
 export const Route = createFileRoute("/routing/")({
   head: () => ({
@@ -39,16 +36,9 @@ export const Route = createFileRoute("/routing/")({
 
 type T = (vi: string, en: string) => string;
 
-const profileLabels = (t: T): Record<VehicleProfile, string> => ({
-  Truck: t("Xe tải", "Truck"),
-  Container: t("Xe container", "Container truck"),
-  Car: t("Ô tô", "Car"),
-  Motorcycle: t("Xe máy", "Motorcycle"),
-});
 const codeOf = (p: RoutePoint) => allLocations().find((l) => l.id === p.locationId)?.code ?? "";
 
 const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
-  const PROFILE_LABEL = profileLabels(t);
   return [
     {
       key: "code",
@@ -127,32 +117,14 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
       options: TERRAINS,
       value: (r) => r.terrain ?? "Plain",
     },
+    // Vehicle = the Truck / Container switch on the route map (same values as the Vehicle filter).
+    // The key stays "vehicleGroup" so users' saved column layouts keep this column in place.
     {
       key: "vehicleGroup",
-      label: t("Phương tiện", "Vehicle"),
-      type: "enum",
-      options: VEHICLE_GROUP_OPTIONS,
-      value: (r) => r.vehicleGroup ?? "",
-      render: (r) => (
-        <span className="whitespace-nowrap">
-          {r.vehicleGroup || "—"}
-          {r.vehicleProfile && (
-            <span className="text-muted-foreground">
-              {" · "}
-              {PROFILE_LABEL[r.vehicleProfile] ?? r.vehicleProfile}
-            </span>
-          )}
-        </span>
-      ),
-    },
-    {
-      key: "vehicleProfile",
-      label: t("Loại xe", "Truck / Container"),
+      label: "Vehicle",
       type: "enum",
       options: VEHICLE_PROFILES,
       value: (r) => r.vehicleProfile,
-      render: (r) => <Tag>{PROFILE_LABEL[r.vehicleProfile]}</Tag>,
-      defaultHidden: true,
     },
     {
       key: "distance",
@@ -204,21 +176,22 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
 };
 
 const quickFiltersFor = (t: T): QuickFilter[] => {
-  const PROFILE_LABEL = profileLabels(t);
   return [
+    // Options show the value only; the filter name is on the "All" entry. Vehicle = the
+    // Truck / Container switch on the route map.
     {
       key: "vehicle",
-      allLabel: t("Loại xe: Tất cả", "Truck / Container: All"),
+      allLabel: t("Vehicle: Tất cả", "Vehicle: All"),
       options: VEHICLE_PROFILES.map((v) => ({
-        label: `${t("Loại xe", "Truck / Container")}: ${PROFILE_LABEL[v]}`,
-        conditions: [{ field: "vehicleProfile", operator: "eq", value: v }],
+        label: v,
+        conditions: [{ field: "vehicleGroup", operator: "eq", value: v }],
       })),
     },
     {
       key: "type",
       allLabel: t("Loại tuyến: Tất cả", "Route Type: All"),
       options: ROUTE_TYPES.map((v) => ({
-        label: `${t("Loại tuyến", "Route Type")}: ${v}`,
+        label: v,
         conditions: [{ field: "type", operator: "eq", value: v }],
       })),
     },
@@ -226,23 +199,15 @@ const quickFiltersFor = (t: T): QuickFilter[] => {
       key: "terrain",
       allLabel: t("Địa hình: Tất cả", "Terrain: All"),
       options: TERRAINS.map((v) => ({
-        label: `${t("Địa hình", "Terrain")}: ${v}`,
+        label: v,
         conditions: [{ field: "terrain", operator: "eq", value: v }],
-      })),
-    },
-    {
-      key: "vehicleGroup",
-      allLabel: t("Nhóm xe: Tất cả", "Vehicle Group: All"),
-      options: VEHICLE_GROUP_OPTIONS.map((v) => ({
-        label: `${t("Nhóm xe", "Vehicle Group")}: ${v}`,
-        conditions: [{ field: "vehicleGroup", operator: "eq", value: v }],
       })),
     },
     {
       key: "status",
       allLabel: t("Trạng thái: Tất cả", "Status: All"),
       options: ["Active", "Inactive"].map((v) => ({
-        label: `${t("Trạng thái", "Status")}: ${v}`,
+        label: v,
         conditions: [{ field: "status", operator: "eq", value: v }],
       })),
     },
@@ -251,15 +216,15 @@ const quickFiltersFor = (t: T): QuickFilter[] => {
       allLabel: t("Khoảng cách: Tất cả", "Distance: All"),
       options: [
         {
-          label: `${t("Khoảng cách", "Distance")}: < 50 km`,
+          label: "< 50 km",
           conditions: [{ field: "distance", operator: "between", value: "", value2: "49.99" }],
         },
         {
-          label: `${t("Khoảng cách", "Distance")}: 50 – 100 km`,
+          label: "50 – 100 km",
           conditions: [{ field: "distance", operator: "between", value: "50", value2: "100" }],
         },
         {
-          label: `${t("Khoảng cách", "Distance")}: > 100 km`,
+          label: "> 100 km",
           conditions: [{ field: "distance", operator: "between", value: "100.01", value2: "" }],
         },
       ],

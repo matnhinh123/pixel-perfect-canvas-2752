@@ -3,6 +3,7 @@ import type {
   RouteCalculation,
   RouteRequest,
   TollStation,
+  VehicleGroup,
   VehicleProfile,
 } from "@/types";
 import { tr } from "@/lib/i18n";
@@ -59,21 +60,40 @@ export const tollClassLabel = (idx: number | null) =>
  */
 export const VEHICLE_CLASSES: Record<
   "Truck" | "Container",
-  { cls: number; kg: number; desc: string }[]
+  { cls: number; kg: number; desc: string; group: VehicleGroup }[]
 > = {
   Truck: [
-    { cls: 1, kg: 1500, desc: "Truck < 2 t" },
-    { cls: 2, kg: 3000, desc: "Truck < 4 t" },
-    { cls: 3, kg: 8000, desc: "Truck < 10 t" },
-    { cls: 4, kg: 15000, desc: "Truck < 18 t" },
-    { cls: 5, kg: 20000, desc: "Truck ≥ 18 t" },
+    { cls: 1, kg: 1500, desc: "Truck < 2 t", group: "Van / Pickup" },
+    { cls: 2, kg: 3000, desc: "Truck < 4 t", group: "Light Truck" },
+    { cls: 3, kg: 8000, desc: "Truck < 10 t", group: "Medium Truck" },
+    { cls: 4, kg: 15000, desc: "Truck < 18 t", group: "Heavy Truck" },
+    { cls: 5, kg: 20000, desc: "Truck ≥ 18 t", group: "Heavy Truck" },
   ],
   Container: [
-    { cls: 3, kg: 9000, desc: "Tractor, not towing a container" },
-    { cls: 4, kg: 20000, desc: "Container ≤ 20 ft" },
-    { cls: 5, kg: 30000, desc: "Container > 20 ft" },
+    {
+      cls: 3,
+      kg: 9000,
+      desc: "Tractor, not towing a container",
+      group: "Tractor / Container Truck",
+    },
+    { cls: 4, kg: 20000, desc: "Container ≤ 20 ft", group: "Tractor / Container Truck" },
+    { cls: 5, kg: 30000, desc: "Container > 20 ft", group: "Tractor / Container Truck" },
   ],
 };
+
+/**
+ * Vehicle Group (cost norms, list / Cost screens) follows the vehicle picked on the route map:
+ * Truck by its weight class, any Container → Tractor / Container Truck.
+ */
+export function vehicleGroupFor(
+  profile: VehicleProfile,
+  chosen: number | undefined,
+  capacityKg?: number,
+): VehicleGroup {
+  const cls = vehicleClassFor(profile, chosen, capacityKg);
+  const list = profile === "Container" ? VEHICLE_CLASSES.Container : VEHICLE_CLASSES.Truck;
+  return list.find((c) => c.cls === cls)?.group ?? "Medium Truck";
+}
 
 /** Class (1..5) to show for a profile: the chosen one if valid, else the one the weight implies. */
 export function vehicleClassFor(

@@ -12,11 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Field, NativeSelect } from "@/components/movex/common";
+import { FEE_TYPE_LABEL } from "./RouteSections";
+import { useT } from "@/lib/i18n";
 import type { TollGateRecord } from "@/mock-data/tollCatalog";
 import { activeTollGates } from "@/services/routing/tollGates";
-import { inferFeeType, tollClassLabel } from "@/services/routing/RouteProvider";
+import { tollClassLabel } from "@/services/routing/RouteProvider";
 import { uid } from "@/repositories";
-import type { TollStation } from "@/types";
+import { FEE_TYPES, type FeeType, type TollStation } from "@/types";
 import { cn } from "@/lib/utils";
 
 export type TollLeg = "Outbound" | "Return";
@@ -45,17 +47,17 @@ export function AddTollDialog({
   onOpenChange,
   tollClass,
   existingIds,
-  legs,
+  roundTrip,
   onAdd,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   /** Toll class index (0..4) of the route's vehicle. */
   tollClass: number;
-  /** Tolls already on the route — shown as added. */
-  existingIds: Set<string>;
-  /** More than one leg only for a round trip with a custom return route. */
-  legs: TollLeg[];
+  /** Tolls already on each direction — shown as added for the chosen direction. */
+  existingIds: Record<TollLeg, Set<string>>;
+  /** The Return direction exists only on a Round Trip. */
+  roundTrip: boolean;
   onAdd: (toll: TollStation, leg: TollLeg) => void;
 }) {
   return (
@@ -65,7 +67,7 @@ export function AddTollDialog({
           <AddTollBody
             tollClass={tollClass}
             existingIds={existingIds}
-            legs={legs}
+            roundTrip={roundTrip}
             onAdd={(t, leg) => {
               onAdd(t, leg);
               onOpenChange(false);
@@ -81,21 +83,27 @@ export function AddTollDialog({
 function AddTollBody({
   tollClass,
   existingIds,
-  legs,
+  roundTrip,
   onAdd,
   onCancel,
 }: {
   tollClass: number;
-  existingIds: Set<string>;
-  legs: TollLeg[];
+  existingIds: Record<TollLeg, Set<string>>;
+  roundTrip: boolean;
   onAdd: (toll: TollStation, leg: TollLeg) => void;
   onCancel: () => void;
 }) {
+  const { t } = useT();
   const [tab, setTab] = useState<"list" | "new">("list");
-  const [leg, setLeg] = useState<TollLeg>(legs[0] ?? "Outbound");
+  const [leg, setLeg] = useState<TollLeg>("Outbound");
   const [q, setQ] = useState("");
   const [pick, setPick] = useState<string | null>(null);
   const [d, setD] = useState({ code: "", name: "", location: "" });
+  // Fee Type and Price apply to this route only (a picked station is pre-filled from the master).
+  const [fee, setFee] = useState<{ feeType: FeeType; price: string }>({
+    feeType: "Toll",
+    price: "",
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const gates = useMemo(() => activeTollGates(), []);
@@ -104,9 +112,41 @@ function AddTollBody({
     return !s || [g.code, g.name, g.road, g.province].some((x) => x.toLowerCase().includes(s));
   });
 
+  const choose = (g: TollGateRecord) => {
+    setPick(g.id);
+    setFee({ feeType: g.feeType, price: String(g.prices[tollClass] ?? 0) });
+    setErrors({});
+  };
+  const switchTab = (v: "list" | "new") => {
+    setTab(v);
+    setErrors({});
+    // A new toll starts blank; going back to the list restores the picked station's values.
+    const g = v === "list" ? gates.find((x) => x.id === pick) : undefined;
+    setFee(
+      g
+        ? { feeType: g.feeType, price: String(g.prices[tollClass] ?? 0) }
+        : { feeType: "Toll", price: "" },
+    );
+  };
+
+  /** Price in VND: required, a whole number ≥ 0. Null (with the error set) when invalid. */
+  const priceOf = (e: Record<string, string>): number | null => {
+    const s = fee.price.trim().replace(/[\s,.]/g, "");
+    const n = Number(s);
+    if (!s) e["price"] = t("Nhập giá.", "Price is required.");
+    else if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n))
+      e["price"] = t("Giá phải là số nguyên ≥ 0.", "Price must be a whole number ≥ 0.");
+    return e["price"] ? null : n;
+  };
+
   const addPicked = () => {
     const g = gates.find((x) => x.id === pick);
-    if (g) onAdd(toRouteToll(g, tollClass), leg);
+    if (!g) return;
+    const e: Record<string, string> = {};
+    const price = priceOf(e);
+    setErrors(e);
+    if (price === null) return;
+    onAdd({ ...toRouteToll(g, tollClass), feeType: fee.feeType, price }, leg);
   };
 
   /** A manual toll lives on this route only — it is not added to Toll Station master. */
@@ -116,16 +156,17 @@ function AddTollBody({
     const e: Record<string, string> = {};
     if (code && !/^[A-Z0-9._-]{1,30}$/.test(code)) e["code"] = "Use A–Z, 0–9, . - _ (max 30).";
     if (!name) e["name"] = "Toll Name is required.";
+    const price = priceOf(e);
     setErrors(e);
-    if (Object.keys(e).length) return;
+    if (Object.keys(e).length || price === null) return;
     onAdd(
       {
         id: uid("MT-"),
         ...(code ? { code } : {}),
         name,
         address: d.location.trim(),
-        feeType: inferFeeType(name),
-        price: 0,
+        feeType: fee.feeType,
+        price,
         vehicleTollGroup: tollClassLabel(tollClass),
         passCount: 1,
         source: "Manual",
@@ -135,23 +176,93 @@ function AddTollBody({
     );
   };
 
+  const feeFields = (
+    <div className="grid grid-cols-2 gap-4">
+      <Field label="Fee Type" required>
+        <NativeSelect
+          value={fee.feeType}
+          onChange={(v) => setFee((f) => ({ ...f, feeType: v as FeeType }))}
+          options={FEE_TYPES}
+          labels={FEE_TYPE_LABEL}
+        />
+      </Field>
+      <Field label={t("Giá (₫)", "Price (₫)")} required error={errors["price"]}>
+        <div className="relative">
+          <Input
+            inputMode="numeric"
+            value={fee.price}
+            placeholder="0"
+            className="pr-8 text-right"
+            disabled={tab === "list" && !pick}
+            onChange={(e) => {
+              setFee((f) => ({ ...f, price: e.target.value }));
+              if (errors["price"]) setErrors(({ price: _p, ...rest }) => rest);
+            }}
+            aria-invalid={!!errors["price"] || undefined}
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            ₫
+          </span>
+        </div>
+      </Field>
+    </div>
+  );
+
   return (
     <>
       <DialogHeader>
         <DialogTitle>Add Toll</DialogTitle>
         <DialogDescription>Pick a toll from Toll Station, or enter a new one.</DialogDescription>
       </DialogHeader>
-      {legs.length > 1 && (
-        <Field label="Add to">
-          <NativeSelect
-            value={leg}
-            onChange={(v) => setLeg(v as TollLeg)}
-            options={legs}
-            labels={{ Outbound: "Outbound", Return: "Return Trip" }}
-          />
-        </Field>
-      )}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "list" | "new")}>
+      <Field label={t("Hướng đi", "Direction")} required>
+        <div className="flex flex-wrap gap-x-6 gap-y-2 pt-1" role="radiogroup">
+          {(
+            [
+              ["Outbound", t("Chiều đi", "Outbound")],
+              ["Return", t("Chiều về", "Return")],
+            ] as [TollLeg, string][]
+          ).map(([v, label]) => {
+            const off = v === "Return" && !roundTrip;
+            return (
+              <label
+                key={v}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  off ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                )}
+                title={
+                  off
+                    ? t("Chỉ áp dụng cho Round Trip", "Only available for a Round Trip")
+                    : undefined
+                }
+              >
+                <input
+                  type="radio"
+                  name="tollLeg"
+                  checked={leg === v}
+                  disabled={off}
+                  onChange={() => {
+                    setLeg(v);
+                    // A station already on that direction can't be added there again.
+                    setPick((p) => (p && existingIds[v].has(p) ? null : p));
+                  }}
+                  className="h-4 w-4 accent-[var(--primary)]"
+                />
+                <span className={cn(leg === v && "font-medium text-primary")}>{label}</span>
+              </label>
+            );
+          })}
+        </div>
+        {!roundTrip && (
+          <span className="text-xs text-muted-foreground">
+            {t(
+              "Chiều về chỉ dùng được khi Route Type là Round Trip.",
+              "Return is available only when the Route Type is Round Trip.",
+            )}
+          </span>
+        )}
+      </Field>
+      <Tabs value={tab} onValueChange={(v) => switchTab(v as "list" | "new")}>
         <TabsList>
           <TabsTrigger value="list">From Toll Station</TabsTrigger>
           <TabsTrigger value="new">New toll</TabsTrigger>
@@ -167,20 +278,20 @@ function AddTollBody({
               className="pl-9"
             />
           </div>
-          <div className="max-h-72 overflow-y-auto rounded-md border">
+          <div className="max-h-56 overflow-y-auto rounded-md border">
             {shown.length === 0 && (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                 No toll found. Use “New toll” to create one.
               </p>
             )}
             {shown.map((g) => {
-              const added = existingIds.has(g.id);
+              const added = existingIds[leg].has(g.id);
               return (
                 <button
                   key={g.id}
                   type="button"
                   disabled={added}
-                  onClick={() => setPick(g.id)}
+                  onClick={() => choose(g)}
                   className={cn(
                     "flex w-full items-center gap-3 border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-accent disabled:cursor-default disabled:opacity-50",
                     pick === g.id && "bg-accent",
@@ -201,6 +312,13 @@ function AddTollBody({
               );
             })}
           </div>
+          <div className="mt-2">{feeFields}</div>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "Fee Type và Giá được lấy từ Toll Station theo nhóm xe của route; thay đổi ở đây chỉ áp dụng cho route này.",
+              "Fee Type and Price come from Toll Station for the route's vehicle group; changes here apply to this route only.",
+            )}
+          </p>
           <DialogFooter className="mt-2">
             <Button variant="outline" onClick={onCancel}>
               Cancel
@@ -231,6 +349,7 @@ function AddTollBody({
               <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
             </Field>
           </div>
+          <div className="mt-4">{feeFields}</div>
           <p className="mt-3 text-xs text-muted-foreground">
             The new toll is added to this route only — it is not saved to Toll Station.
           </p>

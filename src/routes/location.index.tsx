@@ -201,7 +201,7 @@ function LocationList() {
           key: "status",
           allLabel: t("Trạng thái: Tất cả", "Status: All"),
           options: ["Active", "Inactive"].map((s) => ({
-            label: `${t("Trạng thái", "Status")}: ${s}`,
+            label: s,
             conditions: [{ field: "status", operator: "eq", value: s }],
           })),
         },
@@ -209,7 +209,7 @@ function LocationList() {
           key: "type",
           allLabel: t("Loại: Tất cả", "Type: All"),
           options: LOCATION_TYPES.map((x) => ({
-            label: `${t("Loại", "Type")}: ${x}`,
+            label: x,
             conditions: [{ field: "locationType", operator: "eq", value: x }],
           })),
         },
@@ -225,7 +225,7 @@ function LocationList() {
           key: "province",
           allLabel: t("Tỉnh/TP: Tất cả", "Province/City: All"),
           options: usedProvinces.map((x) => ({
-            label: `${t("Tỉnh/TP", "Province/City")}: ${x}`,
+            label: x,
             conditions: [{ field: "province", operator: "eq", value: x }],
           })),
         },

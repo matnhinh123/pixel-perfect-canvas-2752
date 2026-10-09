@@ -224,7 +224,7 @@ function VehicleList() {
           key: "type",
           allLabel: "Vehicle Type: All",
           options: VEHICLE_TYPES.map((x) => ({
-            label: `Vehicle Type: ${x}`,
+            label: x,
             conditions: [{ field: "vehicleType", operator: "eq", value: x }],
           })),
         },
@@ -232,7 +232,7 @@ function VehicleList() {
           key: "truckType",
           allLabel: "Truck Type: All",
           options: TRUCK_TYPES.map((x) => ({
-            label: `Truck Type: ${x}`,
+            label: x,
             conditions: [{ field: "truckType", operator: "eq", value: x }],
           })),
         },
@@ -240,7 +240,7 @@ function VehicleList() {
           key: "status",
           allLabel: "Status: All",
           options: ["Active", "Inactive"].map((s) => ({
-            label: `Status: ${s}`,
+            label: s,
             conditions: [{ field: "status", operator: "eq", value: s }],
           })),
         },

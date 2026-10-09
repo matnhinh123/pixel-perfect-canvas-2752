@@ -109,6 +109,24 @@ describe("Import / Export", () => {
     routeImportConfig.rollback([id!]);
   });
 
+  it("imports the current Routing export (Vehicle = Truck / Container) and derives the group", () => {
+    const loc = locationRepository
+      .all()
+      .find((l) => !l.deleted && l.code && l.status === "Active")!;
+    const table = [
+      ["Route code", "Route name", "Departure code", "Dest. code", "Vehicle", "Capacity (kg)"],
+      ["RT-IMP-2", "Test 2", loc.code!, loc.code!, "Container", "28000"],
+    ];
+    const v = validateImport(routeImportConfig, "routing.xlsx", table);
+    expect(v.errors).toEqual([]);
+    const [id] = routeImportConfig.commit(v.validRows);
+    expect(routeRepository.get(id!)).toMatchObject({
+      vehicleProfile: "Container",
+      vehicleGroup: "Tractor / Container Truck",
+    });
+    routeImportConfig.rollback([id!]);
+  });
+
   it("reads Excel dates and typed cells from .xlsx", async () => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("S");

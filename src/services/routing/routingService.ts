@@ -124,6 +124,32 @@ export function reverseLeg(c: RouteCalculation): RouteCalculation {
   };
 }
 
+/**
+ * Return leg of "Same route reversed", keeping tolls the user added to one direction: tolls added
+ * to the Outbound only are not mirrored, tolls added to the Return (kept from `prevReturn`) stay.
+ */
+export function deriveReturnLeg(
+  outbound: RouteCalculation,
+  prevReturn?: RouteCalculation | null,
+): RouteCalculation {
+  const outboundOnly = outbound.tollStations.some((t) => t.addedTo === "Outbound");
+  const returnOnly = (prevReturn?.tollStations ?? []).filter((t) => t.addedTo === "Return");
+  if (!outboundOnly && returnOnly.length === 0) return reverseLeg(outbound);
+  const leg = reverseLeg({
+    ...outbound,
+    tollStations: outbound.tollStations.filter((t) => t.addedTo !== "Outbound"),
+  });
+  const tollStations = [
+    ...leg.tollStations,
+    ...returnOnly.filter((t) => !leg.tollStations.some((x) => x.id === t.id)),
+  ];
+  return {
+    ...leg,
+    tollStations,
+    tollCost: tollStations.reduce((n, t) => n + t.price * t.passCount, 0),
+  };
+}
+
 export interface RouteCalcResult {
   alternatives: RouteCalculation[];
   returnLeg: RouteCalculation | null;

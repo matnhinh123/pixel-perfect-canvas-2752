@@ -176,7 +176,7 @@ function TollStationList() {
       key: "feeType",
       allLabel: "Fee Type: All",
       options: FEE_TYPE_OPTIONS.map((f) => ({
-        label: `Fee Type: ${f}`,
+        label: f,
         conditions: [{ field: "feeType", operator: "eq", value: f }],
       })),
     },
@@ -184,7 +184,7 @@ function TollStationList() {
       key: "area",
       allLabel: "Area: All",
       options: areas.map((a) => ({
-        label: `Area: ${a}`,
+        label: a,
         conditions: [{ field: "area", operator: "eq", value: a }],
       })),
     },
@@ -192,7 +192,7 @@ function TollStationList() {
       key: "tollGroup",
       allLabel: "Toll Group: All",
       options: TOLL_GROUPS.map(({ group }) => ({
-        label: `Toll Group: Group ${group}`,
+        label: `Group ${group}`,
         conditions: [{ field: "tollGroups", operator: "contains", value: `G${group}` }],
       })),
     },
@@ -200,7 +200,7 @@ function TollStationList() {
       key: "status",
       allLabel: "Status: All",
       options: TOLL_STATION_STATUSES.map((s) => ({
-        label: `Status: ${s}`,
+        label: s,
         conditions: [{ field: "status", operator: "eq", value: s }],
       })),
     },
@@ -208,7 +208,7 @@ function TollStationList() {
       key: "source",
       allLabel: "Source: All",
       options: SOURCES.map((s) => ({
-        label: `Source: ${s}`,
+        label: s,
         conditions: [{ field: "source", operator: "eq", value: s }],
       })),
     },
