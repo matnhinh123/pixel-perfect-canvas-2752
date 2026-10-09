@@ -6,7 +6,6 @@ import type {
   BpCreditTerm,
   BpDocument,
   BpLegalType,
-  BpLicenseAdjustment,
   BpPaymentTerm,
   BpRole,
   BpSalesman,
@@ -179,17 +178,11 @@ export const blankBank = (): BpBankAccount => ({
 export const blankDocument = (): BpDocument => ({
   rid: newRowId(),
   docType: "",
-  docNo: "",
-  issueDate: "",
+  docName: "",
+  validDate: "",
   expiryDate: "",
   fileName: "",
   remark: "",
-});
-export const blankLicense = (): BpLicenseAdjustment => ({
-  rid: newRowId(),
-  adjustmentDate: "",
-  changeContent: "",
-  documentNo: "",
 });
 
 export type BusinessPartnerDraft = Omit<
@@ -229,7 +222,6 @@ export const newBusinessPartnerDraft = (): BusinessPartnerDraft => ({
   creditLimitCurrency: "",
   note: "",
   roles: [],
-  licenseAdjustments: [blankLicense()],
   documents: [blankDocument()],
   customer: {
     creditTerms: [blankCredit()],
@@ -332,7 +324,7 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
   });
   const currencies = uniq([...strList(r["currencies"]), ...(currency ? [currency] : [])]);
 
-  const { contacts: _contacts, salesAssignments: _sales, ...rest } = r;
+  const { contacts: _contacts, salesAssignments: _sales, licenseAdjustments: _lic, ...rest } = r;
   return {
     ...(rest as unknown as BusinessPartnerRecord),
     legalType: normLegalType(r["legalType"]),
@@ -353,8 +345,16 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
     creditLimitCurrency: str(r["creditLimitCurrency"]) || currency,
     note: str(r["note"]),
     roles,
-    licenseAdjustments: arr(r["licenseAdjustments"]) as unknown as BpLicenseAdjustment[],
-    documents: arr(r["documents"]) as unknown as BpDocument[],
+    // Older versions: "Document No." / "Issue Date" became "Document Name" / "Valid Date".
+    documents: arr(r["documents"]).map((x): BpDocument => ({
+      rid: str(x["rid"]) || newRowId(),
+      docType: str(x["docType"]),
+      docName: str(x["docName"]) || str(x["docNo"]),
+      validDate: str(x["validDate"]) || str(x["issueDate"]),
+      expiryDate: str(x["expiryDate"]),
+      fileName: str(x["fileName"]),
+      remark: str(x["remark"]),
+    })),
     customer: {
       creditTerms: arr(cust["creditTerms"]) as unknown as BpCreditTerm[],
       banks: arr(cust["banks"]) as unknown as BpBankAccount[],
@@ -372,7 +372,6 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
 export const draftOf = (r: BusinessPartnerRecord): BusinessPartnerDraft => {
   const d = structuredClone(normalizeBusinessPartner(r)) as BusinessPartnerDraft;
   const fill = <T>(rows: T[], blank: () => T) => (rows.length ? rows : [blank()]);
-  d.licenseAdjustments = fill(d.licenseAdjustments, blankLicense);
   d.documents = fill(d.documents, blankDocument);
   d.customer.creditTerms = fill(d.customer.creditTerms, blankCredit);
   for (const p of [d.customer, d.vendor]) {
@@ -522,17 +521,10 @@ export function validateBusinessPartner(
   set(
     "documents",
     checkRows(d.documents, blankDocument, [["docType", "Document Type"]], (r) =>
-      r.issueDate && r.expiryDate && r.expiryDate < r.issueDate
-        ? tr("Expiry Date phải sau Issue Date.", "Expiry Date must not be before Issue Date.")
+      r.validDate && r.expiryDate && r.expiryDate < r.validDate
+        ? tr("Expiry Date phải sau Valid Date.", "Expiry Date must not be before Valid Date.")
         : null,
     ),
-  );
-  set(
-    "licenseAdjustments",
-    checkRows(d.licenseAdjustments, blankLicense, [
-      ["adjustmentDate", "Adjustment Date"],
-      ["changeContent", "Change Content"],
-    ]),
   );
   /** Contact Info, Bank and Sales Assignment tables of one role tab. */
   const banks = (p: "customer" | "vendor") => {
@@ -710,26 +702,16 @@ const SALES_COLS: Cols = [
 ];
 const TABLES: TableSpec[] = [
   {
-    title: "Documents & License › Documents",
+    title: "Documents",
     rows: (r) => r.documents,
     nameKey: "docType",
     cols: [
       ["docType", "Document Type"],
-      ["docNo", "Document No."],
-      ["issueDate", "Issue Date"],
+      ["docName", "Document Name"],
+      ["validDate", "Valid Date"],
       ["expiryDate", "Expiry Date"],
       ["fileName", "Attachment"],
       ["remark", "Notes"],
-    ],
-  },
-  {
-    title: "Documents & License › License Adjustments",
-    rows: (r) => r.licenseAdjustments,
-    nameKey: "adjustmentDate",
-    cols: [
-      ["adjustmentDate", "Adjustment Date"],
-      ["changeContent", "Change Content"],
-      ["documentNo", "Document No."],
     ],
   },
   {
@@ -880,9 +862,6 @@ export const businessPartnerService = {
       creditLimit: isCustomer ? d.creditLimit.trim() : "",
       creditLimitCurrency: isCustomer && d.creditLimit.trim() ? d.creditLimitCurrency : "",
       roles: roleOrder.filter((r) => d.roles.includes(r)),
-      licenseAdjustments: pruned(d.licenseAdjustments, blankLicense).sort((a, b) =>
-        b.adjustmentDate.localeCompare(a.adjustmentDate),
-      ),
       documents: pruned(d.documents, blankDocument),
       customer: {
         creditTerms: pruned(d.customer.creditTerms, blankCredit),

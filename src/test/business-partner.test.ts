@@ -132,7 +132,7 @@ describe("Change History", () => {
     const hung = d.customer.contacts.find((c) => c.fullName === "Nguyễn Văn Hùng")!;
     hung.mobilePhone = "0909 999 999";
     d.customer.contacts = d.customer.contacts.filter((c) => c.fullName !== "Trần Thị Lan");
-    d.documents = [{ ...d.documents[0]!, docType: "Contract", docNo: "HD-01" }];
+    d.documents = [{ ...d.documents[0]!, docType: "Contract", docName: "HD-01" }];
     const before = auditRepository.all().length;
     businessPartnerService.save(d, "BP-6");
     const fields = auditRepository
@@ -149,11 +149,9 @@ describe("Change History", () => {
         ([f, o]) => f === "Customer › Contact Info › Row removed" && o?.includes("Trần Thị Lan"),
       ),
     ).toBe(true);
-    expect(
-      fields.some(
-        ([f, , n]) => f === "Documents & License › Documents › Row added" && n?.includes("HD-01"),
-      ),
-    ).toBe(true);
+    expect(fields.some(([f, , n]) => f === "Documents › Row added" && n?.includes("HD-01"))).toBe(
+      true,
+    );
     // Saving again without changes logs nothing.
     const after = auditRepository.all().length;
     businessPartnerService.save(draftOf(businessPartnerRepository.get("BP-6")!), "BP-6");

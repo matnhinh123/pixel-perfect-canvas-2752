@@ -18,7 +18,6 @@ import {
   blankContact,
   blankCredit,
   blankDocument,
-  blankLicense,
   blankPayment,
   blankSalesman,
   type BusinessPartnerDraft,
@@ -28,7 +27,6 @@ import type {
   BpContact,
   BpCreditTerm,
   BpDocument,
-  BpLicenseAdjustment,
   BpPaymentTerm,
   BpSalesman,
 } from "@/types";
@@ -69,7 +67,7 @@ function useServiceOptions() {
   }, [all]);
 }
 
-// ---------------------------------------------------------------- Documents & License
+// ---------------------------------------------------------------- Documents
 
 export function DocumentsTab({ d, set, errors }: TabProps) {
   const cols: ColDef<BpDocument>[] = [
@@ -81,36 +79,21 @@ export function DocumentsTab({ d, set, errors }: TabProps) {
       kind: "select",
       options: DOC_TYPES,
     },
-    { key: "docNo", label: "Document No.", width: 140, kind: "text" },
-    { key: "issueDate", label: "Issue Date", width: 140, kind: "date" },
+    { key: "docName", label: "Document Name", width: 200, kind: "text" },
+    { key: "validDate", label: "Valid Date", width: 140, kind: "date" },
     { key: "expiryDate", label: "Expiry Date", width: 140, kind: "date" },
-    { key: "fileName", label: "Attachment", width: 170, kind: "text" },
+    { key: "fileName", label: "Attachment", width: 220, kind: "file" },
     { key: "remark", label: "Notes", width: 180, kind: "text" },
   ];
-  const licenseCols: ColDef<BpLicenseAdjustment>[] = [
-    { key: "adjustmentDate", label: "Adjustment Date", required: true, width: 160, kind: "date" },
-    { key: "changeContent", label: "Change Content", required: true, width: 360, kind: "text" },
-    { key: "documentNo", label: "Document No.", width: 180, kind: "text" },
-  ];
   return (
-    <div className="space-y-4">
-      <EditableTable
-        title="Documents"
-        rows={d.documents}
-        onChange={(documents) => set({ documents })}
-        blank={blankDocument}
-        columns={cols}
-        error={errors["documents"]}
-      />
-      <EditableTable
-        title="License Adjustments"
-        rows={d.licenseAdjustments}
-        onChange={(licenseAdjustments) => set({ licenseAdjustments })}
-        blank={blankLicense}
-        columns={licenseCols}
-        error={errors["licenseAdjustments"]}
-      />
-    </div>
+    <EditableTable
+      title="Documents"
+      rows={d.documents}
+      onChange={(documents) => set({ documents })}
+      blank={blankDocument}
+      columns={cols}
+      error={errors["documents"]}
+    />
   );
 }
 

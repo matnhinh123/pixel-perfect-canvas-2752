@@ -12,19 +12,13 @@ interface Row {
 
 export interface BpDocument extends Row {
   docType: string;
-  docNo: string;
-  issueDate: string;
+  docName: string;
+  /** YYYY-MM-DD */
+  validDate: string;
   expiryDate: string;
+  /** Name of the file picked from the computer (the demo keeps the name only). */
   fileName: string;
   remark: string;
-}
-
-/** License adjustment history: when the business license changed and what changed. */
-export interface BpLicenseAdjustment extends Row {
-  /** YYYY-MM-DD */
-  adjustmentDate: string;
-  changeContent: string;
-  documentNo: string;
 }
 
 export type WoAccessPolicy = "" | "Temporary Allow" | "Approval Required";
@@ -154,7 +148,6 @@ export interface BusinessPartnerRecord extends BaseRecord {
   creditLimitCurrency: string;
   note: string;
   roles: BpRole[];
-  licenseAdjustments: BpLicenseAdjustment[];
   documents: BpDocument[];
   customer: BpCustomerProfile;
   vendor: BpVendorProfile;

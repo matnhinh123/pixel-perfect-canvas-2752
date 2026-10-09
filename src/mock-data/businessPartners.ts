@@ -224,7 +224,6 @@ const bp = (s: Seed, at = SEED_TIME): BusinessPartnerRecord => ({
   creditLimitCurrency: "VND",
   note: "",
   roles: ["Customer"],
-  licenseAdjustments: [],
   documents: [],
   ...meta(at),
   ...s,
@@ -323,14 +322,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
       businessCategory: ["Trading", "Retail"],
       roles: ["Customer"],
       creditLimit: "200000000",
-      licenseAdjustments: [
-        {
-          rid: "l1",
-          adjustmentDate: "2026-03-12",
-          changeContent: "Head office address changed to District 7, Ho Chi Minh City",
-          documentNo: "GPKD-0318846207-03",
-        },
-      ],
     },
     "2026-06-15T03:00:00.000Z",
   ),

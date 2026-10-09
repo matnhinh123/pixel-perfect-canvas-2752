@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Paperclip, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,8 @@ export interface ColDef<T> {
   required?: boolean;
   /** Minimum column width in px. */
   width: number;
-  kind: "text" | "number" | "date" | "datetime" | "select" | "bool";
+  /** "file": pick a file from the computer; the cell keeps its file name. */
+  kind: "text" | "number" | "date" | "datetime" | "select" | "bool" | "file";
   options?: readonly string[];
   /** Unit shown to the right of the input (e.g. "Day", "VND"). */
   suffix?: string;
@@ -71,6 +72,42 @@ export function EditableTable<T extends { rid: string }>({
             aria-label={c.label}
             onCheckedChange={(on) => set(r.rid, c.key, on === true)}
           />
+        </div>
+      );
+    if (c.kind === "file")
+      return (
+        <div className="flex h-8 items-center gap-1.5">
+          <label
+            className={cn(
+              cell,
+              "flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 group-disabled:cursor-default",
+              !v && "text-muted-foreground",
+            )}
+            title={v ? String(v) : undefined}
+          >
+            <Paperclip className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{v ? String(v) : t("Chọn file…", "Choose file…")}</span>
+            <input
+              type="file"
+              className="sr-only"
+              aria-label={c.label}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) set(r.rid, c.key, file.name);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {!!v && (
+            <button
+              type="button"
+              className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground group-disabled:hidden"
+              aria-label={t("Bỏ file", "Remove file")}
+              onClick={() => set(r.rid, c.key, "")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       );
     if (c.kind === "select")

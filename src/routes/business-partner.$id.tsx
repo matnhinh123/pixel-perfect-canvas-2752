@@ -62,7 +62,6 @@ type Tab = "documents" | "customer" | "vendor";
 /** Error key of a profile/role table → the tab that shows it. */
 const TAB_OF_ERROR: [string, Tab][] = [
   ["documents", "documents"],
-  ["licenseAdjustments", "documents"],
   ["customer.", "customer"],
   ["vendor.", "vendor"],
 ];
@@ -565,7 +564,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
         <TabsList className="h-auto w-full justify-start rounded-t-xl bg-card-header p-0">
           {(
             [
-              ["documents", "Documents & License", true],
+              ["documents", "Documents", true],
               ["customer", "Customer", hasRole("Customer")],
               ["vendor", "Vendor", hasRole("Vendor")],
             ] as const
