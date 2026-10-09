@@ -63,15 +63,9 @@ export function toEnglishAddress(local: string): string {
 
 export const taxCodeKey = (v: string) => v.replace(/\s+/g, "").toUpperCase();
 
-/** Company → Tax Code (MST, required); Individual → Identity Number (CCCD, required); Representative → optional. */
-export const taxIdLabel = (legalType: string) =>
-  legalType === "Company"
-    ? "Tax Code"
-    : legalType === "Individual"
-      ? "Identity Number"
-      : "Tax Code / Identity Number";
-export const taxIdRequired = (legalType: string) =>
-  legalType === "Company" || legalType === "Individual";
+/** Both fields are always shown; the Legal Type only decides which one is required. */
+export const taxCodeRequired = (legalType: string) => legalType === "Company";
+export const identityNoRequired = (legalType: string) => legalType === "Individual";
 const MST = /^\d{10}(-?\d{3})?$/;
 const CCCD = /^\d{12}$/;
 
@@ -209,6 +203,7 @@ export const newBusinessPartnerDraft = (): BusinessPartnerDraft => ({
   legalType: "",
   inHouse: false,
   taxCode: "",
+  identityNo: "",
   form: "",
   invoiceSerial: "",
   localName: "",
@@ -344,6 +339,14 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
     businessCategory: strList(r["businessCategory"]),
     currencies,
     tax: str(r["tax"]),
+    // Older records kept an Individual's CCCD in the Tax Code field: move it to Identity Number.
+    ...(() => {
+      const id = str(r["identityNo"]);
+      const tax = str(r["taxCode"]);
+      return !id && normLegalType(r["legalType"]) === "Individual" && CCCD.test(taxCodeKey(tax))
+        ? { identityNo: tax, taxCode: "" }
+        : { identityNo: id, taxCode: tax };
+    })(),
     partnerGroup: str(r["partnerGroup"]),
     defaultPaymentTerm: str(r["defaultPaymentTerm"]),
     creditLimit: str(r["creditLimit"]),
@@ -447,28 +450,38 @@ export function validateBusinessPartner(
   )
     e["bpCode"] = tr(`BP Code ${code} đã tồn tại.`, `BP Code ${code} already exists.`);
 
-  // Company: MST required (10 or 10+3 digits); Individual: CCCD required (12 digits);
-  // Representative: neither. Whatever is entered is unique per tenant among non-deleted partners.
+  // Tax Code (MST, 10 or 10+3 digits): required for a Company. Identity Number (CCCD, 12 digits):
+  // required for an Individual. A Representative needs neither. Each value entered must have the
+  // right format and be unique per tenant among non-deleted partners.
+  const others = businessPartnerRepository.all().filter((b) => !b.deleted && b.id !== id);
   const tax = taxCodeKey(d.taxCode);
-  const idLabel = taxIdLabel(d.legalType);
   if (!tax) {
-    if (taxIdRequired(d.legalType))
-      e["taxCode"] = tr(`Nhập ${idLabel}.`, `${idLabel} is required.`);
-  } else if (d.legalType === "Company" && !MST.test(tax))
+    if (taxCodeRequired(d.legalType)) e["taxCode"] = tr("Nhập Tax Code.", "Tax Code is required.");
+  } else if (!MST.test(tax))
     e["taxCode"] = tr(
       "Mã số thuế gồm 10 số, hoặc 10 + 3 số với chi nhánh.",
       "Tax Code should be 10 digits, or 10 + 3 digits for a branch.",
     );
-  else if (d.legalType === "Individual" && !CCCD.test(tax))
-    e["taxCode"] = tr("Số CCCD gồm 12 số.", "Identity Number (CCCD) should be 12 digits.");
   else {
-    const dup = businessPartnerRepository
-      .all()
-      .find((b) => !b.deleted && b.id !== id && taxCodeKey(str(b.taxCode)) === tax);
+    const dup = others.find((b) => taxCodeKey(str(b.taxCode)) === tax);
     if (dup)
       e["taxCode"] = tr(
-        `${idLabel} ${d.taxCode.trim()} đã được dùng cho ${dup.bpCode}.`,
-        `${idLabel} ${d.taxCode.trim()} is already used by ${dup.bpCode}.`,
+        `Tax Code ${d.taxCode.trim()} đã được dùng cho ${dup.bpCode}.`,
+        `Tax Code ${d.taxCode.trim()} is already used by ${dup.bpCode}.`,
+      );
+  }
+  const cccd = taxCodeKey(d.identityNo);
+  if (!cccd) {
+    if (identityNoRequired(d.legalType))
+      e["identityNo"] = tr("Nhập Identity Number.", "Identity Number is required.");
+  } else if (!CCCD.test(cccd))
+    e["identityNo"] = tr("Số CCCD gồm 12 số.", "Identity Number (CCCD) should be 12 digits.");
+  else {
+    const dup = others.find((b) => taxCodeKey(str(b.identityNo)) === cccd);
+    if (dup)
+      e["identityNo"] = tr(
+        `Identity Number ${d.identityNo.trim()} đã được dùng cho ${dup.bpCode}.`,
+        `Identity Number ${d.identityNo.trim()} is already used by ${dup.bpCode}.`,
       );
   }
 
@@ -621,7 +634,8 @@ const SCALARS: [keyof BusinessPartnerRecord, string][] = [
   ["bpCode", "BP Code"],
   ["legalType", "Legal Type"],
   ["status", "Status"],
-  ["taxCode", "Tax Code / Identity Number"],
+  ["taxCode", "Tax Code"],
+  ["identityNo", "Identity Number"],
   ["form", "Form"],
   ["invoiceSerial", "Serial"],
   ["localName", "Local Name"],
@@ -855,6 +869,7 @@ export const businessPartnerService = {
       ...d,
       bpCode: d.bpCode.trim().toUpperCase(),
       taxCode: d.taxCode.trim(),
+      identityNo: d.identityNo.trim(),
       localName: d.localName.trim(),
       englishName: d.englishName.trim(),
       note: d.note.trim(),
@@ -956,6 +971,7 @@ const bpDraftOfRow = (r: Record<string, string>): BusinessPartnerDraft => {
     legalType: pick(r["legalType"], LEGAL_TYPES) || "",
     roles: pickAll(r["roles"], BP_ROLES).filter((x): x is BpRole => !!x),
     taxCode: r["taxCode"] ?? "",
+    identityNo: r["identityNo"] ?? "",
     localName: r["localName"] ?? "",
     englishName: r["englishName"] ?? "",
     localAddress,
@@ -1002,9 +1018,14 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
     {
       key: "taxCode",
       header: "Tax Code",
-      required: true,
       example: "0312345678",
       aliases: ["Tax ID", "Mã số thuế"],
+    },
+    {
+      key: "identityNo",
+      header: "Identity Number",
+      example: "",
+      aliases: ["CCCD", "Số CCCD"],
     },
     {
       key: "localName",
@@ -1099,6 +1120,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
         "Company",
         vendor ? "Vendor" : i % 3 === 2 ? "Customer; Vendor" : "Customer",
         `0399${String(100000 + i)}`,
+        "", // Identity Number (Company rows)
         `Công ty TNHH Nhập Mẫu ${n}`,
         `Sample Import ${n} Co., Ltd`,
         `${i + 1} Lê Lợi, Quận 1, TP. Hồ Chí Minh`,
@@ -1121,7 +1143,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
     });
     rows[4]![0] = "IMP-BP01"; // duplicate BP Code
     rows[10]![2] = "Partner"; // unknown role
-    rows[15]![11] = "not-an-email"; // invalid email
+    rows[15]![12] = "not-an-email"; // invalid email
     return rows;
   },
 });

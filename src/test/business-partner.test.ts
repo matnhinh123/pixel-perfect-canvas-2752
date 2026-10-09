@@ -93,20 +93,33 @@ describe("Profile rules", () => {
   });
 
   it("requires Tax Code for a Company, Identity Number for an Individual, neither for a Representative", () => {
-    const d = { ...newBusinessPartnerDraft(), taxCode: "" };
-    expect(validateBusinessPartner({ ...d, legalType: "Company" })["taxCode"]).toBeTruthy();
-    expect(validateBusinessPartner({ ...d, legalType: "Individual" })["taxCode"]).toBeTruthy();
-    expect(
-      validateBusinessPartner({ ...d, legalType: "Representative" })["taxCode"],
-    ).toBeUndefined();
-    expect(
-      validateBusinessPartner({ ...d, legalType: "Individual", taxCode: "079085001234" })[
-        "taxCode"
-      ],
-    ).toBeUndefined();
-    expect(
-      validateBusinessPartner({ ...d, legalType: "Individual", taxCode: "0312" })["taxCode"],
-    ).toBeTruthy();
+    const d = { ...newBusinessPartnerDraft(), taxCode: "", identityNo: "" };
+    const company = validateBusinessPartner({ ...d, legalType: "Company" });
+    expect(company["taxCode"]).toBeTruthy();
+    expect(company["identityNo"]).toBeUndefined();
+    const person = validateBusinessPartner({ ...d, legalType: "Individual" });
+    expect(person["identityNo"]).toBeTruthy();
+    expect(person["taxCode"]).toBeUndefined();
+    const rep = validateBusinessPartner({ ...d, legalType: "Representative" });
+    expect(rep["taxCode"]).toBeUndefined();
+    expect(rep["identityNo"]).toBeUndefined();
+    const v = (p: Partial<typeof d>) =>
+      validateBusinessPartner({ ...d, legalType: "Individual", ...p });
+    expect(v({ identityNo: "079085001234" })["identityNo"]).toBeUndefined();
+    expect(v({ identityNo: "0312" })["identityNo"]).toBeTruthy();
+    expect(v({ identityNo: "079085001234", taxCode: "12345" })["taxCode"]).toBeTruthy();
+  });
+
+  it("moves an old Individual's CCCD from Tax Code to Identity Number", () => {
+    const old = {
+      ...seedBusinessPartners()[0]!,
+      legalType: "Individual",
+      taxCode: "079085001234",
+      identityNo: undefined,
+    } as unknown as BusinessPartnerRecord;
+    const n = normalizeBusinessPartner(old);
+    expect(n.identityNo).toBe("079085001234");
+    expect(n.taxCode).toBe("");
   });
 });
 

@@ -202,6 +202,7 @@ const noAccents = (v: string) =>
 const bp = (s: Seed, at = SEED_TIME): BusinessPartnerRecord => ({
   status: "Active",
   legalType: "Company",
+  identityNo: "",
   inHouse: false,
   form: "01GTKT",
   localAddress: "",

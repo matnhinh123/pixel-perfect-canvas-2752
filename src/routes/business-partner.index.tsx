@@ -74,10 +74,17 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "taxCode",
-    width: 190,
-    label: "Tax Code / Identity Number",
+    width: 130,
+    label: "Tax Code",
     type: "text",
     value: (r) => r.taxCode,
+  },
+  {
+    key: "identityNo",
+    width: 150,
+    label: "Identity Number",
+    type: "text",
+    value: (r) => r.identityNo,
   },
   {
     key: "partnerGroup",
@@ -204,7 +211,7 @@ function BusinessPartnerList() {
       rows={rows}
       columns={columns}
       searchPlaceholder={t("Tìm BP Code, tên, mã số thuế...", "Search BP Code, name, tax code...")}
-      searchValues={(r) => [r.bpCode, r.localName, r.englishName, r.taxCode, r.email]}
+      searchValues={(r) => [r.bpCode, r.localName, r.englishName, r.taxCode, r.identityNo, r.email]}
       quickFilters={[
         {
           key: "status",

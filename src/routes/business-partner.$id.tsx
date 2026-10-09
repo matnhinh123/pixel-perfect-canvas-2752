@@ -36,8 +36,8 @@ import {
   sanitizePhone,
   sanitizePostcode,
   taxCodeKey,
-  taxIdLabel,
-  taxIdRequired,
+  identityNoRequired,
+  taxCodeRequired,
   toEnglishAddress,
   type BusinessPartnerDraft,
 } from "@/services/businessPartnerService";
@@ -188,7 +188,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
 
   const rolesChanged = !!source && source.roles.join() !== BP_ROLES.filter(hasRole).join();
 
-  const taxLabel = taxIdLabel(d.legalType);
   /** English Address follows the Local Address (transliterated) until the user edits it. */
   const setLocalAddress = (v: string) => {
     setD((x) => ({
@@ -369,7 +368,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                 onChange={(v) => {
                   // The ID field's meaning (and whether it is required) follows the Legal Type.
                   patch({ legalType: v as BusinessPartnerDraft["legalType"] });
-                  clearErr(["taxCode"]);
+                  clearErr(["taxCode", "identityNo"]);
                 }}
               />
             </Field>
@@ -402,13 +401,13 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               </div>
             </Field>
             <Field
-              label={taxLabel}
-              required={taxIdRequired(d.legalType)}
+              label="Tax Code"
+              required={taxCodeRequired(d.legalType)}
               error={errors["taxCode"]}
               className="sm:col-span-2"
             >
               <div className="flex gap-2">
-                <Input placeholder={`Enter ${taxLabel}`} {...text("taxCode")} />
+                <Input placeholder="Enter Tax Code" {...text("taxCode")} />
                 {d.legalType === "Company" && !readOnly && (
                   <Button
                     type="button"
@@ -421,20 +420,22 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                 )}
               </div>
             </Field>
+            <Field
+              label="Identity Number"
+              required={identityNoRequired(d.legalType)}
+              error={errors["identityNo"]}
+            >
+              <Input placeholder="Enter Identity Number" {...text("identityNo")} />
+            </Field>
             <Field label="Partner Group" required error={errors["partnerGroup"]}>
               <NativeSelect {...select("partnerGroup", PARTNER_GROUPS, "Select Partner Group")} />
-            </Field>
-            <Field label="Service Provider Type">
-              <NativeSelect
-                {...select("serviceProviderType", SERVICE_PROVIDER_TYPES, "Select Type")}
-              />
             </Field>
 
             <Field
               label="Business Category"
               required
               error={errors["businessCategory"]}
-              className="sm:col-span-2 lg:col-span-3"
+              className="sm:col-span-2"
             >
               <MultiSelect
                 value={d.businessCategory}
@@ -442,6 +443,11 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                 options={BUSINESS_CATEGORIES}
                 placeholder="Select Business Category"
                 invalid={!!errors["businessCategory"]}
+              />
+            </Field>
+            <Field label="Service Provider Type">
+              <NativeSelect
+                {...select("serviceProviderType", SERVICE_PROVIDER_TYPES, "Select Type")}
               />
             </Field>
             <Field label="Tax">

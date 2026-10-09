@@ -119,8 +119,10 @@ export interface BusinessPartnerRecord extends BaseRecord {
   bpCode: string;
   legalType: BpLegalType | "";
   inHouse: boolean;
-  /** Company: Tax Code (MST); Individual: Identity Number (CCCD). Unique per tenant among non-deleted partners. */
+  /** Tax Code (MST): required for a Company. Unique per tenant among non-deleted partners. */
   taxCode: string;
+  /** Identity Number (CCCD): required for an Individual. Unique per tenant among non-deleted partners. */
+  identityNo: string;
   form: string;
   invoiceSerial: string;
   localName: string;
