@@ -5,7 +5,8 @@ import {
   COUNTRY_ISO2,
   LOCATION_COUNTRIES,
   LOCATION_TYPES,
-  PORT_SUB_TYPES,
+  ALL_LOCATION_SUB_TYPES,
+  subTypesOf,
   requiresIata,
   requiresUnLocode,
 } from "@/mock-data/locationCatalog";
@@ -116,7 +117,7 @@ export const draftOfLocation = (raw: LocationMasterRecord): LocationDraft => {
 export const withLocationType = (d: LocationDraft, locationType: string): LocationDraft => ({
   ...d,
   locationType,
-  locationSubType: locationType === "Port" ? d.locationSubType : "",
+  locationSubType: subTypesOf(locationType).includes(d.locationSubType) ? d.locationSubType : "",
   unLocode: requiresUnLocode(locationType) ? d.unLocode : "",
   iataCode: requiresIata(locationType) ? d.iataCode : "",
 });
@@ -140,12 +141,11 @@ export function validateLocation(d: LocationDraft, id?: string): Record<string, 
   req("locationType", "loại địa điểm", "Location type");
   req("country", "quốc gia", "Country");
   req("address", "địa chỉ", "Address");
-  if (
-    d.locationSubType &&
-    (d.locationType !== "Port" ||
-      !(PORT_SUB_TYPES as readonly string[]).includes(d.locationSubType))
-  )
-    e["locationSubType"] = tr("Loại phụ không hợp lệ.", "Invalid sub type.");
+  if (d.locationSubType && !subTypesOf(d.locationType).includes(d.locationSubType))
+    e["locationSubType"] = tr(
+      "Loại con không thuộc Location Type đã chọn.",
+      "This sub type does not belong to the chosen Location Type.",
+    );
 
   const unLocode = d.unLocode.trim().toUpperCase();
   if (requiresUnLocode(d.locationType)) {
@@ -194,7 +194,7 @@ const FIELD_LABELS: [keyof LocationDraft, string][] = [
   ["country", "Country"],
   ["province", "Province/City"],
   ["locationType", "Location Type"],
-  ["locationSubType", "Port Sub Type"],
+  ["locationSubType", "Location Sub Type"],
   ["unLocode", "UN/LOCODE"],
   ["iataCode", "IATA Code"],
   ["remark", "Remark"],
@@ -276,7 +276,7 @@ const locationDraftOfRow = (r: Record<string, string>): LocationDraft =>
       address: r["address"] ?? "",
       province: r["province"] ?? "",
       country: pick(r["country"], LOCATION_COUNTRIES) || (r["country"] ?? ""),
-      locationSubType: pick(r["locationSubType"], PORT_SUB_TYPES) || "",
+      locationSubType: pick(r["locationSubType"], ALL_LOCATION_SUB_TYPES) || "",
       unLocode: r["unLocode"] ?? "",
       iataCode: r["iataCode"] ?? "",
       lat: numCell(r["lat"]),
@@ -302,7 +302,12 @@ export const locationImportConfig = draftImportConfig<LocationDraft>({
       example: "Warehouse",
       aliases: ["Type", "Loại"],
     },
-    { key: "locationSubType", header: "Port Sub Type", example: "", aliases: ["Loại cảng"] },
+    {
+      key: "locationSubType",
+      header: "Location Sub Type",
+      example: "",
+      aliases: ["Loại con", "Port Sub Type", "Loại cảng"],
+    },
     {
       key: "country",
       header: "Country",
@@ -344,8 +349,15 @@ export const locationImportConfig = draftImportConfig<LocationDraft>({
       e.push({ field: "locationType", error: `Use one of: ${LOCATION_TYPES.join(", ")}` });
     if (pick(r["country"], LOCATION_COUNTRIES) === undefined)
       e.push({ field: "country", error: `Use one of: ${LOCATION_COUNTRIES.join(", ")}` });
-    if (pick(r["locationSubType"], PORT_SUB_TYPES) === undefined)
-      e.push({ field: "locationSubType", error: `Use one of: ${PORT_SUB_TYPES.join(", ")}` });
+    // Sub type must belong to the row's Location Type.
+    const subs = subTypesOf(pick(r["locationType"], LOCATION_TYPES) || "");
+    if (r["locationSubType"] && pick(r["locationSubType"], subs) === undefined)
+      e.push({
+        field: "locationSubType",
+        error: subs.length
+          ? `Use one of: ${subs.join(", ")}`
+          : "No sub type for this Location Type",
+      });
     if (pick(r["status"], STATUSES) === undefined)
       e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
     for (const k of ["lat", "lng"])

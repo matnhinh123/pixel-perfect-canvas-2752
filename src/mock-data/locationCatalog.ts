@@ -4,8 +4,35 @@
 export const LOCATION_TYPES = ["Port", "Airport", "Warehouse", "Farm", "Customer Site"] as const;
 export type LocationType = (typeof LOCATION_TYPES)[number];
 
-/** Optional Port sub types (only offered when Type = Port). */
+/** Optional Port sub types. */
 export const PORT_SUB_TYPES = ["Seaport", "ICD", "River Port"] as const;
+
+/**
+ * Location Sub Types per Location Type (optional, one per location). Port values are signed off;
+ * the others are placeholders until the Common Code master defines them.
+ */
+export const LOCATION_SUB_TYPES: Record<LocationType, readonly string[]> = {
+  Port: PORT_SUB_TYPES,
+  Airport: ["International Airport", "Domestic Airport", "Cargo Terminal"],
+  Warehouse: [
+    "General Warehouse",
+    "Cold Storage",
+    "Bonded Warehouse",
+    "CFS",
+    "Distribution Center",
+  ],
+  Farm: ["Crop Farm", "Livestock Farm", "Aquaculture Farm"],
+  "Customer Site": ["Factory", "Retail Store", "Office"],
+};
+
+/** Sub types of one Location Type ([] when the type is empty / unknown). */
+export const subTypesOf = (type: string | undefined): readonly string[] =>
+  LOCATION_SUB_TYPES[type as LocationType] ?? [];
+
+/** Every sub type of every type, in catalog order. */
+export const ALL_LOCATION_SUB_TYPES: string[] = LOCATION_TYPES.flatMap((t) => [
+  ...LOCATION_SUB_TYPES[t],
+]);
 
 /** Types that carry an international standard code. */
 export const requiresUnLocode = (type: string | undefined) => type === "Port";
@@ -34,11 +61,9 @@ export function normalizeLocationType(
 ): { type: string; sub: string } {
   const t = (type ?? "").trim();
   if ((LOCATION_TYPES as readonly string[]).includes(t)) {
-    const s = t === "Port" ? (sub ?? "") : "";
-    return {
-      type: t,
-      sub: (PORT_SUB_TYPES as readonly string[]).includes(s) ? s : (LEGACY_PORT_SUBS[s] ?? ""),
-    };
+    const s = sub ?? "";
+    if (subTypesOf(t).includes(s)) return { type: t, sub: s };
+    return { type: t, sub: t === "Port" ? (LEGACY_PORT_SUBS[s] ?? "") : "" };
   }
   const legacy = LEGACY_TYPES[t];
   if (!legacy) return { type: t, sub: "" };

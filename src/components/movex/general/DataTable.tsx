@@ -24,8 +24,9 @@ import type { SortState } from "@/types";
 import type { ListColumn } from "./types";
 import { useT } from "./listLang";
 import { cn } from "@/lib/utils";
+import { PAGE_SIZES } from "@/lib/paging";
 
-export const PAGE_SIZES = ["10", "20", "50"];
+const PAGE_SIZE_OPTIONS = PAGE_SIZES.map(String);
 
 /** Standard table: [checkbox] columns… [actions], sortable headers, resizable columns, paging footer. */
 export function DataTable<T extends { id: string }>({
@@ -309,7 +310,7 @@ export function DataTable<T extends { id: string }>({
               className="h-8 w-20"
               value={String(pageSize)}
               onChange={(v) => onPageSize(Number(v))}
-              options={PAGE_SIZES}
+              options={PAGE_SIZE_OPTIONS}
             />
             <Button
               variant="outline"

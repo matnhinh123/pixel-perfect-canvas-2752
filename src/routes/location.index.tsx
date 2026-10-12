@@ -1,22 +1,40 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { StatusBadge, Tag } from "@/components/movex/common";
-import { EntityListPage } from "@/components/movex/general/EntityListPage";
+import {
+  EntityListPage,
+  type FilterChip,
+  type ListState,
+} from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
+import { LocationFilterBar } from "@/components/movex/location/LocationFilterBar";
 import { useCollection } from "@/hooks/use-store";
 import { locationRepository } from "@/repositories";
 import { listLocations, locationCrud, locationImportConfig } from "@/services/locationService";
 import {
+  appliedConditions,
+  EMPTY_LOCATION_FILTER,
+  filterFromSearch,
+  matchLocation,
+  parseLocationSearch,
+  sortFromSearch,
+  toLocationSearch,
+  withoutField,
+  type LocationFilter,
+} from "@/services/locationFilter";
+import {
   LOCATION_COUNTRIES,
   LOCATION_TYPES,
-  PORT_SUB_TYPES,
+  ALL_LOCATION_SUB_TYPES,
   VN_PROVINCES,
 } from "@/mock-data/locationCatalog";
 import { locationOrigin, type LocationMasterRecord } from "@/mock-data/locations";
 import { formatDateTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
+import { DEFAULT_PAGE_SIZE } from "@/lib/paging";
 
 export const Route = createFileRoute("/location/")({
+  validateSearch: parseLocationSearch,
   head: () => ({
     meta: [
       { title: "Location — MoveX" },
@@ -62,15 +80,15 @@ const columnsFor = (t: T, provinces: string[]): ListColumn<Row>[] => [
   {
     key: "locationSubType",
     defaultHidden: true,
-    label: t("Loại cảng", "Port Sub Type"),
+    label: t("Loại con", "Location Sub Type"),
     type: "enum",
-    options: [...PORT_SUB_TYPES],
+    options: ALL_LOCATION_SUB_TYPES,
     width: 130,
     value: (r) => r.locationSubType ?? "",
   },
   {
     key: "origin",
-    label: t("Nguồn", "Standard / Internal"),
+    label: t("Loại mã", "Code Type"),
     type: "enum",
     options: [...ORIGINS],
     width: 150,
@@ -164,15 +182,28 @@ function LocationList() {
   // `t` is recreated every render; the language is the real dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const columns = useMemo(() => columnsFor(t, provinces), [lang, provinces]);
-  const usedProvinces = useMemo(
-    () =>
-      [...new Set(rows.map((r) => r.province ?? "").filter(Boolean))].sort((a, b) =>
-        a.localeCompare(b, "vi"),
-      ),
-    [rows],
-  );
   const open = (r: Row, mode: "view" | "edit") =>
     void navigate({ to: "/location/$id", params: { id: r.id }, search: { mode } });
+
+  // BR4: filters, sort, page and rows per page live in the URL query.
+  const search = Route.useSearch();
+  const filter = useMemo(() => filterFromSearch(search), [search]);
+  const listState: ListState = {
+    q: search.q ?? "",
+    sort: sortFromSearch(search),
+    page: search.page ?? 1,
+    pageSize: search.size ?? DEFAULT_PAGE_SIZE,
+  };
+  const go = (f: LocationFilter, l: ListState) =>
+    void navigate({ to: "/location", search: toLocationSearch(f, l), replace: true });
+  // A filter change shows the first page of the new result.
+  const setFilter = (f: LocationFilter) => go(f, { ...listState, page: 1 });
+  const match = useCallback((r: Row) => matchLocation(r, filter), [filter]);
+  const chips: FilterChip[] = appliedConditions(filter, t).map((c) => ({
+    key: c.field,
+    label: c.text,
+    onRemove: () => setFilter(withoutField(filter, c.field, rows)),
+  }));
 
   return (
     <EntityListPage<Row>
@@ -196,40 +227,15 @@ function LocationList() {
         r.unLocode ?? "",
         r.iataCode ?? "",
       ]}
-      quickFilters={[
-        {
-          key: "status",
-          allLabel: t("Trạng thái: Tất cả", "Status: All"),
-          options: ["Active", "Inactive"].map((s) => ({
-            label: s,
-            conditions: [{ field: "status", operator: "eq", value: s }],
-          })),
-        },
-        {
-          key: "type",
-          allLabel: t("Loại: Tất cả", "Type: All"),
-          options: LOCATION_TYPES.map((x) => ({
-            label: x,
-            conditions: [{ field: "locationType", operator: "eq", value: x }],
-          })),
-        },
-        {
-          key: "origin",
-          allLabel: t("Nguồn: Tất cả", "Standard / Internal: All"),
-          options: ORIGINS.map((x) => ({
-            label: x,
-            conditions: [{ field: "origin", operator: "eq", value: x }],
-          })),
-        },
-        {
-          key: "province",
-          allLabel: t("Tỉnh/TP: Tất cả", "Province/City: All"),
-          options: usedProvinces.map((x) => ({
-            label: x,
-            conditions: [{ field: "province", operator: "eq", value: x }],
-          })),
-        },
-      ]}
+      listState={listState}
+      onListStateChange={(l) => go(filter, l)}
+      customFilters={{
+        toolbar: <LocationFilterBar rows={rows} value={filter} onChange={setFilter} t={t} />,
+        match,
+        chips,
+        onClearAll: (withSearch) =>
+          go(EMPTY_LOCATION_FILTER, { ...listState, page: 1, ...(withSearch ? { q: "" } : {}) }),
+      }}
       showRefresh={false}
       crud={locationCrud}
       importConfig={locationImportConfig}

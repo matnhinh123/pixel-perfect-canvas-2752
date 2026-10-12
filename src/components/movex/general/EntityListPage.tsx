@@ -29,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState, NativeSelect, PageHeader, Panel } from "@/components/movex/common";
+import { EmptyState, PageHeader, Panel } from "@/components/movex/common";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import type { BaseRecord, EntityType, FilterCondition, SortState } from "@/types";
 import type { EntityCrud } from "@/services/crudService";
@@ -45,6 +45,7 @@ import {
 import { useColumnPreference } from "@/hooks/use-store";
 import { readJson, writeJson } from "@/repositories/storage";
 import { cn } from "@/lib/utils";
+import { DEFAULT_PAGE_SIZE } from "@/lib/paging";
 import { AdvancedFilter } from "./AdvancedFilter";
 import { ColumnSettings } from "./ColumnSettings";
 import { DataTable } from "./DataTable";
@@ -100,6 +101,39 @@ export interface EntityListPageProps<T extends BaseRecord> {
   showRefresh?: boolean;
   /** UI language of the list chrome (toolbar, menus, pager). Vietnamese by default. */
   lang?: ListLang;
+  /**
+   * Search, sort and paging owned by the page (e.g. kept in the URL query). Without it the list
+   * keeps them itself. Changing search or rows per page goes back to page 1.
+   */
+  listState?: ListState;
+  onListStateChange?: (s: ListState) => void;
+  /**
+   * Screen-specific filters (Location): the page renders its own quick filters + filter panel in
+   * the toolbar, decides which rows match and lists the applied conditions as removable chips.
+   * Replaces `quickFilters` and the generic Advanced Filter.
+   */
+  customFilters?: CustomFilters<T>;
+}
+
+export interface ListState {
+  q: string;
+  sort: SortState | null;
+  page: number;
+  pageSize: number;
+}
+
+export interface FilterChip {
+  key: string;
+  label: string;
+  onRemove: () => void;
+}
+
+export interface CustomFilters<T> {
+  toolbar: ReactNode;
+  match: (row: T) => boolean;
+  chips: FilterChip[];
+  /** Clear every filter (and the search box too when `withSearch`). */
+  onClearAll: (withSearch: boolean) => void;
 }
 
 function DisabledWithReason({ reason, children }: { reason: string; children: ReactNode }) {
@@ -113,6 +147,44 @@ function DisabledWithReason({ reason, children }: { reason: string; children: Re
   );
 }
 
+const ALL = "__all__";
+
+/**
+ * Quick filter dropdown. The open list shows plain values ("All", "Active"…); the closed box still
+ * names the filter while nothing is picked ("Status: All"), via a hidden option for that state.
+ */
+function QuickFilterSelect({
+  filter,
+  value,
+  onChange,
+  allText,
+}: {
+  filter: QuickFilter;
+  value: string;
+  onChange: (v: string) => void;
+  allText: string;
+}) {
+  return (
+    <select
+      value={value}
+      aria-label={filter.allLabel}
+      title={filter.allLabel}
+      onChange={(e) => onChange(e.target.value === ALL ? "" : e.target.value)}
+      className="h-10 rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+    >
+      <option value="" hidden>
+        {filter.allLabel}
+      </option>
+      <option value={ALL}>{allText}</option>
+      {filter.options.map((o) => (
+        <option key={o.label} value={o.label}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 /** The standard list screen used by Routing, Service, Cost (+ derived lists). Configure, don't copy. */
 export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) {
   const { screen, columns, crud } = p;
@@ -122,12 +194,35 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     allKeys,
     columns.filter((c) => c.defaultHidden).map((c) => c.key),
   );
-  const [q, setQ] = useState(p.initialSearch ?? "");
-  const [quick, setQuick] = useState<Record<string, string>>({});
-  const [advanced, setAdvanced] = useState<FilterCondition[]>([]);
-  const [sort, setSort] = useState<SortState | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [ownState, setOwnState] = useState<ListState>({
+    q: p.initialSearch ?? "",
+    sort: null,
+    page: 1,
+    pageSize: DEFAULT_PAGE_SIZE,
+  });
+  const ls = p.listState ?? ownState;
+  const { q, sort, page, pageSize } = ls;
+  const patchList = (patch: Partial<ListState>) => {
+    const next = { ...ls, ...patch };
+    if (p.onListStateChange) p.onListStateChange(next);
+    else setOwnState(next);
+  };
+  const setQ = (v: string) => patchList({ q: v, page: 1 });
+  const setSort = (s: SortState | null) => patchList({ sort: s });
+  const setPage = (n: number) => patchList({ page: n });
+  const setPageSize = (n: number) => patchList({ pageSize: n, page: 1 });
+  const custom = p.customFilters;
+  const [quick, setQuickState] = useState<Record<string, string>>({});
+  const [advanced, setAdvancedState] = useState<FilterCondition[]>([]);
+  // Any filter change shows the first page of the new result.
+  const setQuick = (next: Record<string, string>) => {
+    setQuickState(next);
+    setPage(1);
+  };
+  const setAdvanced = (next: FilterCondition[]) => {
+    setAdvancedState(next);
+    setPage(1);
+  };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -172,17 +267,34 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
 
   const filtered = useMemo(() => {
     const searched = applySearch(p.rows, q, p.searchValues);
-    const conds = [...quickConditions, ...advanced];
-    return applySort(applyConditions(searched, conds, filterFields, get), sort, get);
-  }, [p.rows, q, quickConditions, advanced, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+    const matched = custom
+      ? searched.filter(custom.match)
+      : applyConditions(searched, [...quickConditions, ...advanced], filterFields, get);
+    return applySort(matched, sort, get);
+  }, [p.rows, q, quickConditions, advanced, sort, custom?.match]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Applied conditions as removable chips (quick filters first, then advanced ones). */
+  const chips: FilterChip[] = custom
+    ? custom.chips
+    : [
+        ...(p.quickFilters ?? [])
+          .filter((qf) => quick[qf.key])
+          .map((qf) => ({
+            key: `q-${qf.key}`,
+            label: `${qf.allLabel.split(":")[0]}: ${quick[qf.key]}`,
+            onRemove: () => setQuick({ ...quick, [qf.key]: "" }),
+          })),
+        ...advanced.map((c) => ({
+          key: c.id,
+          label: describeCondition(c, filterFields),
+          onRemove: () => setAdvanced(advanced.filter((x) => x.id !== c.id)),
+        })),
+      ];
 
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
     if (page > pages) setPage(pages);
-  }, [page, pages]);
-  useEffect(() => {
-    setPage(1);
-  }, [q, quick, advanced, pageSize]);
+  }, [page, pages]); // eslint-disable-line react-hooks/exhaustive-deps
   // Drop selections that disappeared (e.g. after delete / rollback).
   useEffect(() => {
     const ids = new Set(p.rows.map((r) => r.id));
@@ -229,7 +341,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     return kids;
   }, [tree, p.rows, filtered]);
   // While searching / filtering, every matching branch is shown open.
-  const forceOpen = q.trim() !== "" || quickConditions.length > 0 || advanced.length > 0;
+  const forceOpen = q.trim() !== "" || chips.length > 0;
   const treeRows = useMemo(() => {
     const out: { row: T; depth: number }[] = [];
     if (!treeKids) return out;
@@ -296,7 +408,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             },
       );
   const selectedRows = p.rows.filter((r) => selected.has(r.id));
-  const filtersActive = q.trim() !== "" || quickConditions.length > 0 || advanced.length > 0;
+  const filtersActive = q.trim() !== "" || chips.length > 0;
 
   const doExport = async (rows: T[], scope: string) => {
     if (rows.length === 0) {
@@ -335,10 +447,15 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     }, 450);
   };
 
-  const clearAll = () => {
-    setQ("");
-    setQuick({});
-    setAdvanced([]);
+  /** Remove every filter chip; `withSearch` also empties the search box (empty-result action). */
+  const clearAll = (withSearch = true) => {
+    if (custom) {
+      custom.onClearAll(withSearch);
+      return;
+    }
+    setQuickState({});
+    setAdvancedState([]);
+    patchList(withSearch ? { q: "", page: 1 } : { page: 1 });
   };
   const ro =
     p.readOnlyReason ?? t("Không khả dụng cho danh sách này", "Not available for this list");
@@ -508,12 +625,16 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 </button>
               )}
             </div>
-            <AdvancedFilter
-              screen={screen}
-              fields={filterFields}
-              value={advanced}
-              onApply={setAdvanced}
-            />
+            {custom ? (
+              custom.toolbar
+            ) : (
+              <AdvancedFilter
+                screen={screen}
+                fields={filterFields}
+                value={advanced}
+                onApply={setAdvanced}
+              />
+            )}
             <ColumnSettings
               columns={columns}
               pref={pref}
@@ -523,16 +644,16 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 toast.success(t("Đã khôi phục cột mặc định", "Columns reset to default"));
               }}
             />
-            {p.quickFilters?.map((qf) => (
-              <NativeSelect
-                key={qf.key}
-                value={quick[qf.key] ?? ""}
-                onChange={(v) => setQuick((s) => ({ ...s, [qf.key]: v }))}
-                options={["", ...qf.options.map((o) => o.label)]}
-                labels={{ "": qf.allLabel }}
-                className="h-10"
-              />
-            ))}
+            {!custom &&
+              p.quickFilters?.map((qf) => (
+                <QuickFilterSelect
+                  key={qf.key}
+                  filter={qf}
+                  value={quick[qf.key] ?? ""}
+                  onChange={(v) => setQuick({ ...quick, [qf.key]: v })}
+                  allText={t("Tất cả", "All")}
+                />
+              ))}
             <div className="ml-auto flex items-center gap-2">
               {treeOn && !forceOpen && parentIds.length > 0 && (
                 <Button
@@ -583,22 +704,31 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             </div>
           </div>
 
-          {(advanced.length > 0 || quickConditions.length > 0) && (
+          {/* One chip per applied condition; × removes it, "Clear all" removes them all. */}
+          {chips.length > 0 && (
             <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-              {[...quickConditions, ...advanced].map((c) => (
+              {chips.map((c) => (
                 <span
-                  key={c.id}
-                  className="rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground"
+                  key={c.key}
+                  className="inline-flex items-center gap-1 rounded-full bg-accent py-1 pl-2.5 pr-1 font-medium text-accent-foreground"
                 >
-                  {describeCondition(c, filterFields)}
+                  {c.label}
+                  <button
+                    type="button"
+                    onClick={c.onRemove}
+                    className="rounded-full p-0.5 hover:bg-primary/15"
+                    aria-label={t(`Bỏ lọc ${c.label}`, `Remove filter ${c.label}`)}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </span>
               ))}
               <button
                 type="button"
                 className="font-semibold text-primary hover:underline"
-                onClick={clearAll}
+                onClick={() => clearAll(false)}
               >
-                {t("Xoá tất cả lọc", "Clear all filters")}
+                {t("Xoá tất cả lọc", "Clear all")}
               </button>
             </div>
           )}
@@ -712,7 +842,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                     "Try another keyword or clear the filters.",
                   )}
                   action={
-                    <Button size="sm" variant="outline" onClick={clearAll}>
+                    <Button size="sm" variant="outline" onClick={() => clearAll(true)}>
                       {t("Xoá bộ lọc", "Clear filters")}
                     </Button>
                   }

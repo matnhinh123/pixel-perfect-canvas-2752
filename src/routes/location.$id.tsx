@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { History, MapPin, Pencil, Save, X, XCircle } from "lucide-react";
+import { History, MapPin, Pencil, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,7 @@ import {
   COUNTRY_ISO2,
   LOCATION_COUNTRIES,
   LOCATION_TYPES,
-  PORT_SUB_TYPES,
+  subTypesOf,
   requiresIata,
   requiresUnLocode,
   VN_PROVINCES,
@@ -141,6 +141,7 @@ function LocationForm({
   const hasCoords = Number.isFinite(d.lat) && Number.isFinite(d.lng);
   const isPort = requiresUnLocode(d.locationType);
   const isAirport = requiresIata(d.locationType);
+  const subTypes = subTypesOf(d.locationType);
   const origin = locationOrigin(d);
   // Keep a stored province selectable even when it is not in the catalog.
   const provinces =
@@ -257,21 +258,28 @@ function LocationForm({
                 }}
               />
             </Field>
-            {isPort && (
-              <Field
-                label="Port Sub Type"
-                error={errors["locationSubType"]}
-                className={S3}
-                info={t(
-                  "Không bắt buộc: Seaport, ICD (cảng cạn) hoặc River Port.",
-                  "Optional: Seaport, ICD (inland container depot) or River Port.",
+            {/* Type-specific fields are always shown (stable layout) and locked when they do not
+                apply to the chosen type; a type change clears them (withLocationType). */}
+            <Field
+              label="Location Sub Type"
+              error={errors["locationSubType"]}
+              className={S3}
+              info={t(
+                "Không bắt buộc. Danh sách loại con thay đổi theo Location Type đã chọn.",
+                "Optional. The sub types offered follow the chosen Location Type.",
+              )}
+            >
+              <NativeSelect
+                {...select(
+                  "locationSubType",
+                  subTypes,
+                  !d.locationType
+                    ? t("Chọn Location Type trước", "Select a Location Type first")
+                    : "Select Location Sub Type",
+                  subTypes.length === 0,
                 )}
-              >
-                <NativeSelect
-                  {...select("locationSubType", PORT_SUB_TYPES, "Select Port Sub Type")}
-                />
-              </Field>
-            )}
+              />
+            </Field>
 
             <Field label="Country" required error={errors["country"]} className={S3}>
               <NativeSelect
@@ -286,52 +294,58 @@ function LocationForm({
                 <Input placeholder="Enter Province/City" {...text("province")} />
               )}
             </Field>
-            {isPort && (
-              <Field
-                label="UN/LOCODE"
-                required
-                error={errors["unLocode"]}
-                className={S3}
-                info={t(
-                  "Mã địa điểm của Liên Hợp Quốc: 2 chữ quốc gia + 3 ký tự (VD: VNSGN). Bắt buộc với cảng / ICD.",
-                  "United Nations location code: 2-letter country + 3 characters (e.g. VNSGN). Required for a Port / ICD.",
-                )}
-              >
-                <Input
-                  placeholder={isoPrefix ? `${isoPrefix}XXX` : "Enter UN/LOCODE"}
-                  maxLength={5}
-                  value={d.unLocode}
-                  onChange={(e) =>
-                    patch({ unLocode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })
-                  }
-                  aria-invalid={!!errors["unLocode"] || undefined}
-                />
-              </Field>
-            )}
-            {isAirport && (
-              <Field
-                label="IATA Code"
-                required
-                error={errors["iataCode"]}
-                className={S3}
-                info={t(
-                  "Mã 3 chữ cái của sân bay theo IATA (VD: SGN). Bắt buộc với sân bay.",
-                  "3-letter IATA airport code (e.g. SGN). Required for an Airport.",
-                )}
-              >
-                <Input
-                  placeholder="Enter IATA Code"
-                  maxLength={3}
-                  value={d.iataCode}
-                  onChange={(e) =>
-                    patch({ iataCode: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })
-                  }
-                  aria-invalid={!!errors["iataCode"] || undefined}
-                />
-              </Field>
-            )}
             <Field
-              label="Standard / Internal"
+              label="UN/LOCODE"
+              required={isPort}
+              error={errors["unLocode"]}
+              className={S3}
+              info={t(
+                "Mã địa điểm của Liên Hợp Quốc: 2 chữ quốc gia + 3 ký tự (VD: VNSGN). Bắt buộc với cảng / ICD.",
+                "United Nations location code: 2-letter country + 3 characters (e.g. VNSGN). Required for a Port / ICD.",
+              )}
+            >
+              <Input
+                placeholder={
+                  !isPort
+                    ? t("Chỉ dùng cho Port", "Only for Port")
+                    : isoPrefix
+                      ? `${isoPrefix}XXX`
+                      : "Enter UN/LOCODE"
+                }
+                disabled={!isPort}
+                maxLength={5}
+                value={d.unLocode}
+                onChange={(e) =>
+                  patch({ unLocode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })
+                }
+                aria-invalid={!!errors["unLocode"] || undefined}
+              />
+            </Field>
+            <Field
+              label="IATA Code"
+              required={isAirport}
+              error={errors["iataCode"]}
+              className={S3}
+              info={t(
+                "Mã 3 chữ cái của sân bay theo IATA (VD: SGN). Bắt buộc với sân bay.",
+                "3-letter IATA airport code (e.g. SGN). Required for an Airport.",
+              )}
+            >
+              <Input
+                placeholder={
+                  isAirport ? "Enter IATA Code" : t("Chỉ dùng cho Airport", "Only for Airport")
+                }
+                disabled={!isAirport}
+                maxLength={3}
+                value={d.iataCode}
+                onChange={(e) =>
+                  patch({ iataCode: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })
+                }
+                aria-invalid={!!errors["iataCode"] || undefined}
+              />
+            </Field>
+            <Field
+              label={t("Loại mã", "Code Type")}
               className={S3}
               info={t(
                 "Tự xác định: Standard khi có UN/LOCODE hoặc IATA; còn lại là địa điểm nội bộ (Internal) do tenant tạo, vẫn dùng được trong Routing.",
@@ -396,24 +410,6 @@ function LocationForm({
           </FormGroup>
         </Panel>
       </ReadOnlyScope>
-
-      {!readOnly && (
-        <div className="sticky bottom-0 z-20 -mx-7 mt-4 flex items-center justify-end gap-2 border-t bg-card/95 px-7 py-3 backdrop-blur">
-          {dirty && (
-            <span className="mr-auto text-sm font-medium text-warning">
-              {t("Có thay đổi chưa lưu", "You have unsaved changes")}
-            </span>
-          )}
-          <Button variant="outline" onClick={back}>
-            <X className="h-4 w-4" />
-            Cancel
-          </Button>
-          <Button onClick={save}>
-            <Save className="h-4 w-4" />
-            Save
-          </Button>
-        </div>
-      )}
 
       <MapPickerDialog
         open={mapOpen && !readOnly}

@@ -24,6 +24,7 @@ export function MultiSelect({
   placeholder,
   invalid,
   className,
+  disabled,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
@@ -31,6 +32,7 @@ export function MultiSelect({
   placeholder: string;
   invalid?: boolean;
   className?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const toggle = (o: string) =>
@@ -46,6 +48,7 @@ export function MultiSelect({
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={disabled}
           aria-invalid={invalid || undefined}
           className={cn(
             "flex min-h-9 w-full items-center gap-1 rounded-md border border-input bg-card px-2 py-1 text-left text-sm outline-none focus:ring-2 focus:ring-ring aria-[invalid=true]:border-destructive disabled:cursor-default disabled:bg-muted/40",
