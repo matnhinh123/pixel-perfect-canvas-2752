@@ -35,3 +35,28 @@ export const asReadOnlyRecord = <T extends object>(row: T) => ({
   updatedAt: "",
   updatedBy: "",
 });
+
+/** Menu entries that are planned but not built yet (shown with the same chrome as a list page). */
+export function ComingSoon({ title, description }: { title: string; description: string }) {
+  return (
+    <div>
+      <PageHeader
+        crumbs={[{ label: "Cost" }, { label: title }]}
+        title={title}
+        subtitle={description}
+      />
+      <Panel>
+        <EmptyState
+          icon={<Construction className="h-10 w-10" />}
+          title="Coming soon"
+          description={`${title} is on the roadmap and will be available in a later release.`}
+          action={
+            <Button asChild size="sm">
+              <Link to="/cost">Go to Cost</Link>
+            </Button>
+          }
+        />
+      </Panel>
+    </div>
+  );
+}
