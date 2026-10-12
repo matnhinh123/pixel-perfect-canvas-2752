@@ -233,26 +233,89 @@ export const seedServices = (): ServiceRecord[] => {
     template: ServiceRecord["template"] = null,
     status: ServiceRecord["status"] = "Active",
   ): ServiceRecord => ({ id, code, name, parentId, template, description, status, ...m });
+  // Service type (root) → service → optional Import / Export variant.
+  const ie = (id: string, code: string, name: string, parent: string): ServiceRecord[] => [
+    svc(`${id}-IM`, `${code}-IM`, `${name} Import`, parent, `${name} — nhập khẩu.`),
+    svc(`${id}-EX`, `${code}-EX`, `${name} Export`, parent, `${name} — xuất khẩu.`),
+  ];
   return [
-    svc("S-TRK", "TRK", "Trucking", null, "Nhóm dịch vụ vận tải đường bộ.", "Trucking"),
-    svc("S-TRK-IN", "TRK-IN", "Inland Trucking", "S-TRK", "Vận tải nội địa."),
-    svc("S-TRK-IN-CT", "TRK-IN-CT", "Container Trucking", "S-TRK-IN", "Kéo container cảng – kho."),
-    svc("S-TRK-IN-TD", "TRK-IN-TD", "Truck Delivery", "S-TRK-IN", "Giao hàng bằng xe tải."),
+    // ---- Customs
+    svc("S-CUS", "CUS", "Customs", null, "Nhóm dịch vụ thủ tục hải quan.", "Customs"),
+    svc("S-CUS-NORM", "CUS-NORM", "Normal Customs", "S-CUS", "Thông quan thông thường."),
+    svc("S-CUS-NORM-SEA", "CUS-NORM-SEA", "Normal Customs – Sea", "S-CUS-NORM", "Đường biển."),
+    ...ie("S-CUS-NORM-SEA", "CUS-NORM-SEA", "Customs Sea", "S-CUS-NORM-SEA"),
     svc(
-      "S-TRK-CB",
-      "TRK-CB",
-      "Cross-border Trucking",
+      "S-CUS-NORM-AIR",
+      "CUS-NORM-AIR",
+      "Normal Customs – Air",
+      "S-CUS-NORM",
+      "Đường hàng không.",
+    ),
+    ...ie("S-CUS-NORM-AIR", "CUS-NORM-AIR", "Customs Air", "S-CUS-NORM-AIR"),
+    svc("S-CUS-BW", "CUS-BW", "Bonded Warehouse", "S-CUS", "Thủ tục kho ngoại quan."),
+    svc("S-CUS-BW-SEA", "CUS-BW-SEA", "Bonded Warehouse – Sea", "S-CUS-BW", "Đường biển."),
+    svc("S-CUS-BW-AIR", "CUS-BW-AIR", "Bonded Warehouse – Air", "S-CUS-BW", "Đường hàng không."),
+    svc(
+      "S-CUS-POST",
+      "CUS-POST",
+      "Postal (E-commerce)",
+      "S-CUS",
+      "Thủ tục bưu điện / thương mại điện tử.",
+    ),
+    // ---- Trucking / Transportation
+    svc("S-TRK", "TRK", "Trucking / Transportation", null, "Nhóm dịch vụ vận tải.", "Trucking"),
+    svc("S-TRK-DOM", "TRK-DOM", "Domestic (Local Delivery)", "S-TRK", "Giao hàng nội địa."),
+    svc("S-TRK-CONT", "TRK-CONT", "Container", "S-TRK", "Kéo container cảng – kho."),
+    ...ie("S-TRK-CONT", "TRK-CONT", "Container Trucking", "S-TRK-CONT"),
+    svc(
+      "S-TRK-XB",
+      "TRK-XB",
+      "Cross Border",
       "S-TRK",
       "Vận tải qua biên giới (Lào, Campuchia).",
       null,
       "Inactive",
     ),
-    svc("S-CUS", "CUS", "Customs", null, "Nhóm dịch vụ thủ tục hải quan.", "Customs"),
-    svc("S-CUS-IM", "CUS-IM", "Import Customs", "S-CUS", "Khai báo hải quan hàng nhập."),
-    svc("S-CUS-EX", "CUS-EX", "Export Customs", "S-CUS", "Khai báo hải quan hàng xuất."),
-    svc("S-FRT", "FRT", "Freight", null, "Nhóm dịch vụ cước quốc tế.", "Freight"),
+    ...ie("S-TRK-XB", "TRK-XB", "Cross Border", "S-TRK-XB").map((r) => ({
+      ...r,
+      status: "Inactive" as const,
+    })),
+    svc(
+      "S-TRK-FERRY",
+      "TRK-FERRY",
+      "Ferry (River)",
+      "S-TRK",
+      "Đường sông: ghe / boat / ferry / barge.",
+    ),
+    // ---- Freight (mostly via vendors)
+    svc(
+      "S-FRT",
+      "FRT",
+      "Freight",
+      null,
+      "Nhóm dịch vụ cước quốc tế (chủ yếu qua vendor).",
+      "Freight",
+    ),
     svc("S-FRT-SEA", "FRT-SEA", "Sea Freight", "S-FRT", "Cước đường biển FCL / LCL."),
+    ...ie("S-FRT-SEA", "FRT-SEA", "Sea Freight", "S-FRT-SEA"),
     svc("S-FRT-AIR", "FRT-AIR", "Air Freight", "S-FRT", "Cước hàng không."),
+    ...ie("S-FRT-AIR", "FRT-AIR", "Air Freight", "S-FRT-AIR"),
+    svc(
+      "S-FRT-BND",
+      "FRT-BND",
+      "Bonded (Optional)",
+      "S-FRT",
+      "Dịch vụ kho ngoại quan đi kèm (tùy chọn).",
+    ),
+    svc("S-FRT-BND-AIR", "FRT-BND-AIR", "Bonded – Air", "S-FRT-BND", "Ngoại quan hàng không."),
+    svc("S-FRT-BND-SEA", "FRT-BND-SEA", "Bonded – Sea", "S-FRT-BND", "Ngoại quan đường biển."),
+    svc(
+      "S-FRT-BND-YARD",
+      "FRT-BND-YARD",
+      "Bonded – Trucking Yard",
+      "S-FRT-BND",
+      "Bãi xe / trucking yard.",
+    ),
   ];
 };
 
@@ -276,15 +339,15 @@ export const seedServiceAssignments = (): ServiceAssignment[] => {
     ...m,
   });
   return [
-    a("PC-001", "S-TRK-IN-CT", "D-OPS", "E-001", "Trucking", "Xử lý chính"),
-    a("PC-002", "S-TRK-IN-CT", "D-OPS", null, null, "Theo dõi chung"),
-    a("PC-003", "S-TRK-IN-CT", "D-DOC", "E-003", "Trucking", "Kiểm tra hồ sơ"),
-    a("PC-004", "S-TRK-IN-TD", "D-OPS", "E-002", "Trucking", "Xử lý chính"),
-    a("PC-005", "S-CUS-IM", "D-CUS", "E-005", "Customs", "Khai báo tờ khai"),
-    a("PC-006", "S-CUS-IM", "D-DOC", null, null, "Kiểm tra chứng từ"),
-    a("PC-007", "S-CUS-EX", "D-CUS", "E-005", "Customs", "Xử lý chính"),
-    a("PC-008", "S-FRT-SEA", "D-OPS", "E-001", "Freight", "Đặt chỗ hãng tàu"),
-    a("PC-009", "S-FRT-AIR", "D-SAL", "E-006", "Freight", "Báo giá"),
+    a("PC-001", "S-TRK-CONT", "D-OPS", "E-001", "Trucking", "Xử lý chính"),
+    a("PC-002", "S-TRK-CONT", "D-OPS", null, null, "Theo dõi chung"),
+    a("PC-003", "S-TRK-CONT", "D-DOC", "E-003", "Trucking", "Kiểm tra hồ sơ"),
+    a("PC-004", "S-TRK-DOM", "D-OPS", "E-002", "Trucking", "Xử lý chính"),
+    a("PC-005", "S-CUS-NORM-SEA-IM", "D-CUS", "E-005", "Customs", "Khai báo tờ khai"),
+    a("PC-006", "S-CUS-NORM-SEA-IM", "D-DOC", null, null, "Kiểm tra chứng từ"),
+    a("PC-007", "S-CUS-NORM-SEA-EX", "D-CUS", "E-005", "Customs", "Xử lý chính"),
+    a("PC-008", "S-FRT-SEA-EX", "D-OPS", "E-001", "Freight", "Đặt chỗ hãng tàu"),
+    a("PC-009", "S-FRT-AIR-IM", "D-SAL", "E-006", "Freight", "Báo giá"),
   ];
 };
 

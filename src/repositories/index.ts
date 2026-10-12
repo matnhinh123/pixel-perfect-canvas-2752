@@ -31,9 +31,9 @@ import { createCollection, readJson, subscribeKey, writeJson } from "./storage";
 
 export const routeRepository = createCollection<RouteRecord>("routes", seedRoutes);
 // ".v2": the service tree / form fields were reworked — load the new demo seed without touching routes.
-export const serviceRepository = createCollection<ServiceRecord>("services.v2", seedServices);
+export const serviceRepository = createCollection<ServiceRecord>("services.v3", seedServices);
 export const serviceAssignmentRepository = createCollection<ServiceAssignment>(
-  "service-assignments",
+  "service-assignments.v2",
   seedServiceAssignments,
 );
 export const costRepository = createCollection<CostRecord>("costs", () => seedCosts(seedRoutes()));
