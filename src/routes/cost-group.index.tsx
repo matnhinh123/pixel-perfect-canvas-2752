@@ -1,19 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { StatusBadge } from "@/components/movex/common";
 import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
-import {
-  CostGroupDrawer,
-  type CostGroupDrawerState,
-} from "@/components/movex/cost/CostGroupDrawer";
 import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts";
 import { useCollection } from "@/hooks/use-store";
 import { costGroupRepository } from "@/repositories";
 import { costGroupCrud, costGroupImportConfig, groupName } from "@/services/costMasterService";
 import type { CostGroupRecord } from "@/types";
 
-export const Route = createFileRoute("/cost-group")({
+export const Route = createFileRoute("/cost-group/")({
   head: () => ({
     meta: [
       { title: "Cost Group — MoveX" },
@@ -28,7 +24,9 @@ export const Route = createFileRoute("/cost-group")({
 function CostGroupPage() {
   const all = useCollection(costGroupRepository);
   const groups = useMemo(() => all.filter((g) => !g.deleted), [all]);
-  const [drawer, setDrawer] = useState<CostGroupDrawerState | null>(null);
+  const navigate = useNavigate();
+  const open = (g: CostGroupRecord, mode: "view" | "edit") =>
+    void navigate({ to: "/cost-group/$id", params: { id: g.id }, search: { mode } });
 
   const parentNames = useMemo(
     () =>
@@ -42,13 +40,13 @@ function CostGroupPage() {
     () => [
       {
         key: "code",
-        label: "Group Code",
+        label: "Cost Group Code",
         type: "text",
         pinned: true,
         value: (g) => g.code,
         render: (g) => <span className="font-semibold text-primary">{g.code}</span>,
       },
-      { key: "name", label: "Group Name", type: "text", value: (g) => g.name },
+      { key: "name", label: "Cost Group Name", type: "text", value: (g) => g.name },
       {
         key: "parent",
         label: "Parent Group",
@@ -73,38 +71,35 @@ function CostGroupPage() {
   );
 
   return (
-    <>
-      <EntityListPage<CostGroupRecord>
-        lang="en"
-        screen="cost-group"
-        entityType="Cost Group"
-        entityLabel="Cost Group"
-        title="Cost Group"
-        subtitle="Cost groups used to organize cost master data"
-        rows={groups}
-        columns={columns}
-        searchPlaceholder="Search code, name..."
-        searchValues={(g) => [g.code, g.name]}
-        quickFilters={[
-          statusFilter,
-          {
-            key: "parent",
-            allLabel: "All parent groups",
-            options: parentNames.map((n) => ({
-              label: n,
-              conditions: [{ field: "parent", operator: "eq", value: n }],
-            })),
-          },
-        ]}
-        crud={costGroupCrud}
-        allowDelete={false}
-        addLabel="Add Cost Group"
-        onAdd={() => setDrawer({ mode: "create" })}
-        onView={(g) => setDrawer({ mode: "view", id: g.id })}
-        onEdit={(g) => setDrawer({ mode: "edit", id: g.id })}
-        importConfig={costGroupImportConfig}
-      />
-      <CostGroupDrawer state={drawer} groups={groups} onChange={setDrawer} />
-    </>
+    <EntityListPage<CostGroupRecord>
+      lang="en"
+      screen="cost-group"
+      entityType="Cost Group"
+      entityLabel="Cost Group"
+      title="Cost Group"
+      subtitle="Cost groups used to organize cost master data"
+      rows={groups}
+      columns={columns}
+      searchPlaceholder="Search code, name..."
+      searchValues={(g) => [g.code, g.name]}
+      quickFilters={[
+        statusFilter,
+        {
+          key: "parent",
+          allLabel: "All parent groups",
+          options: parentNames.map((n) => ({
+            label: n,
+            conditions: [{ field: "parent", operator: "eq", value: n }],
+          })),
+        },
+      ]}
+      crud={costGroupCrud}
+      allowDelete={false}
+      addLabel="Add Cost Group"
+      onAdd={() => void navigate({ to: "/cost-group/$id", params: { id: "new" }, search: {} })}
+      onView={(g) => open(g, "view")}
+      onEdit={(g) => open(g, "edit")}
+      importConfig={costGroupImportConfig}
+    />
   );
 }
