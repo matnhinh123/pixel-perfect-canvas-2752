@@ -35,10 +35,11 @@ export const seedCostItems = (): CostItemRecord[] => [
     name: "Toll Fee",
     localName: "Phí cầu đường",
     groupId: "CG-ROAD",
-    serviceId: "S-TRK",
+    serviceIds: ["S-TRK-DOM", "S-TRK-CONT", "S-TRK-CONT-IM", "S-TRK-CONT-EX"],
     taxEvidence: "VAT Invoice",
     currency: "VND",
     taxTariff: "8%",
+    uomCategory: "Quantity",
     uom: "Trip",
     remark: "",
     status: "Active",
@@ -50,10 +51,11 @@ export const seedCostItems = (): CostItemRecord[] => [
     name: "Fuel Cost",
     localName: "Chi phí nhiên liệu",
     groupId: "CG-FUEL",
-    serviceId: "S-TRK",
+    serviceIds: ["S-TRK-DOM", "S-TRK-CONT-IM", "S-TRK-CONT-EX"],
     taxEvidence: "VAT Invoice",
     currency: "VND",
-    taxTariff: "",
+    taxTariff: "10%",
+    uomCategory: "Volume",
     uom: "Liter",
     remark: "",
     status: "Active",
@@ -65,13 +67,26 @@ export const seedCostItems = (): CostItemRecord[] => [
     name: "Lift On / Lift Off",
     localName: "Phí nâng hạ",
     groupId: "CG-PORT",
-    serviceId: "S-FRT",
+    serviceIds: ["S-FRT-SEA", "S-FRT-SEA-IM", "S-FRT-SEA-EX"],
     taxEvidence: "VAT Invoice",
     currency: "VND",
     taxTariff: "",
+    uomCategory: "Quantity",
     uom: "Container",
     remark: "",
     status: "Active",
     ...meta,
   },
 ];
+
+/** Dropdown catalogs for the Cost form (stand-ins for the future Common Code / UoM masters). */
+export const COST_TAX_EVIDENCES = ["VAT Invoice", "Sales Invoice", "Receipt", "No Invoice"];
+export const COST_TAX_TARIFFS = ["0%", "5%", "8%", "10%"];
+export const COST_CURRENCIES = ["VND", "USD", "EUR", "SGD", "JPY", "CNY"];
+export const COST_UOM_CATALOG: Record<string, readonly string[]> = {
+  Quantity: ["Piece", "Package", "Pallet", "Container", "Trip"],
+  Weight: ["Kg", "Ton"],
+  Volume: ["CBM", "Liter"],
+  Distance: ["Km"],
+  Time: ["Hour", "Day"],
+};

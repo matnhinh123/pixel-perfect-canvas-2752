@@ -57,8 +57,7 @@ export function routeTotals(r: RouteRecord): RouteTotals {
     distanceKm:
       r.distanceOverrides?.[r.type] ??
       Math.round(legs.reduce((s, l) => s + l.distance, 0) * 10) / 10,
-    estimatedTimeMin:
-      r.timeOverrides?.[r.type] ?? legs.reduce((s, l) => s + l.estimatedTime, 0),
+    estimatedTimeMin: r.timeOverrides?.[r.type] ?? legs.reduce((s, l) => s + l.estimatedTime, 0),
     outboundToll: outbound ? stationsTotal(outbound.tollStations) : 0,
     returnToll: ret ? stationsTotal(ret.tollStations) : 0,
     tollCost,

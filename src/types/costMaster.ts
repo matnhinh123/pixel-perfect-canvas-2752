@@ -14,12 +14,15 @@ export interface CostItemRecord extends BaseRecord {
   name: string;
   localName: string;
   groupId: string;
-  /** Service master id (e.g. Trucking). */
-  serviceId: string | null;
+  /** Service master ids this cost applies to (any level of the service tree). */
+  serviceIds: string[];
   taxEvidence: string;
+  /** Default currency. */
   currency: string;
   /** e.g. "8%"; empty when not set. */
   taxTariff: string;
+  /** Category UoM (Quantity, Weight…) and the default UoM inside it. */
+  uomCategory: string;
   uom: string;
   remark: string;
 }

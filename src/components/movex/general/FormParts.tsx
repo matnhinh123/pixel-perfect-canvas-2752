@@ -4,6 +4,10 @@ import { cn } from "@/lib/utils";
 
 /** 12-column form grid: S3 = a quarter of the row (short fields), S6 = half, S12 = full row. */
 export const S3 = "sm:col-span-3 lg:col-span-3";
+/** Short fields (dates, years, numbers with a unit, switches) — a sixth of the row. */
+export const S2 = "sm:col-span-3 lg:col-span-2";
+/** A third of the row (three fields per line). */
+export const S4 = "sm:col-span-6 lg:col-span-4";
 export const S6 = "sm:col-span-6 lg:col-span-6";
 export const S12 = "sm:col-span-6 lg:col-span-12";
 

@@ -12,6 +12,8 @@ export const groupName = (id: string | null | undefined, list: CostGroupRecord[]
   (id && list.find((g) => g.id === id)?.name) || "";
 export const serviceName = (id: string | null | undefined) =>
   (id && serviceRepository.get(id)?.name) || "";
+/** Names of the services a cost applies to (skips services that no longer exist). */
+export const serviceNames = (ids: string[]) => ids.map((id) => serviceName(id)).filter(Boolean);
 
 // ---------------------------------------------------------------- Cost Group
 
@@ -165,5 +167,119 @@ export const costItemCrud = makeCrud<CostItemRecord>({
   labelOf: (c) => c.code,
   references: () => null,
 });
+
+export type CostItemDraft = Pick<
+  CostItemRecord,
+  | "code"
+  | "name"
+  | "localName"
+  | "groupId"
+  | "serviceIds"
+  | "taxEvidence"
+  | "currency"
+  | "taxTariff"
+  | "uomCategory"
+  | "uom"
+  | "remark"
+  | "status"
+>;
+
+export const newCostItemDraft = (): CostItemDraft => ({
+  code: "",
+  name: "",
+  localName: "",
+  groupId: "",
+  serviceIds: [],
+  taxEvidence: "",
+  currency: "",
+  taxTariff: "",
+  uomCategory: "",
+  uom: "",
+  remark: "",
+  status: "Active",
+});
+
+export const draftOfCostItem = (c: CostItemRecord): CostItemDraft => ({
+  code: c.code,
+  name: c.name,
+  localName: c.localName,
+  groupId: c.groupId,
+  serviceIds: [...(c.serviceIds ?? [])],
+  taxEvidence: c.taxEvidence,
+  currency: c.currency,
+  taxTariff: c.taxTariff,
+  uomCategory: c.uomCategory ?? "",
+  uom: c.uom,
+  remark: c.remark,
+  status: c.status,
+});
+
+export function validateCostItem(d: CostItemDraft, id?: string): Record<string, string> {
+  const e: Record<string, string> = {};
+  const code = d.code.trim().toUpperCase();
+  if (!code) e["code"] = "Cost Detail Code is required.";
+  else if (!/^[A-Z0-9_-]{2,30}$/.test(code))
+    e["code"] = "Use 2–30 characters: letters, digits, - or _.";
+  else if (items().some((c) => c.id !== id && c.code.toUpperCase() === code))
+    e["code"] = `Cost Detail Code ${code} already exists.`;
+  if (!d.name.trim()) e["name"] = "Cost Detail Name is required.";
+  if (!d.localName.trim()) e["localName"] = "Local Name is required.";
+  if (d.uom && !d.uomCategory) e["uomCategory"] = "Pick a Category UoM first.";
+  return e;
+}
+
+const joinNames = (ids: string[]) => serviceNames(ids).join(", ");
+
+export const costItemService = {
+  save(d: CostItemDraft, id?: string): CostItemRecord {
+    const errors = validateCostItem(d, id);
+    if (Object.keys(errors).length)
+      throw new BusinessRuleError("Please check the highlighted fields.", errors);
+    const clean: CostItemDraft = {
+      ...d,
+      code: d.code.trim().toUpperCase(),
+      name: d.name.trim(),
+      localName: d.localName.trim(),
+      remark: d.remark.trim(),
+    };
+    const existing = id ? costItemRepository.get(id) : undefined;
+    if (!existing) {
+      const rec: CostItemRecord = { ...clean, id: uid("CI-"), ...stampCreate() };
+      costItemRepository.insert(rec);
+      auditService.log({
+        action: "CREATE",
+        entityType: "Cost",
+        entityId: rec.id,
+        entityLabel: rec.code,
+      });
+      return rec;
+    }
+    const next = stampUpdate({ ...existing, ...clean });
+    costItemRepository.update(existing.id, () => next);
+    const base = { entityType: "Cost" as const, entityId: next.id, entityLabel: next.code };
+    const out: AuditInput[] = [];
+    const upd = (action: AuditInput["action"], field: string, a: string, b: string) =>
+      a !== b && out.push({ ...base, action, field, oldValue: a || "—", newValue: b || "—" });
+    upd("UPDATE", "Cost Detail Code", existing.code, next.code);
+    upd("UPDATE", "Cost Detail Name", existing.name, next.name);
+    upd("UPDATE", "Local Name", existing.localName, next.localName);
+    upd("UPDATE", "Cost Group", groupName(existing.groupId), groupName(next.groupId));
+    upd("UPDATE", "Services", joinNames(existing.serviceIds ?? []), joinNames(next.serviceIds));
+    upd("UPDATE", "Tax Evidence", existing.taxEvidence, next.taxEvidence);
+    upd("UPDATE", "Def Currency", existing.currency, next.currency);
+    upd("UPDATE", "Default Tax Tariff", existing.taxTariff, next.taxTariff);
+    upd("UPDATE", "Category UoM", existing.uomCategory ?? "", next.uomCategory);
+    upd("UPDATE", "Def UoM", existing.uom, next.uom);
+    upd("UPDATE", "Remark", existing.remark, next.remark);
+    upd(
+      next.status === "Active" ? "ACTIVATE" : "DEACTIVATE",
+      "Status",
+      existing.status,
+      next.status,
+    );
+    auditService.logMany(out);
+    return next;
+  },
+};
 
 export const costItemsInGroup = (groupId: string) => items().filter((c) => c.groupId === groupId);

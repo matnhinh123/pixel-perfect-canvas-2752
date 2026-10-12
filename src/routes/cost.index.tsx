@@ -1,13 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { StatusBadge } from "@/components/movex/common";
 import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
-import { CostDetailDrawer, costEditComingSoon } from "@/components/movex/cost/CostDetailDrawer";
 import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts";
 import { useCollection } from "@/hooks/use-store";
 import { costGroupRepository, costItemRepository } from "@/repositories";
-import { costItemCrud, groupName, serviceName } from "@/services/costMasterService";
+import { costItemCrud, groupName, serviceNames } from "@/services/costMasterService";
 import type { CostItemRecord } from "@/types";
 
 export const Route = createFileRoute("/cost/")({
@@ -30,7 +29,9 @@ function CostListPage() {
   const itemsAll = useCollection(costItemRepository);
   const groups = useMemo(() => groupsAll.filter((g) => !g.deleted), [groupsAll]);
   const items = useMemo(() => itemsAll.filter((c) => !c.deleted), [itemsAll]);
-  const [costId, setCostId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const open = (c: CostItemRecord, mode: "view" | "edit") =>
+    void navigate({ to: "/cost/$id", params: { id: c.id }, search: { mode } });
 
   const columns = useMemo<ListColumn<CostItemRecord>[]>(
     () => [
@@ -51,7 +52,26 @@ function CostListPage() {
         options: groups.map((g) => g.name),
         value: (c) => groupName(c.groupId, groups),
       },
-      { key: "service", label: "Service", type: "text", value: (c) => serviceName(c.serviceId) },
+      {
+        key: "service",
+        label: "Services",
+        type: "text",
+        value: (c) => serviceNames(c.serviceIds ?? []).join(", "),
+        render: (c) => {
+          const names = serviceNames(c.serviceIds ?? []);
+          if (!names.length) return <span className="text-muted-foreground">—</span>;
+          return (
+            <span title={names.join(", ")}>
+              {names[0]}
+              {names.length > 1 && (
+                <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  +{names.length - 1}
+                </span>
+              )}
+            </span>
+          );
+        },
+      },
       { key: "currency", label: "Currency", type: "text", value: (c) => c.currency },
       { key: "uom", label: "UoM", type: "text", value: (c) => c.uom },
       {
@@ -83,40 +103,34 @@ function CostListPage() {
   );
 
   return (
-    <>
-      <EntityListPage<CostItemRecord>
-        lang="en"
-        screen="cost-item"
-        entityType="Cost"
-        entityLabel="Cost"
-        title="Cost"
-        subtitle="Cost master data"
-        rows={items}
-        columns={columns}
-        searchPlaceholder="Search code, name..."
-        searchValues={(c) => [c.code, c.name, c.localName]}
-        quickFilters={[
-          statusFilter,
-          {
-            key: "group",
-            allLabel: "All cost groups",
-            options: groups.map((g) => ({
-              label: g.name,
-              conditions: [{ field: "group", operator: "eq", value: g.name }],
-            })),
-          },
-        ]}
-        crud={costItemCrud}
-        allowDelete={false}
-        readOnlyReason="Cost Create / Edit is coming soon."
-        onView={(c) => setCostId(c.id)}
-        onEdit={costEditComingSoon}
-      />
-      <CostDetailDrawer
-        cost={items.find((c) => c.id === costId) ?? null}
-        groups={groups}
-        onClose={() => setCostId(null)}
-      />
-    </>
+    <EntityListPage<CostItemRecord>
+      lang="en"
+      screen="cost-item"
+      entityType="Cost"
+      entityLabel="Cost"
+      title="Cost"
+      subtitle="Cost master data"
+      rows={items}
+      columns={columns}
+      searchPlaceholder="Search code, name..."
+      searchValues={(c) => [c.code, c.name, c.localName]}
+      quickFilters={[
+        statusFilter,
+        {
+          key: "group",
+          allLabel: "All cost groups",
+          options: groups.map((g) => ({
+            label: g.name,
+            conditions: [{ field: "group", operator: "eq", value: g.name }],
+          })),
+        },
+      ]}
+      crud={costItemCrud}
+      allowDelete={false}
+      addLabel="Add Cost"
+      onAdd={() => void navigate({ to: "/cost/$id", params: { id: "new" }, search: {} })}
+      onView={(c) => open(c, "view")}
+      onEdit={(c) => open(c, "edit")}
+    />
   );
 }
