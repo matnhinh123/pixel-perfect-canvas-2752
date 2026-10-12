@@ -11,15 +11,20 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuditLogRouteImport } from './routes/audit-log'
+import { Route as CogsRouteImport } from './routes/cogs'
 import { Route as CommonCodeRouteImport } from './routes/common-code'
-import { Route as CostGroupRouteImport } from './routes/cost-group'
 import { Route as ExchangeRateRouteImport } from './routes/exchange-rate'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as VariableCostRouteImport } from './routes/variable-cost'
 import { Route as VendorTariffRouteImport } from './routes/vendor-tariff'
 import { Route as BusinessPartnerIndexRouteImport } from './routes/business-partner.index'
 import { Route as BusinessPartnerIdRouteImport } from './routes/business-partner.$id'
+import { Route as CostGroupIndexRouteImport } from './routes/cost-group.index'
+import { Route as CostGroupIdRouteImport } from './routes/cost-group.$id'
 import { Route as CostIndexRouteImport } from './routes/cost.index'
 import { Route as CostIdRouteImport } from './routes/cost.$id'
+import { Route as FixedCostIndexRouteImport } from './routes/fixed-cost.index'
+import { Route as FixedCostIdRouteImport } from './routes/fixed-cost.$id'
 import { Route as LocationIndexRouteImport } from './routes/location.index'
 import { Route as LocationIdRouteImport } from './routes/location.$id'
 import { Route as RoutingIndexRouteImport } from './routes/routing.index'
@@ -42,14 +47,14 @@ const AuditLogRoute = AuditLogRouteImport.update({
   path: '/audit-log',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CogsRoute = CogsRouteImport.update({
+  id: '/cogs',
+  path: '/cogs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CommonCodeRoute = CommonCodeRouteImport.update({
   id: '/common-code',
   path: '/common-code',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CostGroupRoute = CostGroupRouteImport.update({
-  id: '/cost-group',
-  path: '/cost-group',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExchangeRateRoute = ExchangeRateRouteImport.update({
@@ -60,6 +65,11 @@ const ExchangeRateRoute = ExchangeRateRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VariableCostRoute = VariableCostRouteImport.update({
+  id: '/variable-cost',
+  path: '/variable-cost',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VendorTariffRoute = VendorTariffRouteImport.update({
@@ -77,6 +87,16 @@ const BusinessPartnerIdRoute = BusinessPartnerIdRouteImport.update({
   path: '/business-partner/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CostGroupIndexRoute = CostGroupIndexRouteImport.update({
+  id: '/cost-group/',
+  path: '/cost-group/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CostGroupIdRoute = CostGroupIdRouteImport.update({
+  id: '/cost-group/$id',
+  path: '/cost-group/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CostIndexRoute = CostIndexRouteImport.update({
   id: '/cost/',
   path: '/cost/',
@@ -85,6 +105,16 @@ const CostIndexRoute = CostIndexRouteImport.update({
 const CostIdRoute = CostIdRouteImport.update({
   id: '/cost/$id',
   path: '/cost/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FixedCostIndexRoute = FixedCostIndexRouteImport.update({
+  id: '/fixed-cost/',
+  path: '/fixed-cost/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FixedCostIdRoute = FixedCostIdRouteImport.update({
+  id: '/fixed-cost/$id',
+  path: '/fixed-cost/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LocationIndexRoute = LocationIndexRouteImport.update({
@@ -146,20 +176,25 @@ const ApiVietmapSplatRoute = ApiVietmapSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
+  '/cogs': typeof CogsRoute
   '/common-code': typeof CommonCodeRoute
-  '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
+  '/variable-cost': typeof VariableCostRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
+  '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
+  '/fixed-cost/$id': typeof FixedCostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
+  '/cost-group/': typeof CostGroupIndexRoute
   '/cost/': typeof CostIndexRoute
+  '/fixed-cost/': typeof FixedCostIndexRoute
   '/location/': typeof LocationIndexRoute
   '/routing/': typeof RoutingIndexRoute
   '/service/': typeof ServiceIndexRoute
@@ -170,20 +205,25 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
+  '/cogs': typeof CogsRoute
   '/common-code': typeof CommonCodeRoute
-  '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
+  '/variable-cost': typeof VariableCostRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
+  '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
+  '/fixed-cost/$id': typeof FixedCostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner': typeof BusinessPartnerIndexRoute
+  '/cost-group': typeof CostGroupIndexRoute
   '/cost': typeof CostIndexRoute
+  '/fixed-cost': typeof FixedCostIndexRoute
   '/location': typeof LocationIndexRoute
   '/routing': typeof RoutingIndexRoute
   '/service': typeof ServiceIndexRoute
@@ -195,20 +235,25 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
+  '/cogs': typeof CogsRoute
   '/common-code': typeof CommonCodeRoute
-  '/cost-group': typeof CostGroupRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
+  '/variable-cost': typeof VariableCostRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
+  '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
+  '/fixed-cost/$id': typeof FixedCostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/service/$id': typeof ServiceIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
+  '/cost-group/': typeof CostGroupIndexRoute
   '/cost/': typeof CostIndexRoute
+  '/fixed-cost/': typeof FixedCostIndexRoute
   '/location/': typeof LocationIndexRoute
   '/routing/': typeof RoutingIndexRoute
   '/service/': typeof ServiceIndexRoute
@@ -221,20 +266,25 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/audit-log'
+    | '/cogs'
     | '/common-code'
-    | '/cost-group'
     | '/exchange-rate'
     | '/pricing'
+    | '/variable-cost'
     | '/vendor-tariff'
     | '/business-partner/$id'
+    | '/cost-group/$id'
     | '/cost/$id'
+    | '/fixed-cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/service/$id'
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner/'
+    | '/cost-group/'
     | '/cost/'
+    | '/fixed-cost/'
     | '/location/'
     | '/routing/'
     | '/service/'
@@ -245,20 +295,25 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/audit-log'
+    | '/cogs'
     | '/common-code'
-    | '/cost-group'
     | '/exchange-rate'
     | '/pricing'
+    | '/variable-cost'
     | '/vendor-tariff'
     | '/business-partner/$id'
+    | '/cost-group/$id'
     | '/cost/$id'
+    | '/fixed-cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/service/$id'
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner'
+    | '/cost-group'
     | '/cost'
+    | '/fixed-cost'
     | '/location'
     | '/routing'
     | '/service'
@@ -269,20 +324,25 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/audit-log'
+    | '/cogs'
     | '/common-code'
-    | '/cost-group'
     | '/exchange-rate'
     | '/pricing'
+    | '/variable-cost'
     | '/vendor-tariff'
     | '/business-partner/$id'
+    | '/cost-group/$id'
     | '/cost/$id'
+    | '/fixed-cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/service/$id'
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner/'
+    | '/cost-group/'
     | '/cost/'
+    | '/fixed-cost/'
     | '/location/'
     | '/routing/'
     | '/service/'
@@ -294,20 +354,25 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuditLogRoute: typeof AuditLogRoute
+  CogsRoute: typeof CogsRoute
   CommonCodeRoute: typeof CommonCodeRoute
-  CostGroupRoute: typeof CostGroupRoute
   ExchangeRateRoute: typeof ExchangeRateRoute
   PricingRoute: typeof PricingRoute
+  VariableCostRoute: typeof VariableCostRoute
   VendorTariffRoute: typeof VendorTariffRoute
   BusinessPartnerIdRoute: typeof BusinessPartnerIdRoute
+  CostGroupIdRoute: typeof CostGroupIdRoute
   CostIdRoute: typeof CostIdRoute
+  FixedCostIdRoute: typeof FixedCostIdRoute
   LocationIdRoute: typeof LocationIdRoute
   RoutingIdRoute: typeof RoutingIdRoute
   ServiceIdRoute: typeof ServiceIdRoute
   TollStationIdRoute: typeof TollStationIdRoute
   VehicleIdRoute: typeof VehicleIdRoute
   BusinessPartnerIndexRoute: typeof BusinessPartnerIndexRoute
+  CostGroupIndexRoute: typeof CostGroupIndexRoute
   CostIndexRoute: typeof CostIndexRoute
+  FixedCostIndexRoute: typeof FixedCostIndexRoute
   LocationIndexRoute: typeof LocationIndexRoute
   RoutingIndexRoute: typeof RoutingIndexRoute
   ServiceIndexRoute: typeof ServiceIndexRoute
@@ -332,18 +397,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuditLogRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cogs': {
+      id: '/cogs'
+      path: '/cogs'
+      fullPath: '/cogs'
+      preLoaderRoute: typeof CogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/common-code': {
       id: '/common-code'
       path: '/common-code'
       fullPath: '/common-code'
       preLoaderRoute: typeof CommonCodeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cost-group': {
-      id: '/cost-group'
-      path: '/cost-group'
-      fullPath: '/cost-group'
-      preLoaderRoute: typeof CostGroupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/exchange-rate': {
@@ -358,6 +423,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/variable-cost': {
+      id: '/variable-cost'
+      path: '/variable-cost'
+      fullPath: '/variable-cost'
+      preLoaderRoute: typeof VariableCostRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/vendor-tariff': {
@@ -381,6 +453,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BusinessPartnerIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cost-group/': {
+      id: '/cost-group/'
+      path: '/cost-group'
+      fullPath: '/cost-group/'
+      preLoaderRoute: typeof CostGroupIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cost-group/$id': {
+      id: '/cost-group/$id'
+      path: '/cost-group/$id'
+      fullPath: '/cost-group/$id'
+      preLoaderRoute: typeof CostGroupIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cost/': {
       id: '/cost/'
       path: '/cost'
@@ -393,6 +479,20 @@ declare module '@tanstack/react-router' {
       path: '/cost/$id'
       fullPath: '/cost/$id'
       preLoaderRoute: typeof CostIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fixed-cost/': {
+      id: '/fixed-cost/'
+      path: '/fixed-cost'
+      fullPath: '/fixed-cost/'
+      preLoaderRoute: typeof FixedCostIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fixed-cost/$id': {
+      id: '/fixed-cost/$id'
+      path: '/fixed-cost/$id'
+      fullPath: '/fixed-cost/$id'
+      preLoaderRoute: typeof FixedCostIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/location/': {
@@ -478,20 +578,25 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditLogRoute: AuditLogRoute,
+  CogsRoute: CogsRoute,
   CommonCodeRoute: CommonCodeRoute,
-  CostGroupRoute: CostGroupRoute,
   ExchangeRateRoute: ExchangeRateRoute,
   PricingRoute: PricingRoute,
+  VariableCostRoute: VariableCostRoute,
   VendorTariffRoute: VendorTariffRoute,
   BusinessPartnerIdRoute: BusinessPartnerIdRoute,
+  CostGroupIdRoute: CostGroupIdRoute,
   CostIdRoute: CostIdRoute,
+  FixedCostIdRoute: FixedCostIdRoute,
   LocationIdRoute: LocationIdRoute,
   RoutingIdRoute: RoutingIdRoute,
   ServiceIdRoute: ServiceIdRoute,
   TollStationIdRoute: TollStationIdRoute,
   VehicleIdRoute: VehicleIdRoute,
   BusinessPartnerIndexRoute: BusinessPartnerIndexRoute,
+  CostGroupIndexRoute: CostGroupIndexRoute,
   CostIndexRoute: CostIndexRoute,
+  FixedCostIndexRoute: FixedCostIndexRoute,
   LocationIndexRoute: LocationIndexRoute,
   RoutingIndexRoute: RoutingIndexRoute,
   ServiceIndexRoute: ServiceIndexRoute,

@@ -6,6 +6,8 @@ import type {
   CostGroupRecord,
   CostItemRecord,
   CostRecord,
+  FixedCostRecord,
+  FixedCostSummaryRecord,
   ImportBatch,
   RouteRecord,
   ServiceAssignment,
@@ -23,6 +25,7 @@ import {
   seedTemplateConfig,
 } from "@/mock-data/seed";
 import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
+import { seedFixedCosts, seedFixedCostSummaries } from "@/mock-data/fixedCost";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
 import { seedVehicleMasters } from "@/mock-data/vehicleMaster";
 import { seedBusinessPartners } from "@/mock-data/businessPartners";
@@ -40,6 +43,11 @@ export const costRepository = createCollection<CostRecord>("costs", () => seedCo
 // Master Data > Cost: cost groups and cost items (master data only).
 export const costGroupRepository = createCollection<CostGroupRecord>("cost-groups", seedCostGroups);
 export const costItemRepository = createCollection<CostItemRecord>("cost-items.v3", seedCostItems);
+export const fixedCostRepository = createCollection<FixedCostRecord>("fixed-costs", seedFixedCosts);
+export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
+  "fixed-cost-summaries",
+  seedFixedCostSummaries,
+);
 /** Location master; Routing stop pickers read active locations from it. */
 export const locationRepository = createCollection<LocationMasterRecord>(
   "locations",

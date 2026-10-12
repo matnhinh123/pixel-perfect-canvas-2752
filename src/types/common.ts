@@ -8,6 +8,8 @@ export type EntityType =
   | "Service"
   | "Cost"
   | "Cost Group"
+  | "Fixed Cost"
+  | "Fixed Cost Summary"
   | "Location"
   | "Vehicle"
   | "Toll Station"
