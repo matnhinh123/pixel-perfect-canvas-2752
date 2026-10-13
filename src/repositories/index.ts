@@ -41,8 +41,12 @@ export const serviceAssignmentRepository = createCollection<ServiceAssignment>(
 );
 export const costRepository = createCollection<CostRecord>("costs", () => seedCosts(seedRoutes()));
 // Master Data > Cost: cost groups and cost items (master data only).
-export const costGroupRepository = createCollection<CostGroupRecord>("cost-groups", seedCostGroups);
-export const costItemRepository = createCollection<CostItemRecord>("cost-items.v3", seedCostItems);
+// ".v2" / ".v4": larger demo cost catalog (many groups and sub groups) — load the new demo seed.
+export const costGroupRepository = createCollection<CostGroupRecord>(
+  "cost-groups.v2",
+  seedCostGroups,
+);
+export const costItemRepository = createCollection<CostItemRecord>("cost-items.v4", seedCostItems);
 export const fixedCostRepository = createCollection<FixedCostRecord>("fixed-costs", seedFixedCosts);
 export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
   "fixed-cost-summaries",

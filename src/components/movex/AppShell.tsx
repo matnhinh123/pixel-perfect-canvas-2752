@@ -52,12 +52,16 @@ export const NAV: NavItem[] = [
   { to: "/routing", label: "Route Management", icon: "🗺️" },
   { to: "/service", label: "Service", icon: "🧩" },
   {
-    to: "/cost",
+    to: "/cost-2",
     label: "Cost",
     icon: "💰",
+    // Client preview: the merged Cost page (/cost-2) replaces the separate Cost Group (/cost-group)
+    // and Cost (/cost) pages in the menu. Those pages still exist; restore the two entries below
+    // (and point `to` back at "/cost") to go back to the old layout.
     children: [
-      { to: "/cost-group", label: "Cost Group" },
-      { to: "/cost", label: "Cost" },
+      // { to: "/cost-group", label: "Cost Group" },
+      // { to: "/cost", label: "Cost" },
+      { to: "/cost-2", label: "Cost" },
       { to: "/fixed-cost", label: "Fixed Cost" },
       { to: "/variable-cost", label: "Variable Cost" },
       { to: "/cogs", label: "COGS" },
