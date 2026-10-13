@@ -1,12 +1,23 @@
 // Demo seed for Master Data > Cost > Fixed Cost.
 import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
 
+/** Vehicle types a fixed cost applies to (order as shown in the 5-column picker). */
 export const FIXED_COST_VEHICLE_TYPES = [
-  "Truck 5T",
-  "Truck 10T",
-  "Truck 15T",
-  "Container 20ft",
-  "Container 40ft",
+  "TRUCK",
+  "1T",
+  "2T",
+  "5T",
+  "20DC",
+  "40DC",
+  "HEAD",
+  "8T",
+  "20HC",
+  "40HC",
+  "TRAILER",
+  "20RF",
+  "40RF",
+  "20OT",
+  "45FT",
 ];
 export const FIXED_COST_TYPES = ["DEPRECIATION", "INSURANCE", "INTEREST", "EQUIPMENT", "LICENSE"];
 /** Rate to VND. */
@@ -61,7 +72,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     1_200_000_000,
     8,
     "Year",
-    ["Truck 5T", "Truck 10T", "Truck 15T"],
+    ["5T", "8T", "TRUCK"],
     { utilContainer: 20, utilDay: 30 },
   ),
   fc(
@@ -73,7 +84,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     2_400_000_000,
     10,
     "Year",
-    ["Container 20ft", "Container 40ft"],
+    ["20DC", "40DC"],
     { utilContainer: 24, utilDay: 30 },
   ),
   fc(
@@ -85,7 +96,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     36_000_000,
     1,
     "Year",
-    ["Truck 5T", "Truck 10T", "Truck 15T", "Container 20ft", "Container 40ft"],
+    ["5T", "8T", "TRUCK", "20DC", "40DC"],
     { utilContainer: 20, utilDay: 30 },
   ),
   fc(
@@ -97,7 +108,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     18_000_000,
     1,
     "Month",
-    ["Container 40ft"],
+    ["40DC"],
     { utilContainer: 24, utilDay: 30 },
   ),
   fc(
@@ -109,7 +120,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     150_000,
     1,
     "Month",
-    ["Truck 5T", "Truck 10T", "Container 20ft", "Container 40ft"],
+    ["5T", "8T", "20DC", "40DC"],
     { applyUtilization: false },
   ),
   fc(
@@ -121,7 +132,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     450_000,
     1,
     "Day",
-    ["Truck 10T", "Truck 15T"],
+    ["8T", "TRUCK"],
     { utilContainer: 1, utilDay: 1 },
   ),
   fc(
@@ -133,7 +144,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     25,
     1,
     "Trip",
-    ["Container 20ft", "Container 40ft"],
+    ["20DC", "40DC"],
     { currency: "USD", exchangeRate: 25400 },
   ),
   fc(
@@ -152,16 +163,16 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
 
 export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [
   {
-    id: "FS-Truck 10T",
-    vehicleType: "Truck 10T",
+    id: "FS-8T",
+    vehicleType: "8T",
     assignCostId: "CI-TOLL",
     fixedCostIds: ["FC-DEP-TRK", "FC-INS", "FC-GPS"],
     status: "Active",
     ...meta,
   },
   {
-    id: "FS-Container 40ft",
-    vehicleType: "Container 40ft",
+    id: "FS-40DC",
+    vehicleType: "40DC",
     assignCostId: "CI-FUEL",
     fixedCostIds: ["FC-DEP-CONT", "FC-INS", "FC-LOAN", "FC-PERMIT"],
     status: "Active",

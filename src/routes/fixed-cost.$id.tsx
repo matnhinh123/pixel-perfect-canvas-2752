@@ -28,6 +28,7 @@ import { fmtMoney } from "@/services/fixedCostMath";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
 import { FIXED_COST_TYPES, FIXED_COST_VEHICLE_TYPES } from "@/mock-data/fixedCost";
 import { ALLOCATION_UNITS, type FixedCostRecord } from "@/types";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 type Mode = "view" | "edit";
@@ -316,30 +317,19 @@ function FixedCostForm({
               className="sm:col-span-6 lg:col-span-12"
               hint="Optional. A fixed cost with no vehicle type is listed but appears in no Summary."
             >
-              <div className="flex flex-wrap gap-2">
-                {FIXED_COST_VEHICLE_TYPES.map((v) => {
-                  const on = d.vehicleTypes.includes(v);
-                  return (
-                    <button
-                      key={v}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => toggleVehicle(v)}
-                      className={cn(
-                        "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors group-disabled:cursor-default",
-                        on
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "bg-card text-muted-foreground hover:border-primary/50 group-disabled:hover:border-border",
-                        readOnly && !on && "hidden",
-                      )}
-                    >
-                      {v}
-                    </button>
-                  );
-                })}
-                {readOnly && d.vehicleTypes.length === 0 && (
-                  <span className="text-sm text-muted-foreground">—</span>
-                )}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-5">
+                {FIXED_COST_VEHICLE_TYPES.map((v) => (
+                  <label
+                    key={v}
+                    className="flex cursor-pointer items-center gap-2 text-sm group-disabled:cursor-default"
+                  >
+                    <Checkbox
+                      checked={d.vehicleTypes.includes(v)}
+                      onCheckedChange={() => toggleVehicle(v)}
+                    />
+                    {v}
+                  </label>
+                ))}
               </div>
             </Field>
           </div>
