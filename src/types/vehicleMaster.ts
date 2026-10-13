@@ -31,43 +31,32 @@ export interface VehicleMasterRecord extends BaseRecord {
   trailerType: TrailerType | "";
   plateNumber: string;
   chassisNumber: string;
-  /** Not for TRAILER. */
-  engineNumber: string;
+  /** With Lifetime Limit: a vehicle past its legal service life cannot be dispatched. */
   productionYear: string;
-  fuelRate: string; // l/100km — not for TRAILER
-  fuelCapacity: string; // liter — not for TRAILER
-  // Registration & inspection
+  // Fuel (not for TRAILER): fuel cost norm and max distance between refuels
+  fuelType: string;
+  fuelRate: string; // l/100km
+  fuelCapacity: string; // liter
+  // Registration & inspection: an expired document blocks dispatch
   registrationExpiry: string;
-  inspectionNo: string;
   /** Inspection (đăng kiểm) expiry. */
   inspectionExpiry: string;
   lifetimeLimit: string;
-  // Specifications
-  policyNumber: string;
-  tradeMark: string;
-  modelCode: string;
-  buyingDate: string;
-  overallDimension: string; // "L×W×H" in mm
+  // Load capacity: checked when loading a trip
   containerDimension: string; // "L×W×H" in mm
-  kerbMass: string; // kg
   /** Authorized payload (kg, legal), independent of Truck Type. */
   authorizedPayload: string;
-  rfidTag: string;
-  acquisitionCost: string;
-  acquisitionCurrency: string;
-  contractNumber: string;
-  /** Required for every vehicle. */
-  inspectionReportNo: string;
-  liabilityInsuranceNumber: string;
-  fuelType: string; // not for TRAILER
-  engineDisplacement: string; // cm3 — not for TRAILER
   /** HEAD only (kg). */
   authorizedTowedMass: string;
-  productionCountry: string;
-  renovated: boolean;
-  transportationBusiness: boolean;
-  tachograph: boolean;
+  // Equipment
+  /** ETC toll tag (VETC / ePass). */
+  rfidTag: string;
+  /** GPS / journey monitoring device, required for transport business. */
   telematics: boolean;
+  // Asset (depreciation for Fixed Cost)
+  buyingDate: string;
+  acquisitionCost: string;
+  acquisitionCurrency: string;
   /** HEAD only. */
   containerMappings: ContainerSizeMapping[];
 }

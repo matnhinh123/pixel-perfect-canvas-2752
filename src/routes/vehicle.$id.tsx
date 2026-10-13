@@ -48,8 +48,6 @@ import {
 import {
   ACQUISITION_CURRENCIES,
   FUEL_TYPES,
-  PRODUCTION_COUNTRIES,
-  TRADE_MARKS,
   TRUCK_TYPES,
   VEHICLE_TYPE_LABELS,
   VEHICLE_TYPES,
@@ -153,21 +151,12 @@ function fuelUnitOf(fuelType: string): { rate: string; capacity: string } {
 
 /** Specifications has data worth showing unfolded when editing. */
 const SPEC_DATA: (keyof VehicleDraft)[] = [
-  "policyNumber",
-  "tradeMark",
-  "modelCode",
-  "buyingDate",
-  "overallDimension",
   "containerDimension",
-  "kerbMass",
   "authorizedPayload",
-  "rfidTag",
-  "acquisitionCost",
-  "contractNumber",
-  "liabilityInsuranceNumber",
-  "engineDisplacement",
   "authorizedTowedMass",
-  "productionCountry",
+  "rfidTag",
+  "buyingDate",
+  "acquisitionCost",
 ];
 
 function VehicleForm({
@@ -183,7 +172,6 @@ function VehicleForm({
   const truckTypes = useCodeOptions(CC.TRUCK_TYPE, TRUCK_TYPES);
   const vehicleGroups = useCodeOptions(CC.VEHICLE_GROUP, VEHICLE_GROUP_OPTIONS);
   const fuelTypes = useCodeOptions(CC.FUEL_TYPE, FUEL_TYPES);
-  const tradeMarks = useCodeOptions(CC.TRADE_MARK, TRADE_MARKS);
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -460,11 +448,6 @@ function VehicleForm({
                 {...text("chassisNumber", true)}
               />
             </Field>
-            {shows("engineNumber") && (
-              <Field label="Engine Number" className={S3}>
-                <Input placeholder="Nhập số máy" {...text("engineNumber")} />
-              </Field>
-            )}
             <Field label="Production Year" error={errors["productionYear"]} className={S3}>
               <Input
                 inputMode="numeric"
@@ -508,29 +491,6 @@ function VehicleForm({
 
           <FormGroup title="Registration & Inspection Information">
             <Field
-              label="Vehicle Inspection No"
-              error={errors["inspectionNo"]}
-              className={S3}
-              info={t(
-                "Số quản lý phương tiện: chữ, số, gạch nối.",
-                "Vehicle inspection number: letters, digits, hyphens.",
-              )}
-            >
-              <Input placeholder="Nhập số quản lý phương tiện" {...text("inspectionNo")} />
-            </Field>
-            <Field
-              label="Inspection Report No"
-              required
-              error={errors["inspectionReportNo"]}
-              className={S3}
-              info={t(
-                "Số chứng nhận kiểm định: chữ, số, gạch nối.",
-                "Inspection report number: letters, digits, hyphens.",
-              )}
-            >
-              <Input placeholder="Nhập số chứng nhận kiểm định" {...text("inspectionReportNo")} />
-            </Field>
-            <Field
               label="Inspection Expiration Date"
               className={S3}
               hint={<ExpiryHint ymd={d.inspectionExpiry} />}
@@ -544,7 +504,15 @@ function VehicleForm({
             >
               {dateInput("registrationExpiry")}
             </Field>
-            <Field label="Lifetime Limit" className={S3}>
+            <Field
+              label="Lifetime Limit"
+              className={S3}
+              hint={<ExpiryHint ymd={d.lifetimeLimit} />}
+              info={t(
+                "Niên hạn sử dụng: quá hạn thì xe không được điều.",
+                "Legal service life: past this date the vehicle cannot be dispatched.",
+              )}
+            >
               {dateInput("lifetimeLimit")}
             </Field>
           </FormGroup>
@@ -555,52 +523,19 @@ function VehicleForm({
           defaultOpen={readOnly || (!isNew && specHasData)}
           forceOpen={specError}
         >
-          <FormGroup title="Manufacturer & Engine">
-            <Field label="Trade Mark" className={S3}>
-              <NativeSelect {...select("tradeMark", tradeMarks, "Chọn hãng sản xuất")} />
-            </Field>
+          <FormGroup title="Load Capacity">
             <Field
-              label="Model Code"
-              error={errors["modelCode"]}
-              className={S3}
+              label="Cargo / Container Dimensions"
+              className={S6}
               info={t(
-                "Chữ, số và gạch nối. VD: HD210-2018",
-                "Letters, digits, hyphens. e.g. HD210-2018",
+                "Kích thước lòng thùng, dùng kiểm tra hàng có xếp vừa xe khi điều phối.",
+                "Inner cargo space, used to check that the load fits when dispatching.",
               )}
             >
-              <Input placeholder="VD: HD210-2018" {...text("modelCode")} />
-            </Field>
-            <Field label="Production Country" className={S3}>
-              <NativeSelect
-                {...select("productionCountry", PRODUCTION_COUNTRIES, "Chọn nước sản xuất")}
-              />
-            </Field>
-            {shows("engineDisplacement") && (
-              <Field
-                label="Engine Displacement"
-                error={errors["engineDisplacement"]}
-                className={S3}
-              >
-                {unit("engineDisplacement", "cm3", "Nhập dung tích xi lanh")}
-              </Field>
-            )}
-          </FormGroup>
-
-          <FormGroup title="Dimensions & Weight">
-            <Field label="Overall Dimension" className={S6}>
-              <DimensionInput
-                value={d.overallDimension}
-                onChange={(v) => patch({ overallDimension: v })}
-              />
-            </Field>
-            <Field label="Cargo / Container Dimensions" className={S6}>
               <DimensionInput
                 value={d.containerDimension}
                 onChange={(v) => patch({ containerDimension: v })}
               />
-            </Field>
-            <Field label="Kerb Mass" error={errors["kerbMass"]} className={S3}>
-              {unit("kerbMass", "kg", "Nhập khối lượng bản thân")}
             </Field>
             <Field
               label="Authorized Payload"
@@ -624,7 +559,35 @@ function VehicleForm({
             )}
           </FormGroup>
 
-          <FormGroup title="Purchase & Insurance">
+          <FormGroup title="Equipment">
+            <Field
+              label="ETC / RFID Tag"
+              className={S3}
+              info={t(
+                "Thẻ thu phí không dừng (VETC / ePass).",
+                "Electronic toll collection tag (VETC / ePass).",
+              )}
+            >
+              <Input placeholder="Nhập mã thẻ ETC" {...text("rfidTag")} />
+            </Field>
+            <Field
+              label="GPS / Journey Monitoring Device"
+              className={S3}
+              info={t(
+                "Thiết bị giám sát hành trình, bắt buộc với xe kinh doanh vận tải.",
+                "Journey monitoring device, required for transport business vehicles.",
+              )}
+            >
+              <SwitchRow
+                checked={d.telematics}
+                onChange={(v) => patch({ telematics: v })}
+                on="Yes"
+                off="No"
+              />
+            </Field>
+          </FormGroup>
+
+          <FormGroup title="Asset">
             <Field label="Buying Date" className={S3}>
               {dateInput("buyingDate")}
             </Field>
@@ -647,55 +610,6 @@ function VehicleForm({
                   options={ACQUISITION_CURRENCIES}
                 />
               </div>
-            </Field>
-            <Field label="Contract Number" className={S3}>
-              <Input placeholder="Nhập số hợp đồng" {...text("contractNumber")} />
-            </Field>
-            <div className="hidden lg:col-span-12 lg:block" />
-            <Field label="Comprehensive Policy Number" className={S3}>
-              <Input placeholder="Nhập số bảo hiểm vật chất" {...text("policyNumber")} />
-            </Field>
-            <Field label="Liability Insurance Number" className={S3}>
-              <Input placeholder="Nhập số bảo hiểm TNDS" {...text("liabilityInsuranceNumber")} />
-            </Field>
-          </FormGroup>
-
-          <FormGroup title="Equipment">
-            <Field label="RFID / Barcode Tag" className={S3}>
-              <Input placeholder="Nhập mã định danh điện tử" {...text("rfidTag")} />
-            </Field>
-            <Field label="Equipped with Tachograph" className={S3}>
-              <SwitchRow
-                checked={d.tachograph}
-                onChange={(v) => patch({ tachograph: v })}
-                on="Yes"
-                off="No"
-              />
-            </Field>
-            <Field label="Telematics" className={S3}>
-              <SwitchRow
-                checked={d.telematics}
-                onChange={(v) => patch({ telematics: v })}
-                on="Yes"
-                off="No"
-              />
-            </Field>
-            <div className="hidden lg:col-span-12 lg:block" />
-            <Field label="Transportation Business" className={S3}>
-              <SwitchRow
-                checked={d.transportationBusiness}
-                onChange={(v) => patch({ transportationBusiness: v })}
-                on="Yes"
-                off="No"
-              />
-            </Field>
-            <Field label="Modification" className={S3}>
-              <SwitchRow
-                checked={d.renovated}
-                onChange={(v) => patch({ renovated: v })}
-                on="Renovated"
-                off="Unrenovated"
-              />
             </Field>
           </FormGroup>
         </CollapsiblePanel>

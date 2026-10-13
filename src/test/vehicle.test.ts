@@ -18,7 +18,6 @@ const valid = (p: Partial<VehicleDraft> = {}): VehicleDraft => ({
   vehicleType: "TRAILER",
   plateNumber: "99R-123.45",
   chassisNumber: "TESTVIN0001",
-  inspectionReportNo: "KD-2026-0001",
   ...p,
 });
 
@@ -39,14 +38,9 @@ describe("Vehicle master", () => {
     expect(expiryState("", now)).toBe("none");
   });
 
-  it("requires exactly Vehicle Type, Plate Number, VIN and Inspection Report No", () => {
+  it("requires exactly Vehicle Type, Plate Number and VIN", () => {
     const empty = validateVehicle(newVehicleDraft());
-    expect(Object.keys(empty).sort()).toEqual([
-      "chassisNumber",
-      "inspectionReportNo",
-      "plateNumber",
-      "vehicleType",
-    ]);
+    expect(Object.keys(empty).sort()).toEqual(["chassisNumber", "plateNumber", "vehicleType"]);
     expect(validateVehicle(valid())).toEqual({});
   });
 
@@ -56,7 +50,7 @@ describe("Vehicle master", () => {
     expect(validateVehicle(valid({ vehicleType: "HEAD" }))["truckType"]).toBeUndefined();
   });
 
-  it("checks plate / VIN / code formats and uniqueness", () => {
+  it("checks plate / VIN formats and uniqueness", () => {
     expect(validateVehicle(valid({ plateNumber: "ABC" }))["plateNumber"]).toBeDefined();
     for (const p of ["61C-123.45", "30A-12345", "29LD-123.45"])
       expect(validateVehicle(valid({ plateNumber: p }))["plateNumber"]).toBeUndefined();
@@ -64,7 +58,6 @@ describe("Vehicle master", () => {
       /exist|tồn tại/i,
     );
     expect(validateVehicle(valid({ chassisNumber: "VIN-01" }))["chassisNumber"]).toBeDefined();
-    expect(validateVehicle(valid({ modelCode: "HD 210" }))["modelCode"]).toBeDefined();
     expect(validateVehicle(valid({ productionYear: "1850" }))["productionYear"]).toBeDefined();
   });
 
@@ -72,7 +65,7 @@ describe("Vehicle master", () => {
     expect(showsField("TRUCK", "truckType")).toBe(true);
     expect(showsField("HEAD", "vehicleGroup")).toBe(false);
     expect(showsField("HEAD", "containerMappings")).toBe(true);
-    expect(showsField("TRAILER", "engineNumber")).toBe(false);
+    expect(showsField("TRAILER", "fuelType")).toBe(false);
     expect(showsField("TRAILER", "trailerType")).toBe(true);
     expect(showsField("", "truckType")).toBe(false);
     const truck = valid({ vehicleType: "TRUCK", truckType: "5 tấn", fuelRate: "20" });
@@ -121,11 +114,18 @@ describe("Vehicle master", () => {
       vehicleType: "Tractor",
       vehicleGroup: "Medium Truck",
       ownership: "Outsourced",
+      engineNumber: "D6CB1234567",
+      telematics: false,
+      tachograph: true,
     } as unknown as VehicleMasterRecord;
     const n = normalizeVehicle(legacy);
     expect(n.vehicleType).toBe("HEAD");
     expect(n.vehicleGroup).toBe("");
     expect(n).not.toHaveProperty("ownership");
+    // Dropped fields go; a stored Tachograph flag counts as the GPS device.
+    expect(n).not.toHaveProperty("engineNumber");
+    expect(n).not.toHaveProperty("tachograph");
+    expect(n.telematics).toBe(true);
     expect(
       normalizeVehicle({ ...legacy, vehicleType: "Truck" } as unknown as VehicleMasterRecord)
         .vehicleType,

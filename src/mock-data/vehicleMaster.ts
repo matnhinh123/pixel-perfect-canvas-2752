@@ -11,26 +11,7 @@ export const VEHICLE_TYPE_LABELS: Record<VehicleMasterType, string> = {
 export const VEHICLE_MASTER_GROUPS = ["Group 01", "Group 02", "Group 03", "Group 04", "Group 05"];
 /** Common Code TRUCK_TYPE: commercial load class of a truck. */
 export const TRUCK_TYPES = ["1 tấn", "2 tấn", "5 tấn", "8 tấn", "10 tấn", "15 tấn", "20 tấn"];
-export const TRADE_MARKS = [
-  "HINO",
-  "ISUZU",
-  "HYUNDAI",
-  "THACO",
-  "FUSO",
-  "HOWO",
-  "DONGFENG",
-  "VOLVO",
-];
 export const FUEL_TYPES = ["Diesel", "Gasoline", "CNG", "LPG", "Electric", "Hybrid"];
-export const PRODUCTION_COUNTRIES = [
-  "Vietnam",
-  "Japan",
-  "Korea",
-  "China",
-  "Thailand",
-  "Germany",
-  "USA",
-];
 export const ACQUISITION_CURRENCIES = ["VND", "USD", "EUR", "JPY"];
 
 const BLANK: Omit<
@@ -39,7 +20,6 @@ const BLANK: Omit<
   | "plateNumber"
   | "vehicleType"
   | "chassisNumber"
-  | "inspectionReportNo"
   | "createdAt"
   | "createdBy"
   | "updatedAt"
@@ -49,35 +29,21 @@ const BLANK: Omit<
   vehicleGroup: "",
   truckType: "",
   trailerType: "",
-  engineNumber: "",
   productionYear: "",
+  fuelType: "",
   fuelRate: "",
   fuelCapacity: "",
   registrationExpiry: "",
-  inspectionNo: "",
   inspectionExpiry: "",
   lifetimeLimit: "",
-  policyNumber: "",
-  tradeMark: "",
-  modelCode: "",
-  buyingDate: "",
-  overallDimension: "",
   containerDimension: "",
-  kerbMass: "",
   authorizedPayload: "",
+  authorizedTowedMass: "",
   rfidTag: "",
+  telematics: true,
+  buyingDate: "",
   acquisitionCost: "",
   acquisitionCurrency: "VND",
-  contractNumber: "",
-  liabilityInsuranceNumber: "",
-  fuelType: "",
-  engineDisplacement: "",
-  authorizedTowedMass: "",
-  productionCountry: "",
-  renovated: false,
-  transportationBusiness: true,
-  tachograph: true,
-  telematics: false,
   containerMappings: [],
 };
 
@@ -93,7 +59,6 @@ const v = (
   plate: string,
   type: VehicleMasterType,
   vin: string,
-  inspectionReportNo: string,
   createdAt: string,
   extra: Partial<VehicleMasterRecord> = {},
 ): VehicleMasterRecord => ({
@@ -102,7 +67,6 @@ const v = (
   plateNumber: plate,
   vehicleType: type,
   chassisNumber: vin,
-  inspectionReportNo,
   createdAt,
   createdBy: "Thuy Vu",
   updatedAt: createdAt,
@@ -111,89 +75,88 @@ const v = (
 });
 
 export const seedVehicleMasters = (): VehicleMasterRecord[] => [
-  v("51C-123.45", "TRUCK", "RLHPC1234M5678901", "KD-2024-000789", "2026-07-02T17:22:07", {
+  v("51C-123.45", "TRUCK", "RLHPC1234M5678901", "2026-07-02T17:22:07", {
     vehicleGroup: "Group 01",
     truckType: "5 tấn",
-    engineNumber: "D6CB1234567",
     productionYear: "2019",
+    fuelType: "Diesel",
     fuelRate: "22",
     fuelCapacity: "200",
     registrationExpiry: "2026-12-31",
-    inspectionNo: "VN-1234567",
     inspectionExpiry: inDays(20),
-    tradeMark: "HYUNDAI",
-    modelCode: "HD210-2018",
-    fuelType: "Diesel",
+    lifetimeLimit: "2044-12-31",
+    containerDimension: "6200×2350×2400",
     authorizedPayload: "5000",
-    kerbMass: "8500",
-    productionCountry: "Korea",
+    rfidTag: "VETC-3401-0012345",
+    buyingDate: "2019-05-20",
+    acquisitionCost: "980000000",
   }),
-  v("51D-846.32", "TRUCK", "RLHFCMF6PNV846320", "KD-2024-000812", "2026-07-03T17:38:43", {
+  v("51D-846.32", "TRUCK", "RLHFCMF6PNV846320", "2026-07-03T17:38:43", {
     vehicleGroup: "Group 02",
     truckType: "8 tấn",
-    engineNumber: "N04C-WL84632",
     productionYear: "2021",
+    fuelType: "Diesel",
     fuelRate: "18",
     fuelCapacity: "160",
     registrationExpiry: "2027-11-19",
     inspectionExpiry: "2027-06-30",
-    tradeMark: "HINO",
-    modelCode: "HINO-XZU730L",
-    fuelType: "Diesel",
+    lifetimeLimit: "2046-12-31",
+    containerDimension: "7400×2350×2500",
     authorizedPayload: "8000",
+    rfidTag: "VETC-3401-0018463",
   }),
-  v("51C-789.45", "TRUCK", "RL4C3H70XPC12345A", "KD-2023-004512", "2026-07-03T17:20:21", {
+  v("51C-789.45", "TRUCK", "RL4C3H70XPC12345A", "2026-07-03T17:20:21", {
     vehicleGroup: "Group 01",
     truckType: "2 tấn",
-    engineNumber: "ENG4DB178945",
     productionYear: "2023",
+    fuelType: "Diesel",
     fuelRate: "12",
     fuelCapacity: "100",
     registrationExpiry: inDays(-3),
     inspectionExpiry: "2027-06-29",
-    tradeMark: "THACO",
-    modelCode: "THACO-FD500-2023",
-    fuelType: "Diesel",
+    lifetimeLimit: "2048-12-31",
+    containerDimension: "4300×1850×1900",
     authorizedPayload: "2500",
   }),
-  v("51R-001.23", "HEAD", "JHDHEAD6RNV001230", "KD-2024-001023", "2026-07-03T17:58:15", {
-    engineNumber: "D6AC0012300",
+  v("51R-001.23", "HEAD", "JHDHEAD6RNV001230", "2026-07-03T17:58:15", {
     productionYear: "2020",
+    fuelType: "Diesel",
     fuelRate: "38",
     fuelCapacity: "400",
     registrationExpiry: "2027-06-30",
     inspectionExpiry: "2027-03-01",
-    tradeMark: "HYUNDAI",
-    modelCode: "HD1000",
-    fuelType: "Diesel",
+    lifetimeLimit: "2045-12-31",
     authorizedTowedMass: "32000",
+    rfidTag: "EPASS-0791-0001230",
     containerMappings: [
       { rid: "m1", trailerType: "20 ft", vehicleGroup: "Group 02" },
       { rid: "m2", trailerType: "40 ft", vehicleGroup: "Group 04" },
     ],
   }),
-  v("29H-574.20", "HEAD", "RLHHEAD6RNV574200", "KD-2024-001187", "2026-07-03T17:53:39", {
-    engineNumber: "J08E-WE32681",
+  v("29H-574.20", "HEAD", "RLHHEAD6RNV574200", "2026-07-03T17:53:39", {
     productionYear: "2022",
+    fuelType: "Diesel",
     fuelRate: "35",
     fuelCapacity: "350",
     registrationExpiry: "2027-11-20",
     inspectionExpiry: inDays(12),
-    tradeMark: "HINO",
-    fuelType: "Diesel",
+    lifetimeLimit: "2047-12-31",
     authorizedTowedMass: "30000",
     containerMappings: [{ rid: "m1", trailerType: "40 ft", vehicleGroup: "Group 04" }],
   }),
-  v("51R-045.67", "TRAILER", "TRL40CMF6PNV04567", "KD-2024-002045", "2026-07-03T18:04:00", {
+  v("51R-045.67", "TRAILER", "TRL40CMF6PNV04567", "2026-07-03T18:04:00", {
     trailerType: "40 ft",
+    productionYear: "2021",
     registrationExpiry: "2027-06-30",
     inspectionExpiry: "2027-03-01",
-    tradeMark: "THACO",
-    modelCode: "THACO-SM940RM",
+    authorizedPayload: "30500",
+    telematics: false,
   }),
-  v("51R-078.90", "TRAILER", "TRL20CMF6PNV07890", "KD-2024-002078", "2026-07-09T03:37:38", {
+  v("51R-078.90", "TRAILER", "TRL20CMF6PNV07890", "2026-07-09T03:37:38", {
     trailerType: "20 ft",
     registrationExpiry: "2027-07-08",
     inspectionExpiry: "2027-07-08",
+    authorizedPayload: "26000",
+    telematics: false,
   }),
 ];

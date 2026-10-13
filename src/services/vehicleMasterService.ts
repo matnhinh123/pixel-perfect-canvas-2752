@@ -10,12 +10,7 @@ import {
   type VehicleMasterRecord,
   type VehicleMasterType,
 } from "@/types";
-import {
-  FUEL_TYPES,
-  TRADE_MARKS,
-  TRUCK_TYPES,
-  VEHICLE_MASTER_GROUPS,
-} from "@/mock-data/vehicleMaster";
+import { FUEL_TYPES, TRUCK_TYPES, VEHICLE_MASTER_GROUPS } from "@/mock-data/vehicleMaster";
 import { tr } from "@/lib/i18n";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -45,37 +40,22 @@ export const newVehicleDraft = (): VehicleDraft => ({
   trailerType: "",
   plateNumber: "",
   chassisNumber: "",
-  engineNumber: "",
   productionYear: "",
+  fuelType: "",
   fuelRate: "",
   fuelCapacity: "",
   registrationExpiry: "",
-  inspectionNo: "",
   inspectionExpiry: "",
   lifetimeLimit: "",
-  policyNumber: "",
-  tradeMark: "",
-  modelCode: "",
-  buyingDate: "",
-  overallDimension: "",
   containerDimension: "",
-  kerbMass: "",
   authorizedPayload: "",
+  authorizedTowedMass: "",
   rfidTag: "",
+  // GPS starts On (required for transport business).
+  telematics: true,
+  buyingDate: "",
   acquisitionCost: "",
   acquisitionCurrency: "VND",
-  contractNumber: "",
-  inspectionReportNo: "",
-  liabilityInsuranceNumber: "",
-  fuelType: "",
-  engineDisplacement: "",
-  authorizedTowedMass: "",
-  productionCountry: "",
-  // The four toggles start On.
-  renovated: true,
-  transportationBusiness: true,
-  tachograph: true,
-  telematics: true,
   containerMappings: [],
 });
 
@@ -92,11 +72,9 @@ const ONLY_FOR: Partial<Record<keyof VehicleDraft, readonly VehicleMasterType[]>
   vehicleGroup: ["TRUCK"],
   truckType: ["TRUCK"],
   trailerType: ["TRAILER"],
-  engineNumber: ["TRUCK", "HEAD"],
   fuelRate: ["TRUCK", "HEAD"],
   fuelCapacity: ["TRUCK", "HEAD"],
   fuelType: ["TRUCK", "HEAD"],
-  engineDisplacement: ["TRUCK", "HEAD"],
   authorizedTowedMass: ["HEAD"],
   containerMappings: ["HEAD"],
 };
@@ -111,11 +89,9 @@ const FIELD_LABEL: Partial<Record<keyof VehicleDraft, string>> = {
   vehicleGroup: "Vehicle Group",
   truckType: "Truck Type",
   trailerType: "Trailer Type",
-  engineNumber: "Engine Number",
   fuelRate: "Fuel Rate",
   fuelCapacity: "Fuel Capacity",
   fuelType: "Fuel Type",
-  engineDisplacement: "Engine Displacement",
   authorizedTowedMass: "Authorized Towed Mass",
   containerMappings: "Container Size Mapping",
 };
@@ -169,10 +145,21 @@ export function normalizeVehicle(r: VehicleMasterRecord): VehicleMasterRecord {
   const mappings = Array.isArray(raw["containerMappings"])
     ? (raw["containerMappings"] as ContainerSizeMapping[])
     : [];
-  const { ownership: _o, ownerId: _oi, insuranceExpiry: _ie, badgeExpiry: _be, ...rest } = raw;
+  // Fields dropped from the master; a stored Tachograph flag counts as the GPS device.
+  const known = new Set<string>([
+    ...Object.keys(newVehicleDraft()),
+    "id",
+    "createdAt",
+    "createdBy",
+    "updatedAt",
+    "updatedBy",
+    "deleted",
+  ]);
+  const rest = Object.fromEntries(Object.entries(raw).filter(([k]) => known.has(k)));
   return {
     ...newVehicleDraft(),
     ...(rest as Partial<VehicleMasterRecord>),
+    telematics: raw["telematics"] === true || raw["tachograph"] === true,
     vehicleType,
     vehicleGroup: VEHICLE_GROUP_OPTIONS.includes(group) ? group : "",
     truckType: str("truckType"),
@@ -290,24 +277,11 @@ const norm = (v: string) => v.trim().toUpperCase();
 /** SR-VEH-04: Vietnamese plate, e.g. 51C-123.45, 30A-12345, 29LD-123.45. */
 export const PLATE = /^\d{2}[A-Z]{1,2}\d?-(\d{3}\.\d{2}|\d{4,5})$/;
 const VIN = /^[A-Z0-9]+$/;
-const CODE = /^[A-Za-z0-9-]+$/;
 
 /** SR-VEH-03: always required (Truck Type is added for TRUCK — SR-VEH-22). */
-export const REQUIRED_FIELDS = [
-  "vehicleType",
-  "plateNumber",
-  "chassisNumber",
-  "inspectionReportNo",
-] as const;
+export const REQUIRED_FIELDS = ["vehicleType", "plateNumber", "chassisNumber"] as const;
 /** Fields that live in the folded Specifications panel (it unfolds when one of them has an error). */
-export const SPEC_FIELDS = [
-  "modelCode",
-  "kerbMass",
-  "authorizedPayload",
-  "acquisitionCost",
-  "engineDisplacement",
-  "authorizedTowedMass",
-];
+export const SPEC_FIELDS = ["authorizedPayload", "acquisitionCost", "authorizedTowedMass"];
 
 export function validateVehicle(d: VehicleDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
@@ -335,18 +309,6 @@ export function validateVehicle(d: VehicleDraft, id?: string): Record<string, st
   else if (others.some((x) => norm(x.chassisNumber ?? "") === vin))
     e["chassisNumber"] = tr(`Số khung ${vin} đã tồn tại.`, `Chassis number ${vin} already exists.`);
 
-  if (!d.inspectionReportNo.trim()) req("inspectionReportNo", "Inspection Report No");
-  for (const [k, label] of [
-    ["inspectionReportNo", "Inspection Report No"],
-    ["inspectionNo", "Vehicle Inspection No"],
-    ["modelCode", "Model Code"],
-  ] as const)
-    if (d[k].trim() && !e[k] && !CODE.test(d[k].trim()))
-      e[k] = tr(
-        `${label} chỉ gồm chữ, số và gạch nối.`,
-        `${label} may only contain letters, digits and hyphens.`,
-      );
-
   // SR-VEH-22: Truck Type is required for a truck.
   if (d.vehicleType === "TRUCK" && !d.truckType) req("truckType", "Truck Type");
 
@@ -358,14 +320,7 @@ export function validateVehicle(d: VehicleDraft, id?: string): Record<string, st
         "Production year must be 4 digits between 1900 and 2100.",
       );
   }
-  for (const k of [
-    "fuelRate",
-    "fuelCapacity",
-    "kerbMass",
-    "authorizedPayload",
-    "engineDisplacement",
-    "authorizedTowedMass",
-  ] as const)
+  for (const k of ["fuelRate", "fuelCapacity", "authorizedPayload", "authorizedTowedMass"] as const)
     if (showsField(d.vehicleType, k) && d[k] && !(Number(d[k]) > 0))
       e[k] = tr("Giá trị phải lớn hơn 0.", "Value must be greater than 0.");
 
@@ -400,36 +355,21 @@ const LABELS: [keyof VehicleDraft, string][] = [
   ["trailerType", "Trailer Type"],
   ["plateNumber", "Plate Number"],
   ["chassisNumber", "Chassis Number (VIN)"],
-  ["engineNumber", "Engine Number"],
   ["productionYear", "Production Year"],
+  ["fuelType", "Fuel Type"],
   ["fuelRate", "Fuel Rate"],
   ["fuelCapacity", "Fuel Capacity"],
   ["registrationExpiry", "Registration Expiration Date"],
-  ["inspectionNo", "Vehicle Inspection No"],
   ["inspectionExpiry", "Inspection Expiration Date"],
   ["lifetimeLimit", "Lifetime Limit"],
-  ["policyNumber", "Comprehensive Policy Number"],
-  ["tradeMark", "Trade Mark"],
-  ["modelCode", "Model Code"],
-  ["buyingDate", "Buying Date"],
-  ["overallDimension", "Overall Dimension"],
   ["containerDimension", "Cargo / Container Dimensions"],
-  ["kerbMass", "Kerb Mass"],
   ["authorizedPayload", "Authorized Payload"],
-  ["rfidTag", "RFID / Barcode Tag"],
+  ["authorizedTowedMass", "Authorized Towed Mass"],
+  ["rfidTag", "ETC / RFID Tag"],
+  ["telematics", "GPS / Journey Monitoring Device"],
+  ["buyingDate", "Buying Date"],
   ["acquisitionCost", "Acquisition Cost"],
   ["acquisitionCurrency", "Acquisition Currency"],
-  ["contractNumber", "Contract Number"],
-  ["inspectionReportNo", "Inspection Report No"],
-  ["liabilityInsuranceNumber", "Liability Insurance Number"],
-  ["fuelType", "Fuel Type"],
-  ["engineDisplacement", "Engine Displacement"],
-  ["authorizedTowedMass", "Authorized Towed Mass"],
-  ["productionCountry", "Production Country"],
-  ["renovated", "Modification"],
-  ["transportationBusiness", "Transportation Business"],
-  ["tachograph", "Equipped with Tachograph"],
-  ["telematics", "Telematics"],
 ];
 
 const mappingText = (ms: ContainerSizeMapping[]) =>
@@ -447,10 +387,6 @@ export const vehicleService = {
       ...d,
       plateNumber: norm(d.plateNumber),
       chassisNumber: norm(d.chassisNumber),
-      engineNumber: d.engineNumber.trim(),
-      modelCode: d.modelCode.trim(),
-      inspectionNo: d.inspectionNo.trim(),
-      inspectionReportNo: d.inspectionReportNo.trim(),
     });
     const stored = id ? vehicleMasterRepository.get(id) : undefined;
     if (!stored) {
@@ -510,16 +446,11 @@ const vehicleDraftOfRow = (r: Record<string, string>): VehicleDraft => ({
   truckType: pick(r["truckType"], TRUCK_TYPES) || "",
   trailerType: pick(r["trailerType"], TRAILER_TYPES) || "",
   chassisNumber: r["chassisNumber"] ?? "",
-  engineNumber: r["engineNumber"] ?? "",
   productionYear: r["productionYear"] ?? "",
   fuelRate: r["fuelRate"] ?? "",
   fuelCapacity: r["fuelCapacity"] ?? "",
   registrationExpiry: dateCell(r["registrationExpiry"]),
-  inspectionNo: r["inspectionNo"] ?? "",
   inspectionExpiry: dateCell(r["inspectionExpiry"]),
-  inspectionReportNo: r["inspectionReportNo"] ?? "",
-  tradeMark: pick(r["tradeMark"], TRADE_MARKS) || (r["tradeMark"] ?? ""),
-  modelCode: r["modelCode"] ?? "",
   fuelType: pick(r["fuelType"], FUEL_TYPES) || (r["fuelType"] ?? ""),
   authorizedPayload: (r["authorizedPayload"] ?? "").replace(/[\s,]/g, ""),
   buyingDate: dateCell(r["buyingDate"]),
@@ -556,12 +487,6 @@ export const vehicleImportConfig = draftImportConfig<VehicleDraft>({
       example: "RLHPC1234M5678901",
       aliases: ["VIN", "Số khung"],
     },
-    {
-      key: "engineNumber",
-      header: "Engine Number",
-      example: "",
-      aliases: ["Engine No.", "Số máy"],
-    },
     { key: "productionYear", header: "Production Year", example: "2022" },
     { key: "fuelRate", header: "Fuel Rate (l/100km)", example: "22", aliases: ["Fuel Rate"] },
     {
@@ -576,21 +501,12 @@ export const vehicleImportConfig = draftImportConfig<VehicleDraft>({
       example: "2027-06-30",
       aliases: ["Registration Expiry"],
     },
-    { key: "inspectionNo", header: "Vehicle Inspection No", example: "" },
     {
       key: "inspectionExpiry",
       header: "Inspection Expiration Date",
       example: "2027-03-01",
       aliases: ["Inspection Expiry", "Hạn đăng kiểm"],
     },
-    {
-      key: "inspectionReportNo",
-      header: "Inspection Report No",
-      required: true,
-      example: "KD-2024-000789",
-    },
-    { key: "tradeMark", header: "Trade Mark", example: "HINO" },
-    { key: "modelCode", header: "Model Code", example: "", aliases: ["Model"] },
     { key: "fuelType", header: "Fuel Type", example: "Diesel" },
     { key: "authorizedPayload", header: "Authorized Payload (kg)", example: "5000" },
     { key: "buyingDate", header: "Buying Date", example: "" },
@@ -635,16 +551,11 @@ export const vehicleImportConfig = draftImportConfig<VehicleDraft>({
         type === "TRUCK" ? "5 tấn" : "",
         type === "TRAILER" ? (i % 2 ? "20 ft" : "40 ft") : "",
         `RLHIMP${String(100000 + i)}${n}`,
-        type === "TRAILER" ? "" : `ENG${n}`,
         String(2018 + (i % 6)),
         type === "TRAILER" ? "" : "22",
         type === "TRAILER" ? "" : "300",
         `2027-${String((i % 12) + 1).padStart(2, "0")}-15`,
-        "",
         "2027-01-31",
-        `KD-2026-${String(1000 + i)}`,
-        type === "TRUCK" ? "HINO" : "HYUNDAI",
-        "",
         type === "TRAILER" ? "" : "Diesel",
         type === "TRUCK" ? "5000" : "",
         "",

@@ -85,8 +85,8 @@ export const tollStationRepository = createCollection<TollGateRecord>(
 );
 /** Vehicle master (one row per physical vehicle). */
 export const vehicleMasterRepository = createCollection<VehicleMasterRecord>(
-  // ".v3": TRUCK / HEAD / TRAILER, Truck / Trailer Type and Container Size Mapping — load the new demo seed.
-  "vehicle-masters.v3",
+  // ".v4": paperwork-only fields dropped, demo seed gains payload / cargo space / ETC tag / lifetime.
+  "vehicle-masters.v4",
   seedVehicleMasters,
 );
 /** Business Partner master (customers and vendors — one partner, several roles). */
@@ -105,10 +105,10 @@ export const commonCodeRepository = createCollection<CommonCodeRecord>(
   "common-codes",
   seedCommonCodes,
 );
-// Location Sub-Type was removed (one Location Type only): retire the stored type once.
-{
-  const sub = commonCodeRepository.get(CC.LOCATION_SUB_TYPE);
-  if (sub && !sub.deleted) commonCodeRepository.update(sub.id, (p) => ({ ...p, deleted: true }));
+// Location Sub-Type and vehicle Trade Mark were removed: retire the stored types once.
+for (const code of [CC.LOCATION_SUB_TYPE, CC.TRADE_MARK]) {
+  const t = commonCodeRepository.get(code);
+  if (t && !t.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: true }));
 }
 // Location Type "Port" was renamed "Seaport": stored option + stored locations follow once.
 {

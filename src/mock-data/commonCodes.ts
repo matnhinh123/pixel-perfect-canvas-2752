@@ -21,13 +21,7 @@ import {
   LEGAL_TYPES,
   WO_ACCESS_POLICIES,
 } from "./businessPartners";
-import {
-  FUEL_TYPES,
-  TRADE_MARKS,
-  TRUCK_TYPES,
-  VEHICLE_MASTER_GROUPS,
-  VEHICLE_TYPES,
-} from "./vehicleMaster";
+import { FUEL_TYPES, TRUCK_TYPES, VEHICLE_MASTER_GROUPS, VEHICLE_TYPES } from "./vehicleMaster";
 import { LOCATION_TYPES } from "./locationCatalog";
 import { COST_TAX_EVIDENCES, COST_TAX_TARIFFS, COST_UOM_CATALOG } from "./costMaster";
 import { FIXED_COST_TYPES, FIXED_COST_VEHICLE_TYPES } from "./fixedCost";
@@ -50,6 +44,7 @@ export const CC = {
   TRUCK_TYPE: "VH10",
   VEHICLE_GROUP: "VH11",
   FUEL_TYPE: "VH12",
+  /** Removed (Trade Mark dropped from the vehicle master); kept to retire the stored type. */
   TRADE_MARK: "VH13",
   // Location
   LOCATION_TYPE: "BP16",
@@ -196,10 +191,7 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
     [VH, "Vehicle Create / Edit › Container Size Mapping", "Vehicle Group"],
   ]),
   type(CC.FUEL_TYPE, "Fuel Type", "Customizable", FUEL_TYPES, [
-    [VH, "Vehicle Create / Edit › Specifications", "Fuel Type"],
-  ]),
-  type(CC.TRADE_MARK, "Trade Mark", "Customizable", TRADE_MARKS, [
-    [VH, "Vehicle Create / Edit › Specifications", "Trade Mark"],
+    [VH, "Vehicle Create / Edit › Fuel", "Fuel Type"],
   ]),
   // ---------------------------------------------------------------- Location
   type(

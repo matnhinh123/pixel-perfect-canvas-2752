@@ -126,13 +126,12 @@ const columnsFor = (t: T, days: number): ListColumn<Row>[] => [
     value: (r) => r.chassisNumber,
   },
   {
-    key: "engineNumber",
-    label: "Engine Number",
+    key: "authorizedPayload",
+    label: "Authorized Payload (kg)",
     type: "text",
-    width: 150,
-    truncate: true,
-    value: (r) => r.engineNumber,
-    render: (r) => r.engineNumber || dash,
+    width: 170,
+    value: (r) => r.authorizedPayload,
+    render: (r) => (r.authorizedPayload ? Number(r.authorizedPayload).toLocaleString() : dash),
   },
   {
     key: "registrationExpiry",
@@ -222,7 +221,7 @@ function VehicleList() {
       rows={rows}
       columns={columns}
       searchPlaceholder="Tìm theo biển số, số khung, số máy"
-      searchValues={(r) => [r.plateNumber, r.chassisNumber, r.engineNumber]}
+      searchValues={(r) => [r.plateNumber, r.chassisNumber]}
       quickFilters={[
         {
           key: "type",
