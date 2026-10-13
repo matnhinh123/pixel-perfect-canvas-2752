@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useMemo, useState } from "react";
 import { Download, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +22,7 @@ const num = "px-3 py-2 text-right tabular-nums";
 
 /** SFC.03 — fixed costs picked per vehicle type, with the Total Fixed Cost fed to Pricing List. */
 export function FixedCostSummaryTab() {
+  const vehicleTypes = useCodeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES);
   const fixedAll = useCollection(fixedCostRepository);
   const summaries = useCollection(fixedCostSummaryRepository);
   const costsAll = useCollection(costItemRepository);
@@ -127,7 +130,7 @@ export function FixedCostSummaryTab() {
               className="h-10 w-full"
               value={vehicleType}
               onChange={pickVehicle}
-              options={FIXED_COST_VEHICLE_TYPES}
+              options={withCurrent(vehicleTypes, vehicleType)}
             />
           </Field>
           <Field label="Assign Cost Code" required error={errors["assignCost"]}>

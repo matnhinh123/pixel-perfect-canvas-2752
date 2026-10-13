@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions } from "@/services/commonCodeService";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -310,6 +312,7 @@ function TollStationView({ station }: { station: TollGateRecord }) {
 
 function TollStationForm({ source }: { source: TollGateRecord | null }) {
   const navigate = useNavigate();
+  const feeTypes = useCodeOptions(CC.TOLL_FEE_TYPE, FEE_TYPE_OPTIONS);
   const isNew = !source;
   const initial = useMemo(() => (source ? draftOf(source) : newTollStationDraft()), [source]);
   const [d, setD] = useState<TollStationDraft>(initial);
@@ -421,7 +424,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
               <NativeSelect
                 value={feeTypeName(d.feeType)}
                 onChange={(v) => set("feeType", feeTypeFromLabel(v, d.feeType))}
-                options={FEE_TYPE_OPTIONS}
+                options={feeTypes}
               />
             </Field>
             <Field label="Location" hint="Search by location code or name.">

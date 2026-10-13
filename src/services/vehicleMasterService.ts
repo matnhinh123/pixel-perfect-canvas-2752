@@ -305,7 +305,6 @@ export const SPEC_FIELDS = [
   "kerbMass",
   "authorizedPayload",
   "acquisitionCost",
-  "inspectionReportNo",
   "engineDisplacement",
   "authorizedTowedMass",
 ];

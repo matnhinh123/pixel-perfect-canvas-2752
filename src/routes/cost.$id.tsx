@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, useCodeOptionsOf, withCurrent } from "@/services/commonCodeService";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { History, Pencil, XCircle } from "lucide-react";
@@ -139,7 +141,13 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
 
   const groupIds = groups.map((g) => g.id);
   // Keep a stored group selectable even if it was deactivated / removed from the list.
-  const uoms = COST_UOM_CATALOG[d.uomCategory] ?? [];
+  const taxEvidences = useCodeOptions(CC.TAX_EVIDENCE, COST_TAX_EVIDENCES);
+  const taxTariffs = useCodeOptions(CC.TAX_TARIFF, COST_TAX_TARIFFS);
+  const uomCategories = useCodeOptions(CC.UOM_CATEGORY, Object.keys(COST_UOM_CATALOG));
+  const uoms = withCurrent(
+    useCodeOptionsOf(CC.UOM, d.uomCategory, COST_UOM_CATALOG[d.uomCategory] ?? []),
+    d.uom,
+  );
 
   const back = () =>
     source
@@ -281,20 +289,34 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
         <CollapsiblePanel title="Other Information">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field label="Tax Evidence" className={S4}>
-              <NativeSelect {...select("taxEvidence", COST_TAX_EVIDENCES, "Select Tax Evidence")} />
+              <NativeSelect
+                {...select(
+                  "taxEvidence",
+                  withCurrent(taxEvidences, d.taxEvidence),
+                  "Select Tax Evidence",
+                )}
+              />
             </Field>
             <Field label="Def Currency" className={S4}>
               <NativeSelect {...select("currency", COST_CURRENCIES, "Select currency")} />
             </Field>
             <Field label="Default Tax Tariff" className={S4}>
               <NativeSelect
-                {...select("taxTariff", COST_TAX_TARIFFS, "Select Default Tax Tariff")}
+                {...select(
+                  "taxTariff",
+                  withCurrent(taxTariffs, d.taxTariff),
+                  "Select Default Tax Tariff",
+                )}
               />
             </Field>
             <Field label="Category UoM" error={errors["uomCategory"]} className={S4}>
               <NativeSelect
                 {...{
-                  ...select("uomCategory", Object.keys(COST_UOM_CATALOG), "Select Category UoM"),
+                  ...select(
+                    "uomCategory",
+                    withCurrent(uomCategories, d.uomCategory),
+                    "Select Category UoM",
+                  ),
                   onChange: (v) => patch({ uomCategory: v, uom: "" }),
                 }}
               />

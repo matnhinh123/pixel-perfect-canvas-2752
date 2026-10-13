@@ -1,5 +1,6 @@
 import type { BaseRecord, LocationRecord } from "@/types";
 import { guessLocationType, normalizeLocationType } from "./locationCatalog";
+import { CODE_KINDS, codeKindOf, type CodeKind } from "./standardCodes";
 
 const loc = (
   id: string,
@@ -18,6 +19,56 @@ const coded = (
   lat: number,
   lng: number,
 ): LocationRecord => ({ ...loc(`LOC-${code}`, name, address, province, lat, lng), code });
+
+/** Seed point that existed before it got its real UN/LOCODE: same id, real code. */
+const recoded = (l: LocationRecord, code: string): LocationRecord => ({ ...l, code });
+
+/** Real ports / ICDs (UN/LOCODE) and airports (IATA, OurAirports coordinates). */
+const STANDARD_SEED = (): LocationRecord[] => [
+  coded("VNHPH", "Cảng Hải Phòng", "Quận Ngô Quyền, Hải Phòng", "Hải Phòng", 20.8651, 106.6838),
+  coded(
+    "VNHPP",
+    "Cảng Tân Cảng Hiệp Phước",
+    "Huyện Nhà Bè, TP. Hồ Chí Minh",
+    "TP. Hồ Chí Minh",
+    10.6333,
+    106.75,
+  ),
+  coded(
+    "VNCMT",
+    "Cảng Cái Mép (CMIT)",
+    "TX. Phú Mỹ, Bà Rịa - Vũng Tàu",
+    "Bà Rịa - Vũng Tàu",
+    10.5167,
+    107.0,
+  ),
+  // No UN/LOCODE of its own: uses Nhon Trach (VNNHT), the code of its area. Coordinates: OpenStreetMap.
+  coded(
+    "VNNHT",
+    "Cảng Phước An",
+    "Xã Phước An, Huyện Nhơn Trạch, Đồng Nai",
+    "Đồng Nai",
+    10.6176,
+    106.9957,
+  ),
+  coded("VNILB", "ICD Tân Cảng - Long Bình", "TP. Biên Hòa, Đồng Nai", "Đồng Nai", 10.9, 106.8667),
+  coded("VNSTC", "ICD Sóng Thần", "TP. Dĩ An, Bình Dương", "Bình Dương", 10.9019, 106.7524),
+  coded("VNVCA", "Cảng Cần Thơ (Cái Cui)", "Quận Cái Răng, Cần Thơ", "Cần Thơ", 10.0333, 105.7833),
+  coded(
+    "SGN",
+    "Sân bay Tân Sơn Nhất",
+    "Quận Tân Bình, TP. Hồ Chí Minh",
+    "TP. Hồ Chí Minh",
+    10.8188,
+    106.652,
+  ),
+  coded("HAN", "Sân bay Nội Bài", "Huyện Sóc Sơn, Hà Nội", "Hà Nội", 21.2212, 105.807),
+  coded("DAD", "Sân bay Đà Nẵng", "Quận Hải Châu, Đà Nẵng", "Đà Nẵng", 16.0439, 108.199),
+  coded("CXR", "Sân bay Cam Ranh", "TP. Cam Ranh, Khánh Hòa", "Khánh Hòa", 11.9982, 109.219),
+  coded("PQC", "Sân bay Phú Quốc", "TP. Phú Quốc, Kiên Giang", "Kiên Giang", 10.1698, 103.9935),
+  coded("HPH", "Sân bay Cát Bi", "Quận Hải An, Hải Phòng", "Hải Phòng", 20.8174, 106.7243),
+  coded("VCA", "Sân bay Cần Thơ", "Quận Bình Thủy, Cần Thơ", "Cần Thơ", 10.0834, 105.7094),
+];
 
 /** Location master data (real-world coordinates, used by autocomplete, the mock provider and import checks). */
 export const LOCATIONS: LocationRecord[] = [
@@ -91,14 +142,23 @@ export const LOCATIONS: LocationRecord[] = [
   loc("LOC-CHULAI", "KKT Chu Lai", "Huyện Núi Thành, Quảng Nam", "Quảng Nam", 15.414, 108.68),
   loc("LOC-HOIAN", "Hội An", "TP. Hội An, Quảng Nam", "Quảng Nam", 15.8801, 108.338),
   loc("LOC-DANANG", "Đà Nẵng", "TP. Đà Nẵng", "Đà Nẵng", 16.0544, 108.2022),
-  loc("LOC-TIENSA", "Cảng Tiên Sa", "Quận Sơn Trà, Đà Nẵng", "Đà Nẵng", 16.1225, 108.218),
+  recoded(
+    loc("LOC-TIENSA", "Cảng Tiên Sa", "Quận Sơn Trà, Đà Nẵng", "Đà Nẵng", 16.1225, 108.218),
+    "VNDTS",
+  ),
   loc("LOC-HUE", "Huế", "TP. Huế, Thừa Thiên Huế", "Thừa Thiên Huế", 16.4637, 107.5909),
   // Miền Bắc
   loc("LOC-HANOI", "Hà Nội", "Quận Hoàn Kiếm, Hà Nội", "Hà Nội", 21.0285, 105.8542),
-  loc("LOC-GIALAM", "ICD Gia Lâm", "Quận Long Biên, Hà Nội", "Hà Nội", 21.0359, 105.9257),
+  recoded(
+    loc("LOC-GIALAM", "ICD Gia Lâm", "Quận Long Biên, Hà Nội", "Hà Nội", 21.0359, 105.9257),
+    "VNGIL",
+  ),
   loc("LOC-HAIDUONG", "Hải Dương", "TP. Hải Dương, Hải Dương", "Hải Dương", 20.9373, 106.3146),
   loc("LOC-HAIPHONG", "Hải Phòng", "Quận Hồng Bàng, Hải Phòng", "Hải Phòng", 20.8449, 106.6881),
-  loc("LOC-DINHVU", "Cảng Đình Vũ", "Quận Hải An, Hải Phòng", "Hải Phòng", 20.8379, 106.7737),
+  recoded(
+    loc("LOC-DINHVU", "Cảng Đình Vũ", "Quận Hải An, Hải Phòng", "Hải Phòng", 20.8379, 106.7737),
+    "VNDVU",
+  ),
   // Địa điểm có mã (port / KCX / nông trường) — toạ độ ước lượng theo vị trí thực tế
   coded(
     "DKCBF",
@@ -165,13 +225,16 @@ export const LOCATIONS: LocationRecord[] = [
     10.7704,
     106.7858,
   ),
-  coded(
-    "VNCLN",
-    "Cảng Quảng Ninh / Cái Lân",
-    "TP. Hạ Long, Quảng Ninh",
-    "Quảng Ninh",
-    20.961,
-    107.062,
+  recoded(
+    loc(
+      "LOC-VNCLN",
+      "Cảng Quảng Ninh / Cái Lân",
+      "TP. Hạ Long, Quảng Ninh",
+      "Quảng Ninh",
+      20.961,
+      107.062,
+    ),
+    "VNHLG",
   ),
   coded(
     "VNSGN",
@@ -189,6 +252,8 @@ export const LOCATIONS: LocationRecord[] = [
     19.334,
     105.774,
   ),
+  // Real UN/LOCODE ports / ICDs and IATA airports (codes from the reference data).
+  ...STANDARD_SEED(),
 ];
 
 export const findLocation = (id: string | undefined) =>
@@ -209,14 +274,16 @@ export type LocationMasterRecord = LocationRecord &
   BaseRecord & {
     // Location fields. Optional: rows saved before these existed simply lack them.
     country?: string;
-    /** Port / Airport / Warehouse / Farm / Customer Site (legacy values are normalized on read). */
+    /** Seaport / Airport / Warehouse / Farm / Customer Site (legacy values are normalized on read). */
     locationType?: string;
-    /** Optional, Port only: Seaport / ICD / River Port. */
-    locationSubType?: string;
+    /** UN/LOCODE / IATA Code / Local Code, chosen on the form (older rows: derived from the code). */
+    codeType?: string;
     unLocode?: string;
     iataCode?: string;
     remark?: string;
     // Legacy fields (no longer in scope) — kept so older stored rows still type-check.
+    /** Removed: one Location Type only. Dropped when the row is saved again. */
+    locationSubType?: string;
     serviceMode?: string;
     externalCode?: string;
     operatorName?: string;
@@ -224,37 +291,38 @@ export type LocationMasterRecord = LocationRecord &
     bonded?: boolean;
   };
 
-/** "Standard" when the location carries an international code (UN/LOCODE or IATA), else "Internal". */
-export const locationOrigin = (
-  l: Pick<LocationMasterRecord, "unLocode" | "iataCode">,
-): "Standard" | "Internal" => (l.unLocode?.trim() || l.iataCode?.trim() ? "Standard" : "Internal");
+/** What the code is: a UN/LOCODE or IATA Code from the reference data, else a tenant Local Code. */
+export const locationOrigin = (l: Pick<LocationMasterRecord, "code" | "codeType">): CodeKind =>
+  (CODE_KINDS as readonly string[]).includes(l.codeType ?? "")
+    ? (l.codeType as CodeKind)
+    : codeKindOf(l.code);
 
 /** Brings a stored row (possibly saved before the scope sign-off) to the current model. */
 export function normalizeLocation(l: LocationMasterRecord): LocationMasterRecord {
-  const { type, sub } = normalizeLocationType(l.locationType, l.locationSubType);
-  const unLocode = type === "Port" ? (l.unLocode ?? "") : "";
-  const iataCode = type === "Airport" ? (l.iataCode ?? "") : "";
+  const type = normalizeLocationType(l.locationType);
+  // The code itself says whether it is a UN/LOCODE or an IATA code.
+  const kind = locationOrigin(l);
+  const unLocode = kind === "UN/LOCODE" ? (l.code ?? "") : "";
+  const iataCode = kind === "IATA Code" ? (l.code ?? "") : "";
   if (
     type === (l.locationType ?? "") &&
-    sub === (l.locationSubType ?? "") &&
     unLocode === (l.unLocode ?? "") &&
     iataCode === (l.iataCode ?? "")
   )
     return l;
-  return { ...l, locationType: type, locationSubType: sub, unLocode, iataCode };
+  return { ...l, locationType: type, unLocode, iataCode };
 }
 
 export const seedLocations = (): LocationMasterRecord[] =>
   LOCATIONS.map((l) => {
-    const g = guessLocationType(l.name);
-    // Coded ports in the seed use their UN/LOCODE as the location code.
-    const unLocode = g.type === "Port" && l.code && /^VN[A-Z]{3}$/.test(l.code) ? l.code : "";
+    const kind = codeKindOf(l.code);
     return {
       ...l,
       country: "Vietnam",
-      locationType: g.type,
-      locationSubType: g.sub,
-      unLocode,
+      locationType: guessLocationType(l.name),
+      codeType: kind,
+      unLocode: kind === "UN/LOCODE" ? (l.code ?? "") : "",
+      iataCode: kind === "IATA Code" ? (l.code ?? "") : "",
       status: "Active",
       createdAt: "2026-09-01T02:00:00.000Z",
       createdBy: "Nguyễn Minh Anh",
@@ -262,3 +330,17 @@ export const seedLocations = (): LocationMasterRecord[] =>
       updatedBy: "Nguyễn Minh Anh",
     };
   });
+
+/** Seed rows added after the first release: inserted once into existing storage when missing. */
+export const seedStandardLocations = (): LocationMasterRecord[] => {
+  const ids = new Set(STANDARD_SEED().map((l) => l.id));
+  return seedLocations().filter((l) => ids.has(l.id));
+};
+
+/** Seed points that got their real UN/LOCODE: id → code they had before (undefined = none). */
+export const SEED_CODE_FIXES: Record<string, { from: string | undefined; to: string }> = {
+  "LOC-TIENSA": { from: undefined, to: "VNDTS" },
+  "LOC-GIALAM": { from: undefined, to: "VNGIL" },
+  "LOC-DINHVU": { from: undefined, to: "VNDVU" },
+  "LOC-VNCLN": { from: "VNCLN", to: "VNHLG" },
+};

@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions } from "@/services/commonCodeService";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { Receipt } from "lucide-react";
@@ -175,7 +177,11 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
   ];
 };
 
-const quickFiltersFor = (t: T): QuickFilter[] => {
+const quickFiltersFor = (
+  t: T,
+  routeTypes: readonly string[] = ROUTE_TYPES,
+  terrains: readonly string[] = TERRAINS,
+): QuickFilter[] => {
   return [
     // Options show the value only; the filter name is on the "All" entry. Vehicle = the
     // Truck / Container switch on the route map.
@@ -190,7 +196,7 @@ const quickFiltersFor = (t: T): QuickFilter[] => {
     {
       key: "type",
       allLabel: t("Loại tuyến: Tất cả", "Route Type: All"),
-      options: ROUTE_TYPES.map((v) => ({
+      options: routeTypes.map((v) => ({
         label: v,
         conditions: [{ field: "type", operator: "eq", value: v }],
       })),
@@ -198,7 +204,7 @@ const quickFiltersFor = (t: T): QuickFilter[] => {
     {
       key: "terrain",
       allLabel: t("Địa hình: Tất cả", "Terrain: All"),
-      options: TERRAINS.map((v) => ({
+      options: terrains.map((v) => ({
         label: v,
         conditions: [{ field: "terrain", operator: "eq", value: v }],
       })),
@@ -240,8 +246,12 @@ function RoutingList() {
   // `t` is recreated every render; the language is the real dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const columns = useMemo(() => columnsFor(t), [lang]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const quickFilters = useMemo(() => quickFiltersFor(t), [lang]);
+  const routeTypes = useCodeOptions(CC.ROUTE_TYPE, ROUTE_TYPES);
+  const terrains = useCodeOptions(CC.TERRAIN, TERRAINS);
+  const quickFilters = useMemo(
+    () => quickFiltersFor(t, routeTypes, terrains),
+    [t, routeTypes, terrains],
+  );
   return (
     <EntityListPage<RouteRecord>
       screen="routing"

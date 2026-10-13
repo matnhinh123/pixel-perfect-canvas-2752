@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useMemo, useState } from "react";
 import { Check, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -93,6 +95,7 @@ function AddTollBody({
   onAdd: (toll: TollStation, leg: TollLeg) => void;
   onCancel: () => void;
 }) {
+  const feeTypes = useCodeOptions(CC.ROUTE_FEE_TYPE, FEE_TYPES);
   const { t } = useT();
   const [tab, setTab] = useState<"list" | "new">("list");
   const [leg, setLeg] = useState<TollLeg>("Outbound");
@@ -182,7 +185,7 @@ function AddTollBody({
         <NativeSelect
           value={fee.feeType}
           onChange={(v) => setFee((f) => ({ ...f, feeType: v as FeeType }))}
-          options={FEE_TYPES}
+          options={withCurrent(feeTypes, fee.feeType)}
           labels={FEE_TYPE_LABEL}
         />
       </Field>

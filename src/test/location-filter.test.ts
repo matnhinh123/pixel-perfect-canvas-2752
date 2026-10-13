@@ -9,11 +9,9 @@ import {
   parseLocationSearch,
   provincesFor,
   rangeError,
-  subTypesFor,
   tenantYmd,
   toLocationSearch,
   withCountries,
-  withTypes,
   withoutField,
   type LocationFilter,
 } from "@/services/locationFilter";
@@ -26,7 +24,6 @@ const loc = (p: Partial<LocationMasterRecord>): LocationMasterRecord => ({
   province: "TP. Hồ Chí Minh",
   country: "Vietnam",
   locationType: "Warehouse",
-  locationSubType: "",
   lat: 10.8,
   lng: 106.7,
   status: "Active",
@@ -40,11 +37,9 @@ const loc = (p: Partial<LocationMasterRecord>): LocationMasterRecord => ({
 const rows = [
   loc({ code: "A" }),
   loc({
-    code: "B",
+    code: "VNILB",
     province: "Đồng Nai",
-    locationType: "Port",
-    locationSubType: "ICD",
-    unLocode: "VNDNA",
+    locationType: "Seaport",
   }),
   loc({
     code: "C",
@@ -61,15 +56,15 @@ const codes = (filter: LocationFilter) =>
 
 describe("Location filters", () => {
   it("BR1: combines every condition with AND", () => {
-    expect(codes(f({}))).toEqual(["A", "B", "C"]);
+    expect(codes(f({}))).toEqual(["A", "VNILB", "C"]);
     expect(codes(f({ types: ["Warehouse"] }))).toEqual(["A", "C"]);
     expect(codes(f({ types: ["Warehouse"], status: "Active" }))).toEqual(["A"]);
-    expect(codes(f({ countries: ["Vietnam"], provinces: ["Đồng Nai"] }))).toEqual(["B"]);
-    expect(codes(f({ provinces: ["Đồng Nai", "Phnom Penh"] }))).toEqual(["B", "C"]);
-    expect(codes(f({ origin: "Standard" }))).toEqual(["B"]);
-    expect(codes(f({ subTypes: ["ICD"] }))).toEqual(["B"]);
+    expect(codes(f({ countries: ["Vietnam"], provinces: ["Đồng Nai"] }))).toEqual(["VNILB"]);
+    expect(codes(f({ provinces: ["Đồng Nai", "Phnom Penh"] }))).toEqual(["VNILB", "C"]);
+    expect(codes(f({ origin: "UN/LOCODE" }))).toEqual(["VNILB"]);
+    expect(codes(f({ origin: "Local Code" }))).toEqual(["A", "C"]);
     expect(codes(f({ hasCoordinates: "No" }))).toEqual(["C"]);
-    expect(codes(f({ countries: ["Vietnam", "Cambodia"] }))).toEqual(["A", "B", "C"]);
+    expect(codes(f({ countries: ["Vietnam", "Cambodia"] }))).toEqual(["A", "VNILB", "C"]);
   });
 
   it("BR2: Province/City options follow Country; changing Country clears a province that no longer fits", () => {
@@ -78,16 +73,6 @@ describe("Location filters", () => {
     const picked = f({ countries: ["Vietnam", "Cambodia"], provinces: ["Đồng Nai", "Phnom Penh"] });
     expect(withCountries(picked, ["Cambodia"], rows).provinces).toEqual(["Phnom Penh"]);
     expect(withCountries(picked, [], rows).provinces).toEqual(["Đồng Nai", "Phnom Penh"]);
-  });
-
-  it("Sub Type options follow Location Type", () => {
-    expect(subTypesFor(["Warehouse"])).toContain("Cold Storage");
-    expect(subTypesFor(["Warehouse"])).not.toContain("ICD");
-    expect(subTypesFor(["Port", "Farm"])).toEqual(expect.arrayContaining(["ICD", "Crop Farm"]));
-    expect(subTypesFor(["Port"])).toContain("ICD");
-    expect(withTypes(f({ types: ["Port"], subTypes: ["ICD"] }), ["Warehouse"]).subTypes).toEqual(
-      [],
-    );
   });
 
   it("filters Created / Updated At by tenant day (Asia/Ho_Chi_Minh)", () => {
@@ -108,11 +93,10 @@ describe("Location filters", () => {
       status: "Active",
       countries: ["Vietnam"],
       provinces: ["Đồng Nai"],
-      types: ["Port"],
-      subTypes: ["ICD"],
+      types: ["Seaport"],
     });
     expect(withoutField(all, "status", rows)).toEqual({ ...all, status: "" });
-    expect(withoutField(all, "types", rows)).toEqual({ ...all, types: [], subTypes: ["ICD"] });
+    expect(withoutField(all, "types", rows)).toEqual({ ...all, types: [] });
     expect(withoutField(all, "province", rows)).toEqual({ ...all, provinces: [] });
   });
 

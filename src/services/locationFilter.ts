@@ -1,8 +1,9 @@
 // Location list filters: quick filters (Status, Code Type, Country, Province/City) and the
-// advanced panel (+ Location Type, Sub Type, Has Coordinates, Created / Updated date ranges).
+// advanced panel (+ Location Type, Has Coordinates, Created / Updated date ranges).
 // All conditions combine with AND (BR1); the state lives in the URL query (BR4).
 import { locationOrigin, type LocationMasterRecord } from "@/mock-data/locations";
-import { ALL_LOCATION_SUB_TYPES, LOCATION_TYPES, subTypesOf } from "@/mock-data/locationCatalog";
+import { CODE_KINDS, type CodeKind } from "@/mock-data/standardCodes";
+import { LOCATION_TYPES } from "@/mock-data/locationCatalog";
 import type { SortState } from "@/types";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from "@/lib/paging";
 
@@ -13,11 +14,10 @@ export type YesNo = "" | "Yes" | "No";
 
 export interface LocationFilter {
   status: "" | "Active" | "Inactive";
-  origin: "" | "Standard" | "Internal";
+  origin: "" | CodeKind;
   countries: string[];
   provinces: string[];
   types: string[];
-  subTypes: string[];
   hasCoordinates: YesNo;
   createdFrom: string;
   createdTo: string;
@@ -31,7 +31,6 @@ export const EMPTY_LOCATION_FILTER: LocationFilter = {
   countries: [],
   provinces: [],
   types: [],
-  subTypes: [],
   hasCoordinates: "",
   createdFrom: "",
   createdTo: "",
@@ -54,10 +53,6 @@ export function tenantYmd(iso: string | undefined): string {
 export const hasCoordinates = (l: Pick<LocationMasterRecord, "lat" | "lng">) =>
   Number.isFinite(l.lat) && Number.isFinite(l.lng);
 
-/** Sub types of the chosen Location Types (every sub type when no type is chosen). */
-export const subTypesFor = (types: string[]): string[] =>
-  types.length === 0 ? ALL_LOCATION_SUB_TYPES : types.flatMap((t) => [...subTypesOf(t)]);
-
 /** Province/City values that exist in the tenant's data, limited to the chosen countries. */
 export function provincesFor(rows: LocationMasterRecord[], countries: string[]): string[] {
   const set = new Set<string>();
@@ -77,12 +72,6 @@ export function withCountries(
   return { ...f, countries, provinces: f.provinces.filter((p) => allowed.includes(p)) };
 }
 
-/** Changing Location Type drops sub types that no longer apply. */
-export function withTypes(f: LocationFilter, types: string[]): LocationFilter {
-  const allowed = subTypesFor(types);
-  return { ...f, types, subTypes: f.subTypes.filter((s) => allowed.includes(s)) };
-}
-
 const inRange = (day: string, from: string, to: string) =>
   (!from || (!!day && day >= from)) && (!to || (!!day && day <= to));
 
@@ -93,7 +82,6 @@ export function matchLocation(l: LocationMasterRecord, f: LocationFilter): boole
   if (f.countries.length && !f.countries.includes(l.country ?? "")) return false;
   if (f.provinces.length && !f.provinces.includes(l.province ?? "")) return false;
   if (f.types.length && !f.types.includes(l.locationType ?? "")) return false;
-  if (f.subTypes.length && !f.subTypes.includes(l.locationSubType ?? "")) return false;
   if (f.hasCoordinates && hasCoordinates(l) !== (f.hasCoordinates === "Yes")) return false;
   if (!inRange(tenantYmd(l.createdAt), f.createdFrom, f.createdTo)) return false;
   if (!inRange(tenantYmd(l.updatedAt), f.updatedFrom, f.updatedTo)) return false;
@@ -116,7 +104,6 @@ export type FilterField =
   | "countries"
   | "province"
   | "types"
-  | "subTypes"
   | "hasCoordinates"
   | "created"
   | "updated";
@@ -128,7 +115,6 @@ export const fieldLabel = (k: FilterField, t: T): string =>
     countries: t("Quốc gia", "Country"),
     province: t("Tỉnh/Thành phố", "Province/City"),
     types: t("Loại", "Location Type"),
-    subTypes: t("Loại con", "Location Sub Type"),
     hasCoordinates: t("Có toạ độ", "Has Coordinates"),
     created: t("Ngày tạo", "Created At"),
     updated: t("Ngày cập nhật", "Updated At"),
@@ -145,7 +131,6 @@ export function appliedConditions(f: LocationFilter, t: T): { field: FilterField
     ["countries", f.countries.join(", ")],
     ["province", f.provinces.join(", ")],
     ["types", f.types.join(", ")],
-    ["subTypes", f.subTypes.join(", ")],
     ["hasCoordinates", f.hasCoordinates],
     ["created", range(f.createdFrom, f.createdTo)],
     ["updated", range(f.updatedFrom, f.updatedTo)],
@@ -166,8 +151,6 @@ export function withoutField(
       return withCountries(f, [], rows);
     case "province":
       return { ...f, provinces: [] };
-    case "types":
-      return withTypes(f, []);
     case "created":
       return { ...f, createdFrom: "", createdTo: "" };
     case "updated":
@@ -189,7 +172,6 @@ export interface LocationListSearch {
   country?: string;
   province?: string;
   type?: string;
-  sub?: string;
   coords?: string;
   cFrom?: string;
   cTo?: string;
@@ -227,11 +209,10 @@ export function parseLocationSearch(s: Record<string, unknown>): LocationListSea
     (PAGE_SIZES as readonly number[]).includes(size) && size !== DEFAULT_PAGE_SIZE ? size : 0,
   );
   put("status", oneOf(s["status"], ["Active", "Inactive"]));
-  put("origin", oneOf(s["origin"], ["Standard", "Internal"]));
+  put("origin", oneOf(s["origin"], CODE_KINDS));
   put("country", list(s["country"]).join(","));
   put("province", list(s["province"]).join(","));
   put("type", list(s["type"]).join(","));
-  put("sub", list(s["sub"]).join(","));
   put("coords", oneOf(s["coords"], ["Yes", "No"]));
   put("cFrom", day(s["cFrom"]));
   put("cTo", day(s["cTo"]));
@@ -243,11 +224,10 @@ export function parseLocationSearch(s: Record<string, unknown>): LocationListSea
 export function filterFromSearch(s: LocationListSearch): LocationFilter {
   return {
     status: oneOf(s.status, ["Active", "Inactive"]),
-    origin: oneOf(s.origin, ["Standard", "Internal"]),
+    origin: oneOf(s.origin, CODE_KINDS),
     countries: list(s.country),
     provinces: list(s.province),
     types: list(s.type).filter((x) => (LOCATION_TYPES as readonly string[]).includes(x)),
-    subTypes: list(s.sub),
     hasCoordinates: oneOf(s.coords, ["Yes", "No"]),
     createdFrom: s.cFrom ?? "",
     createdTo: s.cTo ?? "",
@@ -276,7 +256,6 @@ export function toLocationSearch(
     country: f.countries.join(","),
     province: f.provinces.join(","),
     type: f.types.join(","),
-    sub: f.subTypes.join(","),
     coords: f.hasCoordinates,
     cFrom: f.createdFrom,
     cTo: f.createdTo,

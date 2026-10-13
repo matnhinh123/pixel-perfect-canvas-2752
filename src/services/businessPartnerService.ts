@@ -23,6 +23,7 @@ import {
   TENANT_DEFAULT_CURRENCY,
 } from "@/mock-data/businessPartners";
 import { tr } from "@/lib/i18n";
+import { splitList } from "@/lib/utils";
 import { auditService } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { draftImportConfig, listCell, pick } from "./importExportService";
@@ -38,8 +39,8 @@ export const bpCrud = makeCrud<BusinessPartnerRecord>({
 // ---------------------------------------------------------------- BP Code convention
 
 /** A–Z, 0–9, dot, hyphen, underscore. Max 50, always uppercase. */
-export const BP_CODE_MAX = 50;
-const BP_CODE_VALID = /^[A-Z0-9._-]{1,50}$/;
+export const BP_CODE_MAX = 15;
+const BP_CODE_VALID = /^[A-Z0-9._-]{1,15}$/;
 /** Input filter: uppercases and drops every disallowed character as the user types / pastes. */
 export const sanitizeBpCode = (v: string) =>
   v
@@ -437,8 +438,8 @@ export function validateBusinessPartner(
   if (!code) e["bpCode"] = tr("Nhập BP Code.", "BP Code is required.");
   else if (!BP_CODE_VALID.test(code))
     e["bpCode"] = tr(
-      "BP Code chỉ gồm A–Z, 0–9, dấu chấm (.), gạch ngang (-), gạch dưới (_), tối đa 50 ký tự.",
-      "BP Code may only contain A–Z, 0–9, dot (.), hyphen (-), underscore (_), max 50 characters.",
+      "BP Code chỉ gồm A–Z, 0–9, dấu chấm (.), gạch ngang (-), gạch dưới (_), không khoảng trắng, tối đa 15 ký tự.",
+      "BP Code may only contain A–Z, 0–9, dot (.), hyphen (-), underscore (_), no spaces, max 15 characters.",
     );
   else if (
     businessPartnerRepository
@@ -528,17 +529,25 @@ export function validateBusinessPartner(
         ["accountNo", "Account No."],
       ]),
     );
-    set(
-      `${p}.salesmen`,
-      checkRows(d[p].salesmen, blankSalesman, [["staffName", "Staff"]], (r, live) =>
-        live.some((x) => x !== r && x.staffName === r.staffName && x.serviceCode === r.serviceCode)
-          ? tr(
-              "Nhân viên đã được phân công (cùng dịch vụ).",
-              "This staff is already assigned (same service).",
-            )
-          : null,
-      ),
-    );
+    // Sales Assignment exists for customers only.
+    if (p === "customer")
+      set(
+        `${p}.salesmen`,
+        checkRows(d[p].salesmen, blankSalesman, [["staffName", "Staff"]], (r, live) =>
+          live.some((x) => {
+            if (x === r || x.staffName !== r.staffName) return false;
+            // Same staff twice is a duplicate when the services overlap (or neither has one).
+            const a = splitList(x.serviceCode);
+            const b = splitList(r.serviceCode);
+            return (!a.length && !b.length) || a.some((c) => b.includes(c));
+          })
+            ? tr(
+                "Nhân viên đã được phân công (cùng dịch vụ).",
+                "This staff is already assigned (same service).",
+              )
+            : null,
+        ),
+      );
   };
   if (d.roles.includes("Customer")) {
     set(
@@ -1056,7 +1065,10 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
       });
     const code = (r["bpCode"] ?? "").trim().toUpperCase();
     if (code && sanitizeBpCode(code) !== code)
-      e.push({ field: "bpCode", error: "Only A–Z, 0–9, dot, hyphen, underscore (max 50)" });
+      e.push({
+        field: "bpCode",
+        error: "Only A–Z, 0–9, dot, hyphen, underscore; no spaces (max 15)",
+      });
     return e;
   },
   toDraft: bpDraftOfRow,

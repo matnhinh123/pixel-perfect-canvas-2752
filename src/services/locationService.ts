@@ -1,15 +1,20 @@
 // Location master: add / edit / deactivate / delete. Routing stop pickers read active locations.
 import { locationRepository, routeRepository, tollStationRepository, uid } from "@/repositories";
-import { normalizeLocation, type LocationMasterRecord } from "@/mock-data/locations";
 import {
-  COUNTRY_ISO2,
-  LOCATION_COUNTRIES,
-  LOCATION_TYPES,
-  ALL_LOCATION_SUB_TYPES,
-  subTypesOf,
-  requiresIata,
-  requiresUnLocode,
-} from "@/mock-data/locationCatalog";
+  locationOrigin,
+  normalizeLocation,
+  type LocationMasterRecord,
+} from "@/mock-data/locations";
+import { COUNTRY_ISO2, LOCATION_COUNTRIES, LOCATION_TYPES } from "@/mock-data/locationCatalog";
+import {
+  CODE_KINDS,
+  codeKindOf,
+  findStandardCode,
+  defaultTypeFor,
+  typesAllowedFor,
+  type CodeKind,
+  type StandardCode,
+} from "@/mock-data/standardCodes";
 import { tr } from "@/lib/i18n";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -58,13 +63,11 @@ export type LocationDraft = Pick<
   LocationMasterRecord,
   "name" | "address" | "province" | "lat" | "lng" | "status"
 > & {
+  /** Which code the user enters: a UN/LOCODE / IATA Code from the reference list or a Local Code. */
+  codeType: CodeKind;
   code: string;
   country: string;
   locationType: string;
-  /** Optional, Port only. */
-  locationSubType: string;
-  unLocode: string;
-  iataCode: string;
   remark: string;
 };
 
@@ -75,10 +78,15 @@ export function suggestLocationCode(): string {
     const m = /^VN(\d{3,})$/.exec(l.code ?? "");
     if (m) max = Math.max(max, Number(m[1]));
   }
-  return `VN${String(max + 1).padStart(3, "0")}`;
+  // Skip a number that happens to be a real UN/LOCODE: a suggested code stays a Local Code.
+  let code = "";
+  do code = `VN${String(++max).padStart(3, "0")}`;
+  while (findStandardCode(code));
+  return code;
 }
 
 export const newLocationDraft = (): LocationDraft => ({
+  codeType: "Local Code",
   code: suggestLocationCode(),
   name: "",
   address: "",
@@ -88,15 +96,13 @@ export const newLocationDraft = (): LocationDraft => ({
   status: "Active",
   country: "",
   locationType: "",
-  locationSubType: "",
-  unLocode: "",
-  iataCode: "",
   remark: "",
 });
 
 export const draftOfLocation = (raw: LocationMasterRecord): LocationDraft => {
   const l = normalizeLocation(raw);
   return {
+    codeType: locationOrigin(l),
     code: l.code ?? l.id.replace(/^LOC-/, ""),
     name: l.name,
     address: l.address,
@@ -106,26 +112,71 @@ export const draftOfLocation = (raw: LocationMasterRecord): LocationDraft => {
     status: l.status === "Active" ? "Active" : "Inactive",
     country: l.country ?? "",
     locationType: l.locationType ?? "",
-    locationSubType: l.locationSubType ?? "",
-    unLocode: l.unLocode ?? "",
-    iataCode: l.iataCode ?? "",
     remark: l.remark ?? "",
   };
 };
 
-/** Applies a Type change: clears the codes / sub type that do not belong to the new type. */
-export const withLocationType = (d: LocationDraft, locationType: string): LocationDraft => ({
-  ...d,
-  locationType,
-  locationSubType: subTypesOf(locationType).includes(d.locationSubType) ? d.locationSubType : "",
-  unLocode: requiresUnLocode(locationType) ? d.unLocode : "",
-  iataCode: requiresIata(locationType) ? d.iataCode : "",
-});
+/** Does the code belong to the code type (a Local Code must not be a UN/LOCODE / IATA Code)? */
+const codeFits = (code: string, type: CodeKind) => codeKindOf(code) === type;
+
+/** Location Types allowed per Code Type: UN/LOCODE → Seaport / Depot, IATA Code → Airport. */
+export const STANDARD_TYPES: Record<Exclude<CodeKind, "Local Code">, string[]> = {
+  "UN/LOCODE": ["Seaport", "Depot"],
+  "IATA Code": ["Airport"],
+};
+
+/** Is the Location Type allowed with this Code Type (Local Code → any)? */
+export const typeFits = (d: Pick<LocationDraft, "codeType">, type: string): boolean =>
+  d.codeType === "Local Code" || STANDARD_TYPES[d.codeType].includes(type);
+
+/**
+ * Applies a Code Type change: keeps the code when it still fits, else clears it (a Local Code gets
+ * the next suggested code). A UN/LOCODE keeps Seaport / Depot (else Seaport), an IATA Code is an
+ * Airport.
+ */
+export function withCodeType(d: LocationDraft, codeType: CodeKind): LocationDraft {
+  const code =
+    d.code && codeFits(d.code, codeType)
+      ? d.code
+      : codeType === "Local Code"
+        ? suggestLocationCode()
+        : "";
+  const next = { ...d, codeType, code };
+  const std = findStandardCode(code);
+  return std?.kind === codeType
+    ? withStandardCode(next, std)
+    : {
+        ...next,
+        locationType:
+          codeType === "Local Code" || typeFits(next, d.locationType)
+            ? d.locationType
+            : STANDARD_TYPES[codeType][0]!,
+      };
+}
+
+/**
+ * Applies a code from the reference list: Code Type + code, Country from the code (locked on the
+ * form), a Location Type that fits what the place handles, and the official name / coordinates
+ * when those are still empty (both stay editable).
+ */
+export function withStandardCode(d: LocationDraft, c: StandardCode): LocationDraft {
+  const next: LocationDraft = { ...d, codeType: c.kind, code: c.code };
+  const allowed = typesAllowedFor(c);
+  const country = c.country || d.country;
+  return {
+    ...next,
+    country,
+    province: country === d.country ? d.province : "",
+    locationType: !allowed || allowed.includes(d.locationType) ? d.locationType : defaultTypeFor(c),
+    name: d.name.trim() ? d.name : c.name,
+    ...(!Number.isFinite(d.lat) && Number.isFinite(c.lat) ? { lat: c.lat, lng: c.lng } : {}),
+  };
+}
 
 export function validateLocation(d: LocationDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
   const code = d.code.trim().toUpperCase();
-  if (!code) e["code"] = tr("Nhập mã địa điểm.", "Location code is required.");
+  if (!code) e["code"] = tr(`Nhập ${d.codeType}.`, `${d.codeType} is required.`);
   else if (!/^[A-Z0-9_-]{2,20}$/.test(code))
     e["code"] = tr("Mã gồm 2–20 chữ, số, - hoặc _.", "Use 2–20 letters, digits, - or _.");
   else if (
@@ -141,41 +192,40 @@ export function validateLocation(d: LocationDraft, id?: string): Record<string, 
   req("locationType", "loại địa điểm", "Location type");
   req("country", "quốc gia", "Country");
   req("address", "địa chỉ", "Address");
-  if (d.locationSubType && !subTypesOf(d.locationType).includes(d.locationSubType))
-    e["locationSubType"] = tr(
-      "Loại con không thuộc Location Type đã chọn.",
-      "This sub type does not belong to the chosen Location Type.",
-    );
 
-  const unLocode = d.unLocode.trim().toUpperCase();
-  if (requiresUnLocode(d.locationType)) {
-    const iso = COUNTRY_ISO2[d.country.trim()];
-    if (!unLocode)
-      e["unLocode"] = tr(
-        "Nhập UN/LOCODE cho cảng / ICD.",
-        "UN/LOCODE is required for a Port / ICD.",
-      );
-    else if (!/^[A-Z]{2}[A-Z0-9]{3}$/.test(unLocode))
-      e["unLocode"] = tr(
-        "UN/LOCODE gồm 5 ký tự: 2 chữ quốc gia + 3 chữ/số (VD: VNSGN).",
-        "UN/LOCODE is 5 characters: 2-letter country + 3 letters/digits (e.g. VNSGN).",
-      );
-    else if (iso && unLocode.slice(0, 2) !== iso)
-      e["unLocode"] = tr(
-        `UN/LOCODE phải bắt đầu bằng mã quốc gia ${iso}.`,
-        `UN/LOCODE must start with the country code ${iso}.`,
-      );
-  }
-  const iata = d.iataCode.trim().toUpperCase();
-  if (requiresIata(d.locationType)) {
-    if (!iata)
-      e["iataCode"] = tr("Nhập IATA Code cho sân bay.", "IATA Code is required for an Airport.");
-    else if (!/^[A-Z]{3}$/.test(iata))
-      e["iataCode"] = tr(
-        "IATA Code gồm 3 chữ cái (VD: SGN).",
-        "IATA Code is 3 letters (e.g. SGN).",
-      );
-  }
+  // The code must match the chosen Code Type: a UN/LOCODE / IATA Code comes from the reference
+  // list; a Local Code is free but must not be one of those codes.
+  if (!(CODE_KINDS as readonly string[]).includes(d.codeType))
+    e["codeType"] = tr("Chọn loại mã.", "Code Type is required.");
+  const std = !e["code"] ? findStandardCode(code) : undefined;
+  if (e["code"] || e["codeType"]) {
+    // already reported
+  } else if (d.codeType === "UN/LOCODE" && std?.kind !== "UN/LOCODE")
+    e["code"] = tr(
+      `${code} không có trong danh mục UN/LOCODE (5 ký tự, VD: VNSGN).`,
+      `${code} is not in the UN/LOCODE list (5 characters, e.g. VNSGN).`,
+    );
+  else if (d.codeType === "IATA Code" && std?.kind !== "IATA Code")
+    e["code"] = tr(
+      `${code} không có trong danh mục IATA (3 chữ, VD: SGN).`,
+      `${code} is not in the IATA list (3 letters, e.g. SGN).`,
+    );
+  else if (d.codeType === "Local Code" && std)
+    e["code"] = tr(
+      `${code} là ${std.kind} (${std.name}) — chọn Code Type ${std.kind} hoặc đặt mã khác.`,
+      `${code} is a ${std.kind} (${std.name}) — choose Code Type ${std.kind} or another code.`,
+    );
+  else if (std && d.country.trim() && COUNTRY_ISO2[d.country.trim()] !== std.iso2)
+    e["code"] = tr(
+      `${std.kind} ${std.code} thuộc quốc gia ${std.country || std.iso2}, không khớp Country.`,
+      `${std.kind} ${std.code} belongs to ${std.country || std.iso2}, not the chosen Country.`,
+    );
+  // The Location Type must fit what the standard code handles (UN/LOCODE functions / airport).
+  if (std && std.kind === d.codeType && d.locationType && !typeFits(d, d.locationType))
+    e["locationType"] = tr(
+      `${std.kind} chỉ dùng cho Location Type ${(typesAllowedFor(std) ?? []).join(", ")}.`,
+      `A ${std.kind} is only for Location Type ${(typesAllowedFor(std) ?? []).join(", ")}.`,
+    );
   // Coordinates are optional, but if one is typed both must be valid.
   const hasLat = Number.isFinite(d.lat),
     hasLng = Number.isFinite(d.lng);
@@ -188,15 +238,13 @@ export function validateLocation(d: LocationDraft, id?: string): Record<string, 
 }
 
 const FIELD_LABELS: [keyof LocationDraft, string][] = [
+  ["codeType", "Code Type"],
   ["code", "Code"],
   ["name", "Name"],
   ["address", "Address"],
   ["country", "Country"],
   ["province", "Province/City"],
   ["locationType", "Location Type"],
-  ["locationSubType", "Location Sub Type"],
-  ["unLocode", "UN/LOCODE"],
-  ["iataCode", "IATA Code"],
   ["remark", "Remark"],
 ];
 
@@ -208,21 +256,29 @@ export const locationService = {
         tr("Vui lòng kiểm tra các trường được đánh dấu.", "Please check the highlighted fields."),
         errors,
       );
-    const typed = withLocationType(d, d.locationType);
     const clean: LocationDraft = {
-      ...typed,
+      ...d,
       code: d.code.trim().toUpperCase(),
       name: d.name.trim(),
       address: d.address.trim(),
       country: d.country.trim(),
       province: d.province.trim(),
-      unLocode: typed.unLocode.trim().toUpperCase(),
-      iataCode: typed.iataCode.trim().toUpperCase(),
       remark: d.remark.trim(),
+    };
+    // Stored alongside the code for search / export: which international code it is.
+    const kind = clean.codeType;
+    const codes = {
+      unLocode: kind === "UN/LOCODE" ? clean.code : "",
+      iataCode: kind === "IATA Code" ? clean.code : "",
     };
     const existing = id ? locationRepository.get(id) : undefined;
     if (!existing) {
-      const rec: LocationMasterRecord = { ...clean, id: uid("LOC-"), ...stampCreate() };
+      const rec: LocationMasterRecord = {
+        ...clean,
+        ...codes,
+        id: uid("LOC-"),
+        ...stampCreate(),
+      };
       locationRepository.insert(rec);
       auditService.log({
         action: "CREATE",
@@ -239,7 +295,8 @@ export const locationService = {
     delete kept.operatorName;
     delete kept.customsControlled;
     delete kept.bonded;
-    const next = stampUpdate({ ...kept, ...clean });
+    delete kept.locationSubType;
+    const next = stampUpdate({ ...kept, ...clean, ...codes });
     locationRepository.update(existing.id, () => next);
     const base = { entityType: "Location" as const, entityId: next.id, entityLabel: clean.code };
     const out: AuditInput[] = [];
@@ -267,25 +324,21 @@ export const locationService = {
 const STATUSES = ["Active", "Inactive"] as const;
 
 /** Import row → form draft; the form's validateLocation() then checks it like a manual entry. */
-const locationDraftOfRow = (r: Record<string, string>): LocationDraft =>
-  withLocationType(
-    {
-      ...newLocationDraft(),
-      code: r["code"] ?? "",
-      name: r["name"] ?? "",
-      address: r["address"] ?? "",
-      province: r["province"] ?? "",
-      country: pick(r["country"], LOCATION_COUNTRIES) || (r["country"] ?? ""),
-      locationSubType: pick(r["locationSubType"], ALL_LOCATION_SUB_TYPES) || "",
-      unLocode: r["unLocode"] ?? "",
-      iataCode: r["iataCode"] ?? "",
-      lat: numCell(r["lat"]),
-      lng: numCell(r["lng"]),
-      status: pick(r["status"], STATUSES) || "Active",
-      remark: r["remark"] ?? "",
-    },
-    pick(r["locationType"], LOCATION_TYPES) || "",
-  );
+const locationDraftOfRow = (r: Record<string, string>): LocationDraft => ({
+  ...newLocationDraft(),
+  // Without a Code Type column the code says what it is.
+  codeType: pick(r["codeType"], CODE_KINDS) || codeKindOf(r["code"]),
+  code: r["code"] ?? "",
+  name: r["name"] ?? "",
+  address: r["address"] ?? "",
+  province: r["province"] ?? "",
+  country: pick(r["country"], LOCATION_COUNTRIES) || (r["country"] ?? ""),
+  lat: numCell(r["lat"]),
+  lng: numCell(r["lng"]),
+  status: pick(r["status"], STATUSES) || "Active",
+  remark: r["remark"] ?? "",
+  locationType: pick(r["locationType"], LOCATION_TYPES) || "",
+});
 
 /** Headers accept the template name plus the list's Vietnamese / English labels (export → import). */
 export const locationImportConfig = draftImportConfig<LocationDraft>({
@@ -293,7 +346,15 @@ export const locationImportConfig = draftImportConfig<LocationDraft>({
   screen: "location",
   keyColumn: "code",
   columns: [
-    { key: "code", header: "Code", required: true, example: "VN101", aliases: ["Mã"] },
+    {
+      key: "code",
+      header: "Code",
+      required: true,
+      example: "VN101",
+      // A Port's code is its UN/LOCODE, an Airport's its IATA Code.
+      aliases: ["Mã", "Local Code", "Location Code", "UN/LOCODE", "IATA Code"],
+    },
+    { key: "codeType", header: "Code Type", example: "Local Code", aliases: ["Loại mã"] },
     { key: "name", header: "Name", required: true, example: "Kho Bình Tân", aliases: ["Tên"] },
     {
       key: "locationType",
@@ -301,12 +362,6 @@ export const locationImportConfig = draftImportConfig<LocationDraft>({
       required: true,
       example: "Warehouse",
       aliases: ["Type", "Loại"],
-    },
-    {
-      key: "locationSubType",
-      header: "Location Sub Type",
-      example: "",
-      aliases: ["Loại con", "Port Sub Type", "Loại cảng"],
     },
     {
       key: "country",
@@ -328,8 +383,6 @@ export const locationImportConfig = draftImportConfig<LocationDraft>({
       example: "Bình Tân, TP. Hồ Chí Minh",
       aliases: ["Địa chỉ"],
     },
-    { key: "unLocode", header: "UN/LOCODE", example: "" },
-    { key: "iataCode", header: "IATA Code", example: "" },
     { key: "lat", header: "Latitude", example: "10.7652", aliases: ["Vĩ độ"] },
     { key: "lng", header: "Longitude", example: "106.6039", aliases: ["Kinh độ"] },
     { key: "status", header: "Status", example: "Active", aliases: ["Trạng thái"] },
@@ -347,17 +400,10 @@ export const locationImportConfig = draftImportConfig<LocationDraft>({
     const e: { field: string; error: string }[] = [];
     if (pick(r["locationType"], LOCATION_TYPES) === undefined)
       e.push({ field: "locationType", error: `Use one of: ${LOCATION_TYPES.join(", ")}` });
+    if (r["codeType"] && pick(r["codeType"], CODE_KINDS) === undefined)
+      e.push({ field: "codeType", error: `Use one of: ${CODE_KINDS.join(", ")}` });
     if (pick(r["country"], LOCATION_COUNTRIES) === undefined)
       e.push({ field: "country", error: `Use one of: ${LOCATION_COUNTRIES.join(", ")}` });
-    // Sub type must belong to the row's Location Type.
-    const subs = subTypesOf(pick(r["locationType"], LOCATION_TYPES) || "");
-    if (r["locationSubType"] && pick(r["locationSubType"], subs) === undefined)
-      e.push({
-        field: "locationSubType",
-        error: subs.length
-          ? `Use one of: ${subs.join(", ")}`
-          : "No sub type for this Location Type",
-      });
     if (pick(r["status"], STATUSES) === undefined)
       e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
     for (const k of ["lat", "lng"])
@@ -371,28 +417,30 @@ export const locationImportConfig = draftImportConfig<LocationDraft>({
   save: (d) => locationService.save(d),
   rollback: (ids) => locationCrud.removeMany(ids),
   sampleRows: () => {
+    // Ports / airports use real codes that are not in the seed (UN/LOCODE ICDs, IATA airports).
+    const ports = ["VNIPH", "VNBDG", "VNLBT", "VNPHG"];
+    const airports = ["VCS", "VKG"];
     const rows = Array.from({ length: 20 }, (_, i) => {
       const n = String(i + 1).padStart(2, "0");
+      // Ports: VNIPH is an ICD (Depot), the others seaports.
       const port = i % 5 === 0,
         airport = i % 7 === 3;
       return [
-        `IMP-L${n}`,
+        port ? ports[i / 5]! : airport ? airports[i === 3 ? 0 : 1]! : `IMP-L${n}`,
+        port ? "UN/LOCODE" : airport ? "IATA Code" : "Local Code",
         port ? `Cảng nhập ${n}` : airport ? `Sân bay nhập ${n}` : `Kho nhập ${n}`,
-        port ? "Port" : airport ? "Airport" : "Warehouse",
-        port ? "ICD" : "",
+        port ? (i === 0 ? "Depot" : "Seaport") : airport ? "Airport" : "Warehouse",
         "Vietnam",
         "Bình Dương",
         `Lô ${n}, KCN VSIP I, Thuận An, Bình Dương`,
-        port ? `VNI${n}` : "",
-        airport ? "VCS" : "",
         (10.92 + i * 0.004).toFixed(4),
         (106.71 + i * 0.003).toFixed(4),
         i % 6 === 5 ? "Inactive" : "Active",
         "",
       ];
     });
-    rows[2]![0] = "IMP-L01"; // duplicate code
-    rows[9]![2] = "Depot"; // unknown type
+    rows[2]![0] = "IMP-L02"; // duplicate code
+    rows[9]![3] = "Terminal"; // unknown type
     rows[14]![6] = ""; // missing address
     return rows;
   },

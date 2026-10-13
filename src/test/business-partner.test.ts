@@ -10,9 +10,9 @@ import { seedBusinessPartners } from "@/mock-data/businessPartners";
 import type { BusinessPartnerRecord } from "@/types";
 
 describe("BP Code convention", () => {
-  it("uppercases, strips disallowed characters and caps at 50", () => {
+  it("uppercases, strips disallowed characters and caps at 15", () => {
     expect(sanitizeBpCode("abc 12/ú.x_y-z")).toBe("ABC12.X_Y-Z");
-    expect(sanitizeBpCode("a".repeat(80))).toHaveLength(50);
+    expect(sanitizeBpCode("a".repeat(80))).toHaveLength(15);
   });
 
   it("rejects a duplicate BP Code and requires a role", () => {

@@ -1,6 +1,7 @@
 // One repository per entity, all built on the same generic Collection. Swap storage.ts for an API
 // client later; services and UI keep working against the same surface.
 import type {
+  CommonCodeRecord,
   AuditEvent,
   BusinessPartnerRecord,
   CostGroupRecord,
@@ -29,7 +30,13 @@ import { seedFixedCosts, seedFixedCostSummaries } from "@/mock-data/fixedCost";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
 import { seedVehicleMasters } from "@/mock-data/vehicleMaster";
 import { seedBusinessPartners, seedPetrolimexTienGiang } from "@/mock-data/businessPartners";
-import { seedLocations, type LocationMasterRecord } from "@/mock-data/locations";
+import {
+  SEED_CODE_FIXES,
+  seedLocations,
+  seedStandardLocations,
+  type LocationMasterRecord,
+} from "@/mock-data/locations";
+import { CC, seedCommonCodes } from "@/mock-data/commonCodes";
 import { createCollection, readJson, subscribeKey, writeJson } from "./storage";
 
 export const routeRepository = createCollection<RouteRecord>("routes", seedRoutes);
@@ -61,6 +68,19 @@ export const locationRepository = createCollection<LocationMasterRecord>(
   "locations",
   seedLocations,
 );
+// Real UN/LOCODE / IATA seed points: added once when missing; seed points still carrying their old
+// code get the real UN/LOCODE (a code the user changed is left alone).
+{
+  const have = new Set(locationRepository.all().map((l) => l.id));
+  const add = seedStandardLocations().filter((l) => !have.has(l.id));
+  if (add.length) locationRepository.insertMany(add);
+  const codes = new Set(locationRepository.all().map((l) => l.code));
+  for (const [id, fix] of Object.entries(SEED_CODE_FIXES)) {
+    const l = locationRepository.get(id);
+    if (l && l.code === fix.from && !codes.has(fix.to))
+      locationRepository.update(id, (p) => ({ ...p, code: fix.to }));
+  }
+}
 /** Toll Station master; Routing matches gates on the route against it. */
 export const tollStationRepository = createCollection<TollGateRecord>(
   // ".v2": Vietmap ID / Source / Location / Remark were added to the toll station model.
@@ -83,6 +103,59 @@ export const businessPartnerRepository = createCollection<BusinessPartnerRecord>
   const have = new Set(businessPartnerRepository.all().map((b) => b.id));
   const add = seedPetrolimexTienGiang().filter((b) => !have.has(b.id));
   if (add.length) businessPartnerRepository.insertMany(add);
+}
+/** Common Code: the option lists behind dropdowns (types are system-defined). */
+export const commonCodeRepository = createCollection<CommonCodeRecord>(
+  "common-codes",
+  seedCommonCodes,
+);
+// Location Sub-Type was removed (one Location Type only): retire the stored type once.
+{
+  const sub = commonCodeRepository.get(CC.LOCATION_SUB_TYPE);
+  if (sub && !sub.deleted) commonCodeRepository.update(sub.id, (p) => ({ ...p, deleted: true }));
+}
+// Location Type "Port" was renamed "Seaport": stored option + stored locations follow once.
+{
+  const lt = commonCodeRepository.get(CC.LOCATION_TYPE);
+  if (lt?.options.some((o) => o.name === "Port"))
+    commonCodeRepository.update(lt.id, (p) => ({
+      ...p,
+      options: p.options.map((o) => (o.name === "Port" ? { ...o, name: "Seaport" } : o)),
+    }));
+  for (const l of locationRepository.all())
+    if (l.locationType === "Port")
+      locationRepository.update(l.id, (p) => ({ ...p, locationType: "Seaport" }));
+}
+// Location Type "Depot" (ICD) was added: stored option list gets it after Seaport; ICDs (old sub
+// type ICD, or an untouched seed named ICD) become Depots.
+{
+  const lt = commonCodeRepository.get(CC.LOCATION_TYPE);
+  if (lt && !lt.options.some((o) => o.name === "Depot")) {
+    const n = Math.max(0, ...lt.options.map((o) => Number(o.code.slice(lt.code.length)) || 0)) + 1;
+    const depot = {
+      code: `${lt.code}${String(n).padStart(2, "0")}`,
+      name: "Depot",
+      attribute: "DEFAULT",
+      remark: "",
+      active: true,
+    };
+    const at = lt.options.findIndex((o) => o.name === "Seaport") + 1;
+    commonCodeRepository.update(lt.id, (p) => ({
+      ...p,
+      options: [...p.options.slice(0, at), depot, ...p.options.slice(at)],
+    }));
+  }
+  const seedAt = "2026-09-01T02:00:00.000Z";
+  for (const l of locationRepository.all())
+    if (
+      (l.locationType === "Seaport" || l.locationType === "Port") &&
+      (l.locationSubType === "ICD" || (l.updatedAt === seedAt && /\bICD\b/i.test(l.name)))
+    )
+      locationRepository.update(l.id, (p) => {
+        const next = { ...p, locationType: "Depot" };
+        delete next.locationSubType;
+        return next;
+      });
 }
 export const importHistoryRepository = createCollection<ImportBatch>(
   "import-history",

@@ -13,6 +13,8 @@ import {
 } from "@/services/vehicleMasterService";
 import { TRUCK_TYPES, VEHICLE_TYPES } from "@/mock-data/vehicleMaster";
 import { formatDate } from "@/lib/format";
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { TRAILER_TYPES, type VehicleMasterRecord } from "@/types";
@@ -195,6 +197,8 @@ const columnsFor = (t: T, days: number): ListColumn<Row>[] => [
 
 function VehicleList() {
   const { t, lang } = useT();
+  const vehicleTypes = useCodeOptions(CC.VEHICLE_TYPE, VEHICLE_TYPES);
+  const truckTypes = useCodeOptions(CC.TRUCK_TYPE, TRUCK_TYPES);
   const navigate = useNavigate();
   const rows = useVehicles();
   const days = useVehicleAlertDays();
@@ -223,7 +227,7 @@ function VehicleList() {
         {
           key: "type",
           allLabel: "Vehicle Type: All",
-          options: VEHICLE_TYPES.map((x) => ({
+          options: vehicleTypes.map((x) => ({
             label: x,
             conditions: [{ field: "vehicleType", operator: "eq", value: x }],
           })),
@@ -231,7 +235,7 @@ function VehicleList() {
         {
           key: "truckType",
           allLabel: "Truck Type: All",
-          options: TRUCK_TYPES.map((x) => ({
+          options: truckTypes.map((x) => ({
             label: x,
             conditions: [{ field: "truckType", operator: "eq", value: x }],
           })),

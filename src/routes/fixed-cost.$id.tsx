@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { History, Pencil, XCircle } from "lucide-react";
@@ -82,6 +84,9 @@ function FixedCostForm({
   readOnly: boolean;
 }) {
   const navigate = useNavigate();
+  const costTypes = useCodeOptions(CC.FIXED_COST_TYPE, FIXED_COST_TYPES);
+  const vehicleTypes = useCodeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES);
+  const units = useCodeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS);
   const isNew = !source;
   const groupsAll = useCollection(costGroupRepository);
   const groups = useMemo(() => groupsAll.filter((g) => !g.deleted), [groupsAll]);
@@ -249,7 +254,11 @@ function FixedCostForm({
             </Field>
             <Field label="Cost Type Code" required error={errors["costTypeCode"]} className={S4}>
               <NativeSelect
-                {...select("costTypeCode", FIXED_COST_TYPES, "Select Cost Type Code")}
+                {...select(
+                  "costTypeCode",
+                  withCurrent(costTypes, d.costTypeCode),
+                  "Select Cost Type Code",
+                )}
               />
             </Field>
             <Field label="Status" required className={S4}>
@@ -310,7 +319,9 @@ function FixedCostForm({
               className={S4}
               hint={unitNote}
             >
-              <NativeSelect {...select("allocationUnit", ALLOCATION_UNITS, "Select unit")} />
+              <NativeSelect
+                {...select("allocationUnit", withCurrent(units, d.allocationUnit), "Select unit")}
+              />
             </Field>
             <Field
               label="Vehicle Type"
@@ -318,7 +329,7 @@ function FixedCostForm({
               hint="Optional. A fixed cost with no vehicle type is listed but appears in no Summary."
             >
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-5">
-                {FIXED_COST_VEHICLE_TYPES.map((v) => (
+                {withCurrent(vehicleTypes, ...d.vehicleTypes).map((v) => (
                   <label
                     key={v}
                     className="flex cursor-pointer items-center gap-2 text-sm group-disabled:cursor-default"

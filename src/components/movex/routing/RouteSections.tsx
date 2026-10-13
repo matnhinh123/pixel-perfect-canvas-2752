@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useState, type ReactNode } from "react";
 import { GripVertical, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -120,6 +122,7 @@ export function StopList({
   /** Round trip: a last, read-only "Return" row that always mirrors the Departure. */
   returnPoint?: RoutePoint | undefined;
 }) {
+  const stopTypes = useCodeOptions(CC.STOP_TYPE, STOP_TYPES);
   const [armed, setArmed] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
@@ -217,7 +220,7 @@ export function StopList({
                     <NativeSelect
                       value={stopTypeOf(p)}
                       onChange={(v) => update(i, { ...p, stopType: v })}
-                      options={STOP_TYPES}
+                      options={withCurrent(stopTypes, stopTypeOf(p))}
                       className="h-8 min-w-0 flex-1 px-2"
                     />
                   ) : (
@@ -622,6 +625,7 @@ export function ManualCostDialog({
   onOpenChange: (o: boolean) => void;
   onAdd: (m: ManualCost) => void;
 }) {
+  const costTypes = useCodeOptions(CC.MANUAL_COST_TYPE, MANUAL_COST_TYPES);
   const [f, setF] = useState({
     costType: "Ferry" as ManualCostType,
     amount: "",
@@ -660,7 +664,7 @@ export function ManualCostDialog({
             <NativeSelect
               value={f.costType}
               onChange={(v) => setF({ ...f, costType: v as ManualCostType })}
-              options={MANUAL_COST_TYPES}
+              options={withCurrent(costTypes, f.costType)}
             />
           </Field>
           <Field label="Amount (₫)" required error={errors["amount"]}>

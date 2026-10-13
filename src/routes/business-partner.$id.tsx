@@ -44,8 +44,9 @@ import {
   CURRENCIES,
   INVOICE_LANGUAGES,
   LEGAL_TYPES,
-  TAX_OPTIONS,
 } from "@/mock-data/businessPartners";
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { BP_ROLES, type BpRole, type BusinessPartnerRecord } from "@/types";
@@ -106,6 +107,9 @@ function BusinessPartnerPage() {
 
 function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; readOnly: boolean }) {
   const { t } = useT();
+  const legalTypes = useCodeOptions(CC.LEGAL_TYPE, LEGAL_TYPES);
+  const businessCategories = useCodeOptions(CC.BUSINESS_CATEGORY, BUSINESS_CATEGORIES);
+  const invoicingLanguages = useCodeOptions(CC.INVOICING_LANGUAGE, INVOICE_LANGUAGES);
   const navigate = useNavigate();
   const confirm = useConfirm();
   const isNew = !source;
@@ -154,7 +158,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
   ): Parameters<typeof NativeSelect>[0] => ({
     value: String(d[k] ?? ""),
     onChange: (v) => patch({ [k]: v }),
-    options: ["", ...options],
+    options: ["", ...withCurrent(options, String(d[k] ?? ""))],
     labels: { "": readOnly ? "—" : placeholder },
     className: "w-full",
     invalid: !!errors[k],
@@ -168,15 +172,18 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
       ? "documents"
       : tab;
   /** Default currency always belongs to the partner's currencies: picking it adds it there. */
-  const setDefaultCurrency = (currency: string) => {
+  /**
+   * Currencies the partner trades in (several for international partners). The first one picked is
+   * the default currency, used for Credit / Payment Term amounts.
+   */
+  const setCurrencies = (list: string[]) => {
+    const currency = list.includes(d.currency) ? d.currency : (list[0] ?? "");
     patch({
+      currencies: list,
       currency,
-      ...(currency && !d.currencies.includes(currency)
-        ? { currencies: CURRENCIES.filter((c) => c === currency || d.currencies.includes(c)) }
-        : {}),
-      ...(!d.creditLimitCurrency ? { creditLimitCurrency: currency } : {}),
+      ...(!d.creditLimitCurrency && currency ? { creditLimitCurrency: currency } : {}),
     });
-    clearErr(["currencies"]);
+    clearErr(["currency", "currencies"]);
   };
 
   const rolesChanged = !!source && source.roles.join() !== BP_ROLES.filter(hasRole).join();
@@ -326,7 +333,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               required
               error={errors["bpCode"]}
               hint={readOnly ? undefined : `${d.bpCode.length}/${BP_CODE_MAX}`}
-              className="sm:col-span-2"
             >
               <div className="relative">
                 <Input
@@ -343,12 +349,22 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                   </TooltipTrigger>
                   <TooltipContent>
                     {t(
-                      "Duy nhất, tự viết hoa. A–Z, 0–9, . - _ (tối đa 50 ký tự).",
-                      "Unique, auto-uppercase. A–Z, 0–9, . - _ (max 50 characters).",
+                      "Duy nhất, tự viết hoa. A–Z, 0–9, . - _ không khoảng trắng (tối đa 15 ký tự).",
+                      "Unique, auto-uppercase. A–Z, 0–9, . - _ no spaces (max 15 characters).",
                     )}
                   </TooltipContent>
                 </Tooltip>
               </div>
+            </Field>
+            <Field label="Legal Type" required error={errors["legalType"]}>
+              <NativeSelect
+                {...select("legalType", legalTypes, "Select Legal Type")}
+                onChange={(v) => {
+                  // The ID field's meaning (and whether it is required) follows the Legal Type.
+                  patch({ legalType: v as BusinessPartnerDraft["legalType"] });
+                  clearErr(["taxCode", "identityNo"]);
+                }}
+              />
             </Field>
             <Field
               label="Tax Code"
@@ -422,40 +438,27 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               <Input placeholder="Enter English Address" {...text("englishAddress")} />
             </Field>
 
-            <Field label="Legal Type" required error={errors["legalType"]}>
-              <NativeSelect
-                {...select("legalType", LEGAL_TYPES, "Select Legal Type")}
-                onChange={(v) => {
-                  // The ID field's meaning (and whether it is required) follows the Legal Type.
-                  patch({ legalType: v as BusinessPartnerDraft["legalType"] });
-                  clearErr(["taxCode", "identityNo"]);
-                }}
-              />
-            </Field>
             <Field
               label="Business Category"
               required
               error={errors["businessCategory"]}
-              className="sm:col-span-2 lg:col-span-3"
+              className="sm:col-span-2 lg:col-span-4"
             >
               <MultiSelect
                 value={d.businessCategory}
                 onChange={(businessCategory) => patch({ businessCategory })}
-                options={BUSINESS_CATEGORIES}
+                options={withCurrent(businessCategories, ...d.businessCategory)}
                 placeholder="Select Business Category"
                 invalid={!!errors["businessCategory"]}
               />
             </Field>
-            <Field label="Tax">
-              <NativeSelect {...select("tax", TAX_OPTIONS, "Select Tax")} />
-            </Field>
             <Field label="Invoicing Language">
-              <NativeSelect {...select("invoiceLanguage", INVOICE_LANGUAGES, "Select Language")} />
+              <NativeSelect {...select("invoiceLanguage", invoicingLanguages, "Select Language")} />
             </Field>
-
             <Field label="Invoice Serial">
               <Input placeholder="Enter Invoice Serial" {...text("invoiceSerial")} />
             </Field>
+
             <Field label="Country" required error={errors["country"]}>
               <NativeSelect {...select("country", COUNTRIES, "Select Country")} />
             </Field>
@@ -463,20 +466,27 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               label="Currency"
               required
               error={errors["currency"]}
-              info={t("Mặc định theo tiền tệ của tenant.", "Defaults to the tenant currency.")}
+              className="sm:col-span-2"
+              info={t(
+                "Chọn được nhiều loại tiền. Mặc định theo tiền tệ của tenant; loại đầu tiên là tiền tệ mặc định, dùng cho số tiền ở Credit / Payment Term.",
+                "Several currencies allowed. Defaults to the tenant currency; the default one is used for Credit / Payment Term amounts.",
+              )}
+              hint={d.currencies.length > 1 && d.currency ? `Default: ${d.currency}` : undefined}
             >
-              <NativeSelect
-                {...select("currency", CURRENCIES, "Select Currency")}
-                onChange={setDefaultCurrency}
+              <MultiSelect
+                value={withCurrent(d.currencies, d.currency).filter(Boolean)}
+                onChange={setCurrencies}
+                options={withCurrent(CURRENCIES, ...d.currencies)}
+                placeholder="Select Currency"
+                invalid={!!errors["currency"]}
               />
             </Field>
-
             {/* Not a <Field>: that renders a <label>, and a click anywhere on this full-width row would
                 tick the first checkbox. Each checkbox has its own label instead. */}
             <div
               role="group"
               aria-label="Role"
-              className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-6"
+              className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-3"
             >
               <span className="text-sm font-semibold text-foreground">
                 Role<span className="ml-0.5 text-destructive">*</span>

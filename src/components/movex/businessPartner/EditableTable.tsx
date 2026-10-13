@@ -1,9 +1,21 @@
-import type { ReactNode } from "react";
-import { Paperclip, Plus, Trash2, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import * as HoverCardPrimitive from "@radix-ui/react-hover-card";
+import { ChevronDown, Paperclip, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn, joinList, splitList } from "@/lib/utils";
+import { withCurrent } from "@/services/commonCodeService";
 import { useT } from "@/lib/i18n";
 
 export interface ColDef<T> {
@@ -14,10 +26,22 @@ export interface ColDef<T> {
   width: number;
   /** "file": pick a file from the computer; the cell keeps its file name. */
   /** "readonly": shown, never edited (filled by `derive`). */
-  kind: "text" | "number" | "date" | "datetime" | "select" | "bool" | "file" | "readonly";
+  /** "multiselect": several options, stored as "A, B"; hovering the cell previews them all. */
+  kind:
+    | "text"
+    | "number"
+    | "date"
+    | "datetime"
+    | "select"
+    | "multiselect"
+    | "bool"
+    | "file"
+    | "readonly";
   options?: readonly string[];
   /** Unit shown to the right of the input (e.g. "Day", "VND"). */
   suffix?: string;
+  /** Hover preview of a multiselect cell; defaults to the list of picked values. */
+  preview?: (row: T) => ReactNode;
 }
 
 const thClass =
@@ -64,7 +88,18 @@ export function EditableTable<T extends { rid: string }>({
 
   const input = (r: T, c: ColDef<T>) => {
     const v = r[c.key] as unknown;
-    const ph = `${c.kind === "select" ? "Select" : "Enter"} ${c.label}`;
+    const ph = `${c.kind.endsWith("select") ? "Select" : "Enter"} ${c.label}`;
+    if (c.kind === "multiselect")
+      return (
+        <MultiCell
+          value={String(v ?? "")}
+          options={c.options ?? []}
+          label={c.label}
+          placeholder={ph}
+          preview={c.preview?.(r)}
+          onChange={(next) => set(r.rid, c.key, next)}
+        />
+      );
     if (c.kind === "bool")
       return (
         <div className="flex h-8 items-center justify-center">
@@ -130,7 +165,7 @@ export function EditableTable<T extends { rid: string }>({
           onChange={(e) => set(r.rid, c.key, e.target.value)}
         >
           <option value="">{ph}</option>
-          {c.options?.map((o) => (
+          {withCurrent(c.options ?? [], v ? String(v) : undefined).map((o) => (
             <option key={o} value={o} className="text-foreground">
               {o}
             </option>
@@ -245,5 +280,114 @@ export function EditableTable<T extends { rid: string }>({
       </div>
       {error && <p className="mt-1.5 text-xs font-medium text-destructive">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * Multi-pick cell: one line (first pick + "+N"), a checkbox list on click, and a hover card that
+ * previews every pick so a narrow column never hides what was chosen.
+ */
+function MultiCell({
+  value,
+  options,
+  label,
+  placeholder,
+  preview,
+  onChange,
+}: {
+  value: string;
+  options: readonly string[];
+  label: string;
+  placeholder: string;
+  preview?: ReactNode;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const picked = splitList(value);
+  const all = withCurrent(options, ...picked);
+  const toggle = (o: string) =>
+    onChange(
+      joinList(
+        picked.includes(o)
+          ? picked.filter((x) => x !== o)
+          : // Keep the catalog order so the list reads the same way everywhere.
+            all.filter((x) => x === o || picked.includes(x)),
+      ),
+    );
+
+  return (
+    <HoverCard openDelay={150} closeDelay={80}>
+      <Popover open={open} onOpenChange={setOpen}>
+        {/* The hover trigger wraps the button so the preview also works when the table is disabled. */}
+        <HoverCardTrigger asChild>
+          <div>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={label}
+                className={cn(
+                  cell,
+                  "flex items-center gap-1 text-left disabled:cursor-default disabled:bg-muted/40",
+                )}
+              >
+                {picked.length === 0 ? (
+                  <span className="flex-1 truncate text-muted-foreground">{placeholder}</span>
+                ) : (
+                  <span className="flex min-w-0 flex-1 items-center gap-1">
+                    <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+                      {picked[0]}
+                    </span>
+                    {picked.length > 1 && (
+                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                        +{picked.length - 1}
+                      </span>
+                    )}
+                  </span>
+                )}
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-disabled:hidden" />
+              </button>
+            </PopoverTrigger>
+          </div>
+        </HoverCardTrigger>
+        <PopoverContent align="start" className="w-(--radix-popover-trigger-width) min-w-60 p-0">
+          <Command>
+            {all.length > 7 && <CommandInput placeholder="Search..." />}
+            <CommandList>
+              <CommandEmpty>No results.</CommandEmpty>
+              <CommandGroup>
+                {all.map((o) => (
+                  <CommandItem key={o} value={o} onSelect={() => toggle(o)}>
+                    <Checkbox
+                      checked={picked.includes(o)}
+                      tabIndex={-1}
+                      className="pointer-events-none"
+                      aria-hidden
+                    />
+                    {o}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {picked.length > 0 && !open && (
+        // Portal: the table scrolls horizontally and would clip the card.
+        <HoverCardPrimitive.Portal>
+          <HoverCardContent align="start" className="w-auto min-w-48 max-w-80 p-3">
+            <p className="mb-1.5 text-xs font-semibold text-muted-foreground">
+              {label} ({picked.length})
+            </p>
+            {preview ?? (
+              <ul className="space-y-1 text-[13px]">
+                {picked.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+          </HoverCardContent>
+        </HoverCardPrimitive.Portal>
+      )}
+    </HoverCard>
   );
 }

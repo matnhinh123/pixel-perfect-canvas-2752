@@ -10,15 +10,15 @@ import {
   businessPartnerImportConfig,
   normalizeBusinessPartner,
 } from "@/services/businessPartnerService";
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useT } from "@/lib/i18n";
 import { BP_ROLES, type BusinessPartnerRecord } from "@/types";
 import {
   BUSINESS_CATEGORIES,
   COUNTRIES,
-  CURRENCIES,
   INVOICE_LANGUAGES,
   LEGAL_TYPES,
-  TAX_OPTIONS,
 } from "@/mock-data/businessPartners";
 
 export const Route = createFileRoute("/business-partner/")({
@@ -111,7 +111,6 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
     type: "text",
     value: (r) => r.businessCategory.join(", "),
   },
-  { key: "tax", width: 140, label: "Tax", type: "enum", options: TAX_OPTIONS, value: (r) => r.tax },
   {
     key: "invoiceLanguage",
     width: 160,
@@ -137,11 +136,12 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   {
     key: "currency",
-    width: 100,
+    width: 140,
     label: "Currency",
-    type: "enum",
-    options: CURRENCIES,
-    value: (r) => r.currency,
+    type: "text",
+    // Default currency first, then the others.
+    value: (r) =>
+      [r.currency, ...r.currencies.filter((c) => c !== r.currency)].filter(Boolean).join(", "),
   },
   {
     key: "roles",
@@ -170,6 +170,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
 
 function BusinessPartnerList() {
   const { t, lang } = useT();
+  const businessCategories = useCodeOptions(CC.BUSINESS_CATEGORY, BUSINESS_CATEGORIES);
   const navigate = useNavigate();
   const all = useCollection(businessPartnerRepository);
   // Records saved by older versions are normalized (e.g. single Business Category → list).
@@ -210,7 +211,7 @@ function BusinessPartnerList() {
         {
           key: "businessCategory",
           allLabel: t("Ngành nghề: Tất cả", "Category: All"),
-          options: BUSINESS_CATEGORIES.map((c) => ({
+          options: businessCategories.map((c) => ({
             label: c,
             conditions: [{ field: "businessCategory", operator: "contains", value: c }],
           })),

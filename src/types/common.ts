@@ -13,7 +13,8 @@ export type EntityType =
   | "Location"
   | "Vehicle"
   | "Toll Station"
-  | "Business Partner";
+  | "Business Partner"
+  | "Common Code";
 
 /** Every persisted record carries these fields so the generic repository can soft-delete & audit. */
 export interface BaseRecord {

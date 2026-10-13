@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions } from "@/services/commonCodeService";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { Archive, ArchiveRestore } from "lucide-react";
@@ -46,6 +48,7 @@ const feeOf = (g: Row, i: number): number | null => {
 
 function TollStationList() {
   const navigate = useNavigate();
+  const feeTypes = useCodeOptions(CC.TOLL_FEE_TYPE, FEE_TYPE_OPTIONS);
   const { q } = Route.useSearch();
   const all = useCollection(tollStationRepository);
   const locations = useCollection(locationRepository);
@@ -175,7 +178,7 @@ function TollStationList() {
     {
       key: "feeType",
       allLabel: "Fee Type: All",
-      options: FEE_TYPE_OPTIONS.map((f) => ({
+      options: feeTypes.map((f) => ({
         label: f,
         conditions: [{ field: "feeType", operator: "eq", value: f }],
       })),

@@ -61,6 +61,8 @@ import {
   type VehicleMasterType,
 } from "@/types";
 import { formatDate } from "@/lib/format";
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useT } from "@/lib/i18n";
 
 type Mode = "view" | "edit";
@@ -141,6 +143,14 @@ function ExpiryHint({ ymd }: { ymd: string }): ReactNode {
   return undefined;
 }
 
+/** Fuel Rate / Fuel Capacity units follow the Fuel Type (gas → kg, electric → kWh, else litres). */
+function fuelUnitOf(fuelType: string): { rate: string; capacity: string } {
+  const f = fuelType.toLowerCase();
+  if (f.includes("electric")) return { rate: "kWh/100km", capacity: "kWh" };
+  if (f.includes("cng")) return { rate: "kg/100km", capacity: "kg" };
+  return { rate: "l/100km", capacity: "liter" };
+}
+
 /** Specifications has data worth showing unfolded when editing. */
 const SPEC_DATA: (keyof VehicleDraft)[] = [
   "policyNumber",
@@ -155,7 +165,6 @@ const SPEC_DATA: (keyof VehicleDraft)[] = [
   "acquisitionCost",
   "contractNumber",
   "liabilityInsuranceNumber",
-  "fuelType",
   "engineDisplacement",
   "authorizedTowedMass",
   "productionCountry",
@@ -169,6 +178,12 @@ function VehicleForm({
   readOnly: boolean;
 }) {
   const { t } = useT();
+  const vehicleTypes = useCodeOptions(CC.VEHICLE_TYPE, VEHICLE_TYPES);
+  const trailerSizes = useCodeOptions(CC.TRAILER_SIZE, TRAILER_TYPES);
+  const truckTypes = useCodeOptions(CC.TRUCK_TYPE, TRUCK_TYPES);
+  const vehicleGroups = useCodeOptions(CC.VEHICLE_GROUP, VEHICLE_GROUP_OPTIONS);
+  const fuelTypes = useCodeOptions(CC.FUEL_TYPE, FUEL_TYPES);
+  const tradeMarks = useCodeOptions(CC.TRADE_MARK, TRADE_MARKS);
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -206,7 +221,7 @@ function VehicleForm({
   ): Parameters<typeof NativeSelect>[0] => ({
     value: String(d[k] ?? ""),
     onChange: (v) => patch({ [k]: v }),
-    options: ["", ...options],
+    options: ["", ...withCurrent(options, String(d[k] ?? ""))],
     labels: { "": readOnly ? "—" : placeholder },
     className: "w-full",
     invalid: !!errors[k],
@@ -256,6 +271,7 @@ function VehicleForm({
     setMappings(d.containerMappings.map((m) => (m.rid === rid ? { ...m, ...p } : m)));
 
   const maxDistance = maxDistanceKm(d.fuelRate, d.fuelCapacity);
+  const fuelUnit = fuelUnitOf(d.fuelType);
   const specError = SPEC_FIELDS.some((k) => errors[k]);
   const specHasData = SPEC_DATA.some((k) => String(initial[k] ?? "").trim() !== "");
 
@@ -392,7 +408,7 @@ function VehicleForm({
               <NativeSelect
                 value={d.vehicleType}
                 onChange={(v) => void changeType(v as VehicleMasterType | "")}
-                options={["", ...VEHICLE_TYPES]}
+                options={["", ...withCurrent(vehicleTypes, d.vehicleType)]}
                 labels={{ "": readOnly ? "—" : "Chọn loại phương tiện", ...VEHICLE_TYPE_LABELS }}
                 className="w-full"
                 invalid={!!errors["vehicleType"]}
@@ -400,17 +416,17 @@ function VehicleForm({
             </Field>
             {shows("trailerType") && (
               <Field label="Trailer Type" error={errors["trailerType"]} className={S3}>
-                <NativeSelect {...select("trailerType", TRAILER_TYPES, "Chọn cỡ rơ-moóc")} />
+                <NativeSelect {...select("trailerType", trailerSizes, "Chọn cỡ rơ-moóc")} />
               </Field>
             )}
             {shows("vehicleGroup") && (
               <Field label="Vehicle Group" error={errors["vehicleGroup"]} className={S3}>
-                <NativeSelect {...select("vehicleGroup", VEHICLE_GROUP_OPTIONS, "Chọn nhóm xe")} />
+                <NativeSelect {...select("vehicleGroup", vehicleGroups, "Chọn nhóm xe")} />
               </Field>
             )}
             {shows("truckType") && (
               <Field label="Truck Type" required error={errors["truckType"]} className={S3}>
-                <NativeSelect {...select("truckType", TRUCK_TYPES, "Chọn hạng tải xe")} />
+                <NativeSelect {...select("truckType", truckTypes, "Chọn hạng tải xe")} />
               </Field>
             )}
             {/* Keep the next fields on a new row. */}
@@ -459,43 +475,38 @@ function VehicleForm({
                 onChange={(e) => patch({ productionYear: e.target.value.replace(/\D/g, "") })}
               />
             </Field>
-
-            {shows("fuelRate") && (
-              <>
-                <Field label="Fuel Rate" error={errors["fuelRate"]} className={S3}>
-                  {unit("fuelRate", "l/100km", "Nhập định mức tiêu hao")}
-                </Field>
-                <Field label="Fuel Capacity" error={errors["fuelCapacity"]} className={S3}>
-                  {unit("fuelCapacity", "liter", "Nhập dung tích bình dầu")}
-                </Field>
-                <Field
-                  label="Quãng đường tối đa"
-                  className={S3}
-                  info={
-                    maxDistance
-                      ? "Fuel Capacity ÷ Fuel Rate × 100"
-                      : "Cần Fuel Rate và Fuel Capacity"
-                  }
-                >
-                  <UnitInput
-                    readOnly
-                    unit="km"
-                    value={maxDistance}
-                    placeholder="Cần Fuel Rate và Fuel Capacity"
-                  />
-                </Field>
-              </>
-            )}
           </FormGroup>
 
+          {/* Fuel: the type decides the units of the rate and the capacity. */}
+          {shows("fuelType") && (
+            <FormGroup title="Fuel">
+              <Field label="Fuel Type" className={S3}>
+                <NativeSelect {...select("fuelType", fuelTypes, "Chọn loại nhiên liệu")} />
+              </Field>
+              <Field label="Fuel Rate" error={errors["fuelRate"]} className={S3}>
+                {unit("fuelRate", fuelUnit.rate, "Nhập định mức tiêu hao")}
+              </Field>
+              <Field label="Fuel Capacity" error={errors["fuelCapacity"]} className={S3}>
+                {unit("fuelCapacity", fuelUnit.capacity, "Nhập dung tích bình dầu")}
+              </Field>
+              <Field
+                label="Quãng đường tối đa"
+                className={S3}
+                info={
+                  maxDistance ? "Fuel Capacity ÷ Fuel Rate × 100" : "Cần Fuel Rate và Fuel Capacity"
+                }
+              >
+                <UnitInput
+                  readOnly
+                  unit="km"
+                  value={maxDistance}
+                  placeholder="Cần Fuel Rate và Fuel Capacity"
+                />
+              </Field>
+            </FormGroup>
+          )}
+
           <FormGroup title="Registration & Inspection Information">
-            <Field
-              label="Registration Expiration Date"
-              className={S3}
-              hint={<ExpiryHint ymd={d.registrationExpiry} />}
-            >
-              {dateInput("registrationExpiry")}
-            </Field>
             <Field
               label="Vehicle Inspection No"
               error={errors["inspectionNo"]}
@@ -508,11 +519,30 @@ function VehicleForm({
               <Input placeholder="Nhập số quản lý phương tiện" {...text("inspectionNo")} />
             </Field>
             <Field
+              label="Inspection Report No"
+              required
+              error={errors["inspectionReportNo"]}
+              className={S3}
+              info={t(
+                "Số chứng nhận kiểm định: chữ, số, gạch nối.",
+                "Inspection report number: letters, digits, hyphens.",
+              )}
+            >
+              <Input placeholder="Nhập số chứng nhận kiểm định" {...text("inspectionReportNo")} />
+            </Field>
+            <Field
               label="Inspection Expiration Date"
               className={S3}
               hint={<ExpiryHint ymd={d.inspectionExpiry} />}
             >
               {dateInput("inspectionExpiry")}
+            </Field>
+            <Field
+              label="Registration Expiration Date"
+              className={S3}
+              hint={<ExpiryHint ymd={d.registrationExpiry} />}
+            >
+              {dateInput("registrationExpiry")}
             </Field>
             <Field label="Lifetime Limit" className={S3}>
               {dateInput("lifetimeLimit")}
@@ -525,12 +555,9 @@ function VehicleForm({
           defaultOpen={readOnly || (!isNew && specHasData)}
           forceOpen={specError}
         >
-          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-6 lg:grid-cols-12">
-            <Field label="Comprehensive Policy Number" className={S3}>
-              <Input placeholder="Nhập số bảo hiểm vật chất" {...text("policyNumber")} />
-            </Field>
+          <FormGroup title="Manufacturer & Engine">
             <Field label="Trade Mark" className={S3}>
-              <NativeSelect {...select("tradeMark", TRADE_MARKS, "Chọn hãng sản xuất")} />
+              <NativeSelect {...select("tradeMark", tradeMarks, "Chọn hãng sản xuất")} />
             </Field>
             <Field
               label="Model Code"
@@ -543,10 +570,23 @@ function VehicleForm({
             >
               <Input placeholder="VD: HD210-2018" {...text("modelCode")} />
             </Field>
-            <Field label="Buying Date" className={S3}>
-              {dateInput("buyingDate")}
+            <Field label="Production Country" className={S3}>
+              <NativeSelect
+                {...select("productionCountry", PRODUCTION_COUNTRIES, "Chọn nước sản xuất")}
+              />
             </Field>
+            {shows("engineDisplacement") && (
+              <Field
+                label="Engine Displacement"
+                error={errors["engineDisplacement"]}
+                className={S3}
+              >
+                {unit("engineDisplacement", "cm3", "Nhập dung tích xi lanh")}
+              </Field>
+            )}
+          </FormGroup>
 
+          <FormGroup title="Dimensions & Weight">
             <Field label="Overall Dimension" className={S6}>
               <DimensionInput
                 value={d.overallDimension}
@@ -559,7 +599,6 @@ function VehicleForm({
                 onChange={(v) => patch({ containerDimension: v })}
               />
             </Field>
-
             <Field label="Kerb Mass" error={errors["kerbMass"]} className={S3}>
               {unit("kerbMass", "kg", "Nhập khối lượng bản thân")}
             </Field>
@@ -574,8 +613,20 @@ function VehicleForm({
             >
               {unit("authorizedPayload", "kg", "Nhập tải trọng cho phép")}
             </Field>
-            <Field label="RFID / Barcode Tag" className={S3}>
-              <Input placeholder="Nhập mã định danh điện tử" {...text("rfidTag")} />
+            {shows("authorizedTowedMass") && (
+              <Field
+                label="Authorized Towed Mass"
+                error={errors["authorizedTowedMass"]}
+                className={S3}
+              >
+                {unit("authorizedTowedMass", "kg", "Nhập khối lượng kéo theo cho phép")}
+              </Field>
+            )}
+          </FormGroup>
+
+          <FormGroup title="Purchase & Insurance">
+            <Field label="Buying Date" className={S3}>
+              {dateInput("buyingDate")}
             </Field>
             <Field label="Acquisition Cost" error={errors["acquisitionCost"]} className={S3}>
               <div className="flex">
@@ -597,69 +648,21 @@ function VehicleForm({
                 />
               </div>
             </Field>
-
             <Field label="Contract Number" className={S3}>
               <Input placeholder="Nhập số hợp đồng" {...text("contractNumber")} />
             </Field>
-            <Field
-              label="Inspection Report No"
-              required
-              error={errors["inspectionReportNo"]}
-              className={S3}
-              info={t(
-                "Số chứng nhận kiểm định: chữ, số, gạch nối.",
-                "Inspection report number: letters, digits, hyphens.",
-              )}
-            >
-              <Input placeholder="Nhập số chứng nhận kiểm định" {...text("inspectionReportNo")} />
+            <div className="hidden lg:col-span-12 lg:block" />
+            <Field label="Comprehensive Policy Number" className={S3}>
+              <Input placeholder="Nhập số bảo hiểm vật chất" {...text("policyNumber")} />
             </Field>
             <Field label="Liability Insurance Number" className={S3}>
               <Input placeholder="Nhập số bảo hiểm TNDS" {...text("liabilityInsuranceNumber")} />
             </Field>
-            {shows("fuelType") && (
-              <Field label="Fuel Type" className={S3}>
-                <NativeSelect {...select("fuelType", FUEL_TYPES, "Chọn loại nhiên liệu")} />
-              </Field>
-            )}
-            {shows("engineDisplacement") && (
-              <Field
-                label="Engine Displacement"
-                error={errors["engineDisplacement"]}
-                className={S3}
-              >
-                {unit("engineDisplacement", "cm3", "Nhập dung tích xi lanh")}
-              </Field>
-            )}
-            {shows("authorizedTowedMass") && (
-              <Field
-                label="Authorized Towed Mass"
-                error={errors["authorizedTowedMass"]}
-                className={S3}
-              >
-                {unit("authorizedTowedMass", "kg", "Nhập khối lượng kéo theo cho phép")}
-              </Field>
-            )}
-            <Field label="Production Country" className={S3}>
-              <NativeSelect
-                {...select("productionCountry", PRODUCTION_COUNTRIES, "Chọn nước sản xuất")}
-              />
-            </Field>
+          </FormGroup>
 
-            <Field label="Modification" className={S3}>
-              <SwitchRow
-                checked={d.renovated}
-                onChange={(v) => patch({ renovated: v })}
-                on="Renovated"
-                off="Unrenovated"
-              />
-            </Field>
-            <Field label="Transportation Business" className={S3}>
-              <SwitchRow
-                checked={d.transportationBusiness}
-                onChange={(v) => patch({ transportationBusiness: v })}
-                on="Yes"
-                off="No"
-              />
+          <FormGroup title="Equipment">
+            <Field label="RFID / Barcode Tag" className={S3}>
+              <Input placeholder="Nhập mã định danh điện tử" {...text("rfidTag")} />
             </Field>
             <Field label="Equipped with Tachograph" className={S3}>
               <SwitchRow
@@ -677,7 +680,24 @@ function VehicleForm({
                 off="No"
               />
             </Field>
-          </div>
+            <div className="hidden lg:col-span-12 lg:block" />
+            <Field label="Transportation Business" className={S3}>
+              <SwitchRow
+                checked={d.transportationBusiness}
+                onChange={(v) => patch({ transportationBusiness: v })}
+                on="Yes"
+                off="No"
+              />
+            </Field>
+            <Field label="Modification" className={S3}>
+              <SwitchRow
+                checked={d.renovated}
+                onChange={(v) => patch({ renovated: v })}
+                on="Renovated"
+                off="Unrenovated"
+              />
+            </Field>
+          </FormGroup>
         </CollapsiblePanel>
 
         {shows("containerMappings") && (
@@ -688,9 +708,9 @@ function VehicleForm({
                 <Button
                   size="sm"
                   type="button"
-                  disabled={d.containerMappings.length >= TRAILER_TYPES.length}
+                  disabled={d.containerMappings.length >= trailerSizes.length}
                   title={
-                    d.containerMappings.length >= TRAILER_TYPES.length
+                    d.containerMappings.length >= trailerSizes.length
                       ? t("Đã khai đủ các Trailer Type.", "Every Trailer Type is already mapped.")
                       : undefined
                   }
@@ -737,7 +757,7 @@ function VehicleForm({
                                 trailerType: v as ContainerSizeMapping["trailerType"],
                               })
                             }
-                            options={["", ...TRAILER_TYPES]}
+                            options={["", ...withCurrent(trailerSizes, m.trailerType)]}
                             labels={{ "": readOnly ? "—" : "Chọn cỡ rơ-moóc" }}
                             className="w-full"
                             invalid={!!errors["containerMappings"] && !m.trailerType}
@@ -747,7 +767,7 @@ function VehicleForm({
                           <NativeSelect
                             value={m.vehicleGroup}
                             onChange={(v) => setMapping(m.rid, { vehicleGroup: v })}
-                            options={["", ...VEHICLE_GROUP_OPTIONS]}
+                            options={["", ...withCurrent(vehicleGroups, m.vehicleGroup)]}
                             labels={{ "": readOnly ? "—" : "Chọn nhóm xe" }}
                             className="w-full"
                             invalid={!!errors["containerMappings"] && !m.vehicleGroup}

@@ -35,7 +35,9 @@ import type {
   BpPaymentTerm,
   BpSalesman,
 } from "@/types";
-import { cn } from "@/lib/utils";
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
+import { cn, joinList, splitList } from "@/lib/utils";
 import { EditableTable, type ColDef } from "./EditableTable";
 
 type Draft = BusinessPartnerDraft;
@@ -106,6 +108,31 @@ function useServiceOptions() {
     return {
       codes: [...byCode.keys()],
       names: [...byName.keys()],
+      nameOf: (code: string) => byCode.get(code) ?? "",
+      /** Several services per row (Sales Assignment): the picked codes and names stay paired. */
+      deriveMany: <T extends { serviceCode: string; serviceName: string }>(
+        _r: T,
+        key: string,
+        v: unknown,
+      ): Partial<T> => {
+        if (key === "serviceCode")
+          return {
+            serviceName: joinList(
+              splitList(v)
+                .map((c) => byCode.get(c) ?? "")
+                .filter(Boolean),
+            ),
+          } as Partial<T>;
+        if (key === "serviceName")
+          return {
+            serviceCode: joinList(
+              splitList(v)
+                .map((n) => byName.get(n) ?? "")
+                .filter(Boolean),
+            ),
+          } as Partial<T>;
+        return {};
+      },
       /** Picking a code fills the name and vice versa. */
       derive: <T extends { serviceCode: string; serviceName: string }>(
         _r: T,
@@ -125,6 +152,7 @@ function useServiceOptions() {
 // ---------------------------------------------------------------- Documents
 
 export function DocumentsTab({ d, set, errors }: TabProps) {
+  const docTypes = useCodeOptions(CC.DOCUMENT_TYPE, DOC_TYPES);
   const cols: ColDef<BpDocument>[] = [
     {
       key: "docType",
@@ -132,7 +160,7 @@ export function DocumentsTab({ d, set, errors }: TabProps) {
       required: true,
       width: 170,
       kind: "select",
-      options: DOC_TYPES,
+      options: docTypes,
     },
     { key: "docName", label: "Document Name", width: 200, kind: "text" },
     { key: "validDate", label: "Valid Date", width: 140, kind: "date" },
@@ -155,12 +183,14 @@ export function DocumentsTab({ d, set, errors }: TabProps) {
 // ---------------------------------------------------------------- Contact Info (per role)
 
 function ContactTable({ role, d, set, errors }: TabProps & { role: Role }) {
+  const genders = useCodeOptions(CC.GENDER, GENDERS);
+  const contactRoles = useCodeOptions(CC.CONTACT_ROLE, CONTACT_POSITIONS);
   const svc = useServiceOptions();
   const prof = d[role];
   const cols: ColDef<BpContact>[] = [
     { key: "serviceCode", label: "Service Code", width: 160, kind: "select", options: svc.codes },
     { key: "serviceName", label: "Service Name", width: 180, kind: "select", options: svc.names },
-    { key: "gender", label: "Gender", width: 100, kind: "select", options: GENDERS },
+    { key: "gender", label: "Gender", width: 100, kind: "select", options: genders },
     { key: "fullName", label: "Full Name", width: 200, kind: "text" },
     { key: "identityNo", label: "Identity No.", width: 150, kind: "text" },
     { key: "telephone", label: "Telephone", width: 150, kind: "text" },
@@ -170,7 +200,7 @@ function ContactTable({ role, d, set, errors }: TabProps & { role: Role }) {
       label: "Contact Role",
       width: 190,
       kind: "select",
-      options: CONTACT_POSITIONS,
+      options: contactRoles,
     },
     { key: "email", label: "Email", width: 220, kind: "text" },
     { key: "address", label: "Address", width: 240, kind: "text" },
@@ -209,6 +239,17 @@ function ContactTable({ role, d, set, errors }: TabProps & { role: Role }) {
 function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
   const svc = useServiceOptions();
   const prof = d[role];
+  /** Both service cells preview the same "code — name" pairs. */
+  const servicePreview = (r: BpSalesman) => (
+    <ul className="space-y-1 text-[13px]">
+      {splitList(r.serviceCode).map((c, i) => (
+        <li key={c} className="flex gap-2">
+          <span className="font-medium text-primary">{c}</span>
+          <span>{svc.nameOf(c) || splitList(r.serviceName)[i] || "—"}</span>
+        </li>
+      ))}
+    </ul>
+  );
   const cols: ColDef<BpSalesman>[] = [
     {
       key: "staffName",
@@ -218,7 +259,6 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
       kind: "select",
       options: EMPLOYEES.map((e) => e.name),
     },
-    { key: "leader", label: "Leader", width: 190, kind: "readonly" },
     {
       key: "department",
       label: "Department",
@@ -226,9 +266,24 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
       kind: "select",
       options: STAFF_DEPARTMENTS.map((x) => x.name),
     },
-    { key: "serviceCode", label: "Service Code", width: 170, kind: "select", options: svc.codes },
-    { key: "serviceName", label: "Service Name", width: 190, kind: "select", options: svc.names },
-    { key: "remark", label: "Remark", width: 220, kind: "text" },
+    { key: "leader", label: "Leader", width: 180, kind: "readonly" },
+    {
+      key: "serviceCode",
+      label: "Service Code",
+      width: 170,
+      kind: "multiselect",
+      options: svc.codes,
+      preview: servicePreview,
+    },
+    {
+      key: "serviceName",
+      label: "Service Name",
+      width: 220,
+      kind: "multiselect",
+      options: svc.names,
+      preview: servicePreview,
+    },
+    { key: "remark", label: "Remark", width: 240, kind: "text" },
   ];
   return (
     <EditableTable
@@ -246,7 +301,7 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
             department: e ? departmentName(e.departmentId) : "",
           };
         }
-        return svc.derive(r, key, v);
+        return svc.deriveMany(r, key, v);
       }}
       error={errors[`${role}.salesmen`]}
     />
@@ -326,6 +381,9 @@ const roleSections = (role: Role, d: Draft, set: TabProps["set"], errors: Errors
 ];
 
 export function CustomerTab({ d, set, errors }: TabProps) {
+  const terms = useCodeOptions(CC.PAYMENT_TERM, CREDIT_TERMS);
+  const policies = useCodeOptions(CC.WO_ACCESS_POLICY, WO_ACCESS_POLICIES);
+  const approvers = useCodeOptions(CC.APPROVER, APPROVERS);
   const svc = useServiceOptions();
   const cols: ColDef<BpCreditTerm>[] = [
     {
@@ -343,7 +401,7 @@ export function CustomerTab({ d, set, errors }: TabProps) {
       required: true,
       width: 140,
       kind: "select",
-      options: CREDIT_TERMS,
+      options: terms,
     },
     { key: "creditDays", label: "Credit Days", width: 130, kind: "number", suffix: "Day" },
     // Amounts are in the partner Currency of General Information.
@@ -361,10 +419,10 @@ export function CustomerTab({ d, set, errors }: TabProps) {
       label: "WO Access Policy",
       width: 180,
       kind: "select",
-      options: WO_ACCESS_POLICIES,
+      options: policies,
     },
     { key: "autoLockAfterExpiry", label: "Auto Lock After Expiry", width: 130, kind: "bool" },
-    { key: "approvedBy", label: "Approved By", width: 180, kind: "select", options: APPROVERS },
+    { key: "approvedBy", label: "Approved By", width: 180, kind: "select", options: approvers },
     {
       key: "status",
       label: "Status",
@@ -409,6 +467,7 @@ export function CustomerTab({ d, set, errors }: TabProps) {
 // ---------------------------------------------------------------- Vendor (AP 331)
 
 export function VendorTab({ d, set, errors }: TabProps) {
+  const terms = useCodeOptions(CC.PAYMENT_TERM, CREDIT_TERMS);
   const svc = useServiceOptions();
   const cols: ColDef<BpPaymentTerm>[] = [
     {
@@ -426,7 +485,7 @@ export function VendorTab({ d, set, errors }: TabProps) {
       required: true,
       width: 150,
       kind: "select",
-      options: CREDIT_TERMS,
+      options: terms,
     },
     { key: "effectiveFrom", label: "Effective From", width: 160, kind: "date" },
     { key: "effectiveTo", label: "Effective To", width: 160, kind: "date" },
@@ -453,7 +512,8 @@ export function VendorTab({ d, set, errors }: TabProps) {
             />
           ),
         },
-        ...roleSections("vendor", d, set, errors),
+        // Vendors have no Sales Assignment.
+        ...roleSections("vendor", d, set, errors).filter((x) => x.key !== "sales"),
       ]}
     />
   );

@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions } from "@/services/commonCodeService";
 import { useState } from "react";
 import { Check, ChevronDown, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,7 @@ import {
 import { Field } from "@/components/movex/common";
 import { MultiSelect } from "@/components/movex/businessPartner/MultiSelect";
 import { LOCATION_COUNTRIES, LOCATION_TYPES } from "@/mock-data/locationCatalog";
+import { CODE_KINDS } from "@/mock-data/standardCodes";
 import type { LocationMasterRecord } from "@/mock-data/locations";
 import {
   EMPTY_LOCATION_FILTER,
@@ -29,9 +32,7 @@ import {
   filterHasErrors,
   provincesFor,
   rangeError,
-  subTypesFor,
   withCountries,
-  withTypes,
   type LocationFilter,
 } from "@/services/locationFilter";
 import { cn } from "@/lib/utils";
@@ -190,7 +191,6 @@ const panelCount = (f: LocationFilter) =>
     f.countries.length,
     f.provinces.length,
     f.types.length,
-    f.subTypes.length,
     f.hasCoordinates,
     f.createdFrom || f.createdTo,
     f.updatedFrom || f.updatedTo,
@@ -198,7 +198,7 @@ const panelCount = (f: LocationFilter) =>
 
 /**
  * Location list toolbar filters: quick filters (Status, Code Type, Country, Province/City)
- * and the Filter panel (Country, Province/City, Location Type, Sub Type, Has Coordinates, Created /
+ * and the Filter panel (Country, Province/City, Location Type, Has Coordinates, Created /
  * Updated At).
  */
 export function LocationFilterBar({
@@ -212,6 +212,7 @@ export function LocationFilterBar({
   onChange: (f: LocationFilter) => void;
   t: T;
 }) {
+  const locationTypes = useCodeOptions(CC.LOCATION_TYPE, LOCATION_TYPES);
   const allText = t("Tất cả", "All");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<LocationFilter>(value);
@@ -224,7 +225,6 @@ export function LocationFilterBar({
     onChange(draft);
     setOpen(false);
   };
-  const subOptions = subTypesFor(draft.types);
   const count = panelCount(value);
   const country = value.countries;
   const provinces = value.provinces;
@@ -242,7 +242,7 @@ export function LocationFilterBar({
         label={fieldLabel("origin", t)}
         allText={allText}
         value={value.origin}
-        options={["Standard", "Internal"]}
+        options={[...CODE_KINDS]}
         onChange={(v) => onChange({ ...value, origin: v as LocationFilter["origin"] })}
       />
       <SearchSelect
@@ -309,22 +309,9 @@ export function LocationFilterBar({
             <Field label={fieldLabel("types", t)}>
               <MultiSelect
                 value={draft.types}
-                options={LOCATION_TYPES}
+                options={locationTypes}
                 placeholder={allText}
-                onChange={(v) => setDraft(withTypes(draft, v))}
-              />
-            </Field>
-            <Field label={fieldLabel("subTypes", t)}>
-              <MultiSelect
-                value={draft.subTypes}
-                options={subOptions}
-                disabled={subOptions.length === 0}
-                placeholder={
-                  subOptions.length
-                    ? allText
-                    : t("Không có cho loại đã chọn", "None for the chosen type")
-                }
-                onChange={(v) => setDraft({ ...draft, subTypes: v })}
+                onChange={(v) => setDraft({ ...draft, types: v })}
               />
             </Field>
             <Field label={fieldLabel("hasCoordinates", t)}>

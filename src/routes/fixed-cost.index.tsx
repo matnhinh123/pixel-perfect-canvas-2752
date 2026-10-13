@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions } from "@/services/commonCodeService";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
@@ -48,6 +50,7 @@ const money = (n: number | null) => <span className="tabular-nums">{fmtMoney(n)}
 
 function FixedCostList() {
   const navigate = useNavigate();
+  const vehicleTypes = useCodeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES);
   const groups = useCollection(costGroupRepository);
   const rowsAll = useCollection(fixedCostRepository);
   const rows = useMemo(() => rowsAll.filter((f) => !f.deleted), [rowsAll]);
@@ -184,7 +187,7 @@ function FixedCostList() {
         {
           key: "vehicleType",
           allLabel: "All vehicle types",
-          options: FIXED_COST_VEHICLE_TYPES.map((v) => ({
+          options: vehicleTypes.map((v) => ({
             label: v,
             conditions: [{ field: "vehicleTypes", operator: "contains", value: v }],
           })),

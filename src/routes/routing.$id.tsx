@@ -1,3 +1,5 @@
+import { CC } from "@/mock-data/commonCodes";
+import { useCodeOptions, withCurrent as withStored } from "@/services/commonCodeService";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -151,6 +153,8 @@ const altName = (alts: RouteCalculation[], id: string | null) => {
 
 function RouteEditor({ source }: { source: RouteRecord | null }) {
   const navigate = useNavigate();
+  const routeTypes = useCodeOptions(CC.ROUTE_TYPE, ["Single Trip", "Round Trip"]);
+  const terrains = useCodeOptions(CC.TERRAIN, ["Plain", "Highland"]);
   const isNew = !source;
   const initial = useMemo(() => normalize(source ?? newRouteDraft()), [source]);
   const [r, setR] = useState<RouteRecord>(() => structuredClone(initial));
@@ -623,46 +627,46 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
                 </Field>
                 <Field label="Route Type">
                   <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
-                    {(
-                      [
-                        ["Single Trip", "Single Trip"],
-                        ["Round Trip", "Round Trip"],
-                      ] as [RouteType, string][]
-                    ).map(([v, label]) => (
-                      <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
-                        <input
-                          type="radio"
-                          name="routeType"
-                          checked={r.type === v}
-                          onChange={() => changeRouteType(v)}
-                          className="h-4 w-4 accent-[var(--primary)]"
-                        />
-                        <span className={cn(r.type === v && "text-primary")}>{label}</span>
-                      </label>
-                    ))}
+                    {withStored(routeTypes, r.type)
+                      .map((v) => [v as RouteType, v] as const)
+                      .map(([v, label]) => (
+                        <label
+                          key={v}
+                          className="flex cursor-pointer items-center gap-2 text-[15px]"
+                        >
+                          <input
+                            type="radio"
+                            name="routeType"
+                            checked={r.type === v}
+                            onChange={() => changeRouteType(v)}
+                            className="h-4 w-4 accent-[var(--primary)]"
+                          />
+                          <span className={cn(r.type === v && "text-primary")}>{label}</span>
+                        </label>
+                      ))}
                   </div>
                 </Field>
                 <Field label="Terrain">
                   <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2" role="radiogroup">
-                    {(
-                      [
-                        ["Plain", "Plain"],
-                        ["Highland", "Highland"],
-                      ] as [Terrain, string][]
-                    ).map(([v, label]) => (
-                      <label key={v} className="flex cursor-pointer items-center gap-2 text-[15px]">
-                        <input
-                          type="radio"
-                          name="terrain"
-                          checked={(r.terrain ?? "Plain") === v}
-                          onChange={() => set("terrain", v)}
-                          className="h-4 w-4 accent-[var(--primary)]"
-                        />
-                        <span className={cn((r.terrain ?? "Plain") === v && "text-primary")}>
-                          {label}
-                        </span>
-                      </label>
-                    ))}
+                    {withStored(terrains, r.terrain ?? "Plain")
+                      .map((v) => [v as Terrain, v] as const)
+                      .map(([v, label]) => (
+                        <label
+                          key={v}
+                          className="flex cursor-pointer items-center gap-2 text-[15px]"
+                        >
+                          <input
+                            type="radio"
+                            name="terrain"
+                            checked={(r.terrain ?? "Plain") === v}
+                            onChange={() => set("terrain", v)}
+                            className="h-4 w-4 accent-[var(--primary)]"
+                          />
+                          <span className={cn((r.terrain ?? "Plain") === v && "text-primary")}>
+                            {label}
+                          </span>
+                        </label>
+                      ))}
                   </div>
                 </Field>
                 <Field label="Note" className="col-span-2">

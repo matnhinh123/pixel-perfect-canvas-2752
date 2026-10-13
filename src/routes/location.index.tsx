@@ -22,13 +22,9 @@ import {
   withoutField,
   type LocationFilter,
 } from "@/services/locationFilter";
-import {
-  LOCATION_COUNTRIES,
-  LOCATION_TYPES,
-  ALL_LOCATION_SUB_TYPES,
-  VN_PROVINCES,
-} from "@/mock-data/locationCatalog";
+import { LOCATION_COUNTRIES, LOCATION_TYPES, VN_PROVINCES } from "@/mock-data/locationCatalog";
 import { locationOrigin, type LocationMasterRecord } from "@/mock-data/locations";
+import { CODE_KINDS } from "@/mock-data/standardCodes";
 import { formatDateTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { DEFAULT_PAGE_SIZE } from "@/lib/paging";
@@ -47,12 +43,12 @@ export const Route = createFileRoute("/location/")({
 type Row = LocationMasterRecord;
 type T = (vi: string, en: string) => string;
 
-const ORIGINS = ["Standard", "Internal"] as const;
-
+/** Same fields, labels and order as the Location detail form. */
 const columnsFor = (t: T, provinces: string[]): ListColumn<Row>[] => [
   {
+    // The detail form names this field after its Code Type (UN/LOCODE / IATA Code / Local Code).
     key: "id",
-    label: t("Mã", "Code"),
+    label: "Code",
     type: "text",
     pinned: true,
     width: 130,
@@ -60,17 +56,26 @@ const columnsFor = (t: T, provinces: string[]): ListColumn<Row>[] => [
     render: (r) => <span className="font-semibold text-primary">{r.code ?? r.id}</span>,
   },
   {
+    key: "origin",
+    label: "Code Type",
+    type: "enum",
+    options: [...CODE_KINDS],
+    width: 130,
+    value: (r) => locationOrigin(r),
+    render: (r) => <Tag>{locationOrigin(r)}</Tag>,
+  },
+  {
     key: "name",
-    label: t("Tên", "Name"),
+    label: "Location Name",
     type: "text",
-    width: 200,
+    width: 220,
     truncate: true,
     value: (r) => r.name,
     className: "font-medium",
   },
   {
     key: "locationType",
-    label: t("Loại", "Type"),
+    label: "Location Type",
     type: "enum",
     options: [...LOCATION_TYPES],
     width: 140,
@@ -78,43 +83,15 @@ const columnsFor = (t: T, provinces: string[]): ListColumn<Row>[] => [
     render: (r) => (r.locationType ? <Tag>{r.locationType}</Tag> : "—"),
   },
   {
-    key: "locationSubType",
-    defaultHidden: true,
-    label: t("Loại con", "Location Sub Type"),
-    type: "enum",
-    options: ALL_LOCATION_SUB_TYPES,
-    width: 130,
-    value: (r) => r.locationSubType ?? "",
-  },
-  {
-    key: "origin",
-    label: t("Loại mã", "Code Type"),
-    type: "enum",
-    options: [...ORIGINS],
-    width: 150,
-    value: (r) => locationOrigin(r),
-    render: (r) => {
-      const o = locationOrigin(r);
-      return <Tag tone={o === "Standard" ? "Auto" : o}>{o}</Tag>;
-    },
-  },
-  {
-    key: "unLocode",
-    label: "UN/LOCODE",
+    key: "coords",
+    label: "Latitude, Longitude",
     type: "text",
-    width: 110,
-    value: (r) => r.unLocode ?? "",
-  },
-  {
-    key: "iataCode",
-    label: "IATA Code",
-    type: "text",
-    width: 100,
-    value: (r) => r.iataCode ?? "",
+    width: 170,
+    value: (r) => (Number.isFinite(r.lat) && Number.isFinite(r.lng) ? `${r.lat}, ${r.lng}` : ""),
   },
   {
     key: "country",
-    label: t("Quốc gia", "Country"),
+    label: "Country",
     type: "enum",
     options: LOCATION_COUNTRIES,
     width: 110,
@@ -122,7 +99,7 @@ const columnsFor = (t: T, provinces: string[]): ListColumn<Row>[] => [
   },
   {
     key: "province",
-    label: t("Tỉnh/Thành phố", "Province/City"),
+    label: "Province/City",
     type: "enum",
     options: provinces,
     width: 160,
@@ -131,30 +108,30 @@ const columnsFor = (t: T, provinces: string[]): ListColumn<Row>[] => [
   },
   {
     key: "address",
-    label: t("Địa chỉ", "Address"),
+    label: "Address",
     type: "text",
-    width: 230,
+    width: 260,
     truncate: true,
-    defaultHidden: true,
     value: (r) => r.address,
     className: "text-muted-foreground",
   },
   {
-    key: "coords",
-    label: t("Vĩ độ, Kinh độ", "Latitude, Longitude"),
-    type: "text",
-    width: 170,
-    defaultHidden: true,
-    value: (r) => (Number.isFinite(r.lat) && Number.isFinite(r.lng) ? `${r.lat}, ${r.lng}` : ""),
-  },
-  {
     key: "status",
-    label: t("Trạng thái", "Status"),
+    label: "Status",
     type: "enum",
     options: ["Active", "Inactive"],
     width: 110,
     value: (r) => r.status,
     render: (r) => <StatusBadge status={r.status} />,
+  },
+  {
+    key: "remark",
+    label: "Remark",
+    type: "text",
+    width: 220,
+    truncate: true,
+    defaultHidden: true,
+    value: (r) => r.remark ?? "",
   },
   {
     key: "updatedAt",

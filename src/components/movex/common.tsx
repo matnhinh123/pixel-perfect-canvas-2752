@@ -10,6 +10,8 @@ const tones: Record<string, string> = {
   Draft: "bg-info-soft text-primary",
   Inactive: "bg-muted text-muted-foreground",
   Auto: "bg-info-soft text-info",
+  "UN/LOCODE": "bg-info-soft text-info",
+  "IATA Code": "bg-success-soft text-success",
   Manual: "bg-warning-soft text-warning",
   "Single Trip": "bg-info-soft text-info",
   "Round Trip": "bg-success-soft text-success",
