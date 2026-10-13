@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
-import { Pencil, Plus, Power, Save, Trash2, X, XCircle } from "lucide-react";
+import { History, Pencil, Plus, Power, Save, Trash2, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   StatusBadge,
   Tag,
 } from "@/components/movex/common";
+import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import {
   FormErrorBanner,
@@ -170,6 +171,7 @@ function VehicleForm({
   const { t } = useT();
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const [historyOpen, setHistoryOpen] = useState(false);
   const isNew = !source;
   const initial = useMemo<VehicleDraft>(
     () => (source ? draftOfVehicle(source) : newVehicleDraft()),
@@ -351,6 +353,10 @@ function VehicleForm({
         extra={
           source && (
             <>
+              <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
+                <History className="h-4 w-4" />
+                {t("Lịch sử", "History")}
+              </Button>
               {readOnly && (
                 <>
                   <Button variant="outline" size="lg" onClick={() => void toggleStatus()}>
@@ -792,6 +798,16 @@ function VehicleForm({
             Save
           </Button>
         </div>
+      )}
+
+      {source && (
+        <AuditHistoryDrawer
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          entityType="Vehicle"
+          entityId={source.id}
+          title={source.plateNumber}
+        />
       )}
     </div>
   );
