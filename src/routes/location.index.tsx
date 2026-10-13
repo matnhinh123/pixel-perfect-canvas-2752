@@ -84,7 +84,7 @@ const columnsFor = (t: T, provinces: string[]): ListColumn<Row>[] => [
   },
   {
     key: "coords",
-    label: "Latitude, Longitude",
+    label: "Map Position",
     type: "text",
     width: 170,
     value: (r) => (Number.isFinite(r.lat) && Number.isFinite(r.lng) ? `${r.lat}, ${r.lng}` : ""),

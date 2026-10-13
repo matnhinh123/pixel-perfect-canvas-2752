@@ -383,12 +383,12 @@ function LocationForm({
 
           <FormGroup title={t("Vị trí", "Position")}>
             <Field
-              label="Latitude, Longitude"
+              label="Map Position"
               error={errors["coords"]}
               className={S3}
               info={t(
-                "Chọn điểm trên bản đồ: Country, Province/City và Address được điền tự động (OpenStreetMap), có thể sửa lại.",
-                "Pick a spot on the map: Country, Province/City and Address are filled in (OpenStreetMap) and stay editable.",
+                'Toạ độ của địa điểm, ghi dạng "Latitude, Longitude" (Vĩ độ, Kinh độ). VD: 10.7704, 106.7858 — Latitude (vĩ độ) -90…90, Longitude (kinh độ) -180…180. Chọn điểm trên bản đồ: Country, Province/City và Address được điền tự động (OpenStreetMap), có thể sửa lại.',
+                'The location\'s coordinates, written "Latitude, Longitude". e.g. 10.7704, 106.7858 — Latitude -90…90, Longitude -180…180. Pick a spot on the map: Country, Province/City and Address are filled in (OpenStreetMap) and stay editable.',
               )}
             >
               <div className="flex gap-2">
