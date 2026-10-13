@@ -6,7 +6,6 @@ import { Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, Field, NativeSelect, Panel } from "@/components/movex/common";
@@ -33,8 +32,6 @@ import {
   normalizeBusinessPartner,
   sanitizeBpCode,
   lookupTaxPayer,
-  sanitizePhone,
-  sanitizePostcode,
   taxCodeKey,
   identityNoRequired,
   taxCodeRequired,
@@ -47,9 +44,6 @@ import {
   CURRENCIES,
   INVOICE_LANGUAGES,
   LEGAL_TYPES,
-  PARTNER_GROUPS,
-  provincesOf,
-  SERVICE_PROVIDER_TYPES,
   TAX_OPTIONS,
 } from "@/mock-data/businessPartners";
 import { useT } from "@/lib/i18n";
@@ -325,57 +319,14 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
       {/* View mode: everything inside is disabled natively and restyled to read like plain text. */}
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
         <Panel title="General Information">
-          {/* Role first, then one 6-column grid: short values take one column, names/addresses take half. */}
+          {/* BP Code, Tax Code, Identity Number first; then Local / English name + address pairs. */}
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-6">
-            {/* Not a <Field>: that renders a <label>, and a click anywhere on this full-width row would
-                tick the first checkbox. Each checkbox has its own label instead. */}
-            <div
-              role="group"
-              aria-label="Role"
-              className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-6"
-            >
-              <span className="text-sm font-semibold text-foreground">
-                Role<span className="ml-0.5 text-destructive">*</span>
-              </span>
-              <div className="flex h-9 items-center gap-6">
-                {(["Customer", "Vendor"] as const).map((r) => (
-                  <label key={r} className="flex cursor-pointer items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={hasRole(r)}
-                      onCheckedChange={(on) => toggleRole(r, on === true)}
-                    />
-                    {r}
-                  </label>
-                ))}
-              </div>
-              {rolesChanged && (
-                <p className="mt-1 text-xs text-warning">
-                  {t(
-                    "Đổi vai trò chỉ áp dụng cho nghiệp vụ mới, không ảnh hưởng record/hoá đơn cũ.",
-                    "A role change only applies to new transactions; existing records/invoices are untouched.",
-                  )}
-                </p>
-              )}
-              {errors["roles"] && (
-                <span className="text-xs font-medium text-destructive">{errors["roles"]}</span>
-              )}
-            </div>
-
-            <Field label="Legal Type" required error={errors["legalType"]}>
-              <NativeSelect
-                {...select("legalType", LEGAL_TYPES, "Select Legal Type")}
-                onChange={(v) => {
-                  // The ID field's meaning (and whether it is required) follows the Legal Type.
-                  patch({ legalType: v as BusinessPartnerDraft["legalType"] });
-                  clearErr(["taxCode", "identityNo"]);
-                }}
-              />
-            </Field>
             <Field
               label="BP Code"
               required
               error={errors["bpCode"]}
               hint={readOnly ? undefined : `${d.bpCode.length}/${BP_CODE_MAX}`}
+              className="sm:col-span-2"
             >
               <div className="relative">
                 <Input
@@ -423,18 +374,69 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               label="Identity Number"
               required={identityNoRequired(d.legalType)}
               error={errors["identityNo"]}
+              className="sm:col-span-2"
             >
               <Input placeholder="Enter Identity Number" {...text("identityNo")} />
             </Field>
-            <Field label="Partner Group" required error={errors["partnerGroup"]}>
-              <NativeSelect {...select("partnerGroup", PARTNER_GROUPS, "Select Partner Group")} />
+
+            <Field
+              label="Local Name"
+              required
+              error={errors["localName"]}
+              className="sm:col-span-2"
+            >
+              <Input placeholder="Enter Local Name" {...text("localName")} />
+            </Field>
+            <Field
+              label="Local Address"
+              required
+              error={errors["localAddress"]}
+              className="sm:col-span-2 lg:col-span-4"
+            >
+              <Input
+                placeholder="Enter Local Address"
+                value={d.localAddress}
+                onChange={(e) => setLocalAddress(e.target.value)}
+                aria-invalid={!!errors["localAddress"] || undefined}
+              />
             </Field>
 
+            <Field
+              label="English Name"
+              required
+              error={errors["englishName"]}
+              className="sm:col-span-2"
+            >
+              <Input placeholder="Enter English Name" {...text("englishName")} />
+            </Field>
+            <Field
+              label="English Address"
+              required
+              error={errors["englishAddress"]}
+              info={t(
+                "Tự điền từ Local Address (bỏ dấu) — vui lòng kiểm tra lại.",
+                "Filled in from Local Address — please review.",
+              )}
+              className="sm:col-span-2 lg:col-span-4"
+            >
+              <Input placeholder="Enter English Address" {...text("englishAddress")} />
+            </Field>
+
+            <Field label="Legal Type" required error={errors["legalType"]}>
+              <NativeSelect
+                {...select("legalType", LEGAL_TYPES, "Select Legal Type")}
+                onChange={(v) => {
+                  // The ID field's meaning (and whether it is required) follows the Legal Type.
+                  patch({ legalType: v as BusinessPartnerDraft["legalType"] });
+                  clearErr(["taxCode", "identityNo"]);
+                }}
+              />
+            </Field>
             <Field
               label="Business Category"
               required
               error={errors["businessCategory"]}
-              className="sm:col-span-2"
+              className="sm:col-span-2 lg:col-span-3"
             >
               <MultiSelect
                 value={d.businessCategory}
@@ -444,13 +446,18 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                 invalid={!!errors["businessCategory"]}
               />
             </Field>
-            <Field label="Service Provider Type">
-              <NativeSelect
-                {...select("serviceProviderType", SERVICE_PROVIDER_TYPES, "Select Type")}
-              />
-            </Field>
             <Field label="Tax">
               <NativeSelect {...select("tax", TAX_OPTIONS, "Select Tax")} />
+            </Field>
+            <Field label="Invoicing Language">
+              <NativeSelect {...select("invoiceLanguage", INVOICE_LANGUAGES, "Select Language")} />
+            </Field>
+
+            <Field label="Invoice Serial">
+              <Input placeholder="Enter Invoice Serial" {...text("invoiceSerial")} />
+            </Field>
+            <Field label="Country" required error={errors["country"]}>
+              <NativeSelect {...select("country", COUNTRIES, "Select Country")} />
             </Field>
             <Field
               label="Currency"
@@ -463,99 +470,40 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                 onChange={setDefaultCurrency}
               />
             </Field>
-            <Field label="Invoicing Language">
-              <NativeSelect {...select("invoiceLanguage", INVOICE_LANGUAGES, "Select Language")} />
-            </Field>
 
-            <Field
-              label="Local Name"
-              required
-              error={errors["localName"]}
-              className="sm:col-span-2 lg:col-span-3"
+            {/* Not a <Field>: that renders a <label>, and a click anywhere on this full-width row would
+                tick the first checkbox. Each checkbox has its own label instead. */}
+            <div
+              role="group"
+              aria-label="Role"
+              className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-6"
             >
-              <Input placeholder="Enter Local Name" {...text("localName")} />
-            </Field>
-            <Field
-              label="English Name"
-              required
-              error={errors["englishName"]}
-              className="sm:col-span-2 lg:col-span-3"
-            >
-              <Input placeholder="Enter English Name" {...text("englishName")} />
-            </Field>
-
-            <Field
-              label="Local Address"
-              required
-              error={errors["localAddress"]}
-              className="sm:col-span-2 lg:col-span-3"
-            >
-              <Textarea
-                rows={2}
-                placeholder="Enter Local Address"
-                value={d.localAddress}
-                onChange={(e) => setLocalAddress(e.target.value)}
-                aria-invalid={!!errors["localAddress"] || undefined}
-              />
-            </Field>
-            <Field
-              label="English Address"
-              required
-              error={errors["englishAddress"]}
-              info={t(
-                "Tự điền từ Local Address (bỏ dấu) — vui lòng kiểm tra lại.",
-                "Filled in from Local Address — please review.",
+              <span className="text-sm font-semibold text-foreground">
+                Role<span className="ml-0.5 text-destructive">*</span>
+              </span>
+              <div className="flex h-9 items-center gap-6">
+                {(["Customer", "Vendor"] as const).map((r) => (
+                  <label key={r} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={hasRole(r)}
+                      onCheckedChange={(on) => toggleRole(r, on === true)}
+                    />
+                    {r}
+                  </label>
+                ))}
+              </div>
+              {rolesChanged && (
+                <p className="mt-1 text-xs text-warning">
+                  {t(
+                    "Đổi vai trò chỉ áp dụng cho nghiệp vụ mới, không ảnh hưởng record/hoá đơn cũ.",
+                    "A role change only applies to new transactions; existing records/invoices are untouched.",
+                  )}
+                </p>
               )}
-              className="sm:col-span-2 lg:col-span-3"
-            >
-              <Textarea rows={2} placeholder="Enter English Address" {...text("englishAddress")} />
-            </Field>
-
-            <Field label="Country" required error={errors["country"]}>
-              <NativeSelect
-                {...select("country", COUNTRIES, "Select Country")}
-                onChange={(country) => {
-                  // A Province of another Country no longer applies.
-                  patch({
-                    country,
-                    ...(provincesOf(country).includes(d.province) ? {} : { province: "" }),
-                  });
-                  clearErr(["province"]);
-                }}
-              />
-            </Field>
-            <Field label="Province" error={errors["province"]}>
-              <NativeSelect
-                {...select(
-                  "province",
-                  provincesOf(d.country),
-                  d.country ? "Select Province" : "Select Country first",
-                )}
-                disabled={!d.country}
-              />
-            </Field>
-            <Field label="Post Code" error={errors["postcode"]}>
-              <Input
-                inputMode="numeric"
-                maxLength={10}
-                placeholder="Enter Post Code"
-                value={d.postcode}
-                onChange={(e) => patch({ postcode: sanitizePostcode(e.target.value) })}
-                aria-invalid={!!errors["postcode"] || undefined}
-              />
-            </Field>
-            <Field label="Email" error={errors["email"]} className="sm:col-span-2">
-              <Input placeholder="Enter Email" {...text("email")} />
-            </Field>
-            <Field label="Phone" error={errors["phone"]}>
-              <Input
-                inputMode="tel"
-                placeholder="Enter Phone"
-                value={d.phone}
-                onChange={(e) => patch({ phone: sanitizePhone(e.target.value) })}
-                aria-invalid={!!errors["phone"] || undefined}
-              />
-            </Field>
+              {errors["roles"] && (
+                <span className="text-xs font-medium text-destructive">{errors["roles"]}</span>
+              )}
+            </div>
           </div>
         </Panel>
       </ReadOnlyScope>

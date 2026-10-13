@@ -18,8 +18,6 @@ import {
   CURRENCIES,
   INVOICE_LANGUAGES,
   LEGAL_TYPES,
-  PARTNER_GROUPS,
-  SERVICE_PROVIDER_TYPES,
   TAX_OPTIONS,
 } from "@/mock-data/businessPartners";
 
@@ -51,28 +49,6 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
     render: (r) => <span className="font-semibold text-primary">{r.bpCode}</span>,
   },
   {
-    key: "roles",
-    width: 170,
-    label: "Role",
-    type: "text",
-    value: (r) => r.roles.join(", "),
-    render: (r) => (
-      <span className="flex flex-nowrap gap-1">
-        {r.roles.map((x) => (
-          <Tag key={x}>{x}</Tag>
-        ))}
-      </span>
-    ),
-  },
-  {
-    key: "legalType",
-    width: 120,
-    label: "Legal Type",
-    type: "enum",
-    options: [...LEGAL_TYPES],
-    value: (r) => r.legalType,
-  },
-  {
     key: "taxCode",
     width: 130,
     label: "Tax Code",
@@ -87,20 +63,45 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
     value: (r) => r.identityNo,
   },
   {
-    key: "partnerGroup",
-    width: 130,
-    label: "Partner Group",
-    type: "enum",
-    options: PARTNER_GROUPS,
-    value: (r) => r.partnerGroup,
+    key: "localName",
+    width: 240,
+    truncate: true,
+    label: "Local Name",
+    type: "text",
+    value: (r) => r.localName,
+    className: "font-medium",
   },
   {
-    key: "serviceProviderType",
-    width: 170,
-    label: "Service Provider Type",
+    key: "localAddress",
+    width: 260,
+    truncate: true,
+    label: "Local Address",
+    type: "text",
+    value: (r) => r.localAddress,
+  },
+  {
+    key: "englishName",
+    width: 240,
+    truncate: true,
+    label: "English Name",
+    type: "text",
+    value: (r) => r.englishName,
+  },
+  {
+    key: "englishAddress",
+    width: 260,
+    truncate: true,
+    label: "English Address",
+    type: "text",
+    value: (r) => r.englishAddress,
+  },
+  {
+    key: "legalType",
+    width: 120,
+    label: "Legal Type",
     type: "enum",
-    options: SERVICE_PROVIDER_TYPES,
-    value: (r) => r.serviceProviderType,
+    options: [...LEGAL_TYPES],
+    value: (r) => r.legalType,
   },
   {
     key: "businessCategory",
@@ -112,14 +113,6 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
   },
   { key: "tax", width: 140, label: "Tax", type: "enum", options: TAX_OPTIONS, value: (r) => r.tax },
   {
-    key: "currency",
-    width: 100,
-    label: "Currency",
-    type: "enum",
-    options: CURRENCIES,
-    value: (r) => r.currency,
-  },
-  {
     key: "invoiceLanguage",
     width: 160,
     label: "Invoicing Language",
@@ -128,37 +121,11 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
     value: (r) => r.invoiceLanguage,
   },
   {
-    key: "localName",
-    width: 240,
-    truncate: true,
-    label: "Local Name",
+    key: "invoiceSerial",
+    width: 130,
+    label: "Invoice Serial",
     type: "text",
-    value: (r) => r.localName,
-    className: "font-medium",
-  },
-  {
-    key: "englishName",
-    width: 240,
-    truncate: true,
-    label: "English Name",
-    type: "text",
-    value: (r) => r.englishName,
-  },
-  {
-    key: "localAddress",
-    width: 260,
-    truncate: true,
-    label: "Local Address",
-    type: "text",
-    value: (r) => r.localAddress,
-  },
-  {
-    key: "englishAddress",
-    width: 260,
-    truncate: true,
-    label: "English Address",
-    type: "text",
-    value: (r) => r.englishAddress,
+    value: (r) => r.invoiceSerial,
   },
   {
     key: "country",
@@ -169,16 +136,27 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
     value: (r) => r.country,
   },
   {
-    key: "province",
-    width: 150,
-    truncate: true,
-    label: "Province",
-    type: "text",
-    value: (r) => r.province,
+    key: "currency",
+    width: 100,
+    label: "Currency",
+    type: "enum",
+    options: CURRENCIES,
+    value: (r) => r.currency,
   },
-  { key: "postcode", width: 100, label: "Post Code", type: "text", value: (r) => r.postcode },
-  { key: "email", width: 200, truncate: true, label: "Email", type: "text", value: (r) => r.email },
-  { key: "phone", width: 140, label: "Phone", type: "text", value: (r) => r.phone },
+  {
+    key: "roles",
+    width: 170,
+    label: "Role",
+    type: "text",
+    value: (r) => r.roles.join(", "),
+    render: (r) => (
+      <span className="flex flex-nowrap gap-1">
+        {r.roles.map((x) => (
+          <Tag key={x}>{x}</Tag>
+        ))}
+      </span>
+    ),
+  },
   {
     key: "status",
     width: 110,
@@ -211,7 +189,7 @@ function BusinessPartnerList() {
       rows={rows}
       columns={columns}
       searchPlaceholder={t("Tìm BP Code, tên, mã số thuế...", "Search BP Code, name, tax code...")}
-      searchValues={(r) => [r.bpCode, r.localName, r.englishName, r.taxCode, r.identityNo, r.email]}
+      searchValues={(r) => [r.bpCode, r.localName, r.englishName, r.taxCode, r.identityNo]}
       quickFilters={[
         {
           key: "status",

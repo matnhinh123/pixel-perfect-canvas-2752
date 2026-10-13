@@ -12,16 +12,13 @@ import type {
   BusinessPartnerRecord,
 } from "@/types";
 import { BP_ROLES } from "@/types";
-import { EMPLOYEES, departmentName } from "@/mock-data/staff";
+import { EMPLOYEES, departmentName, leaderNameOf } from "@/mock-data/staff";
 import {
   BUSINESS_CATEGORIES,
   COUNTRIES,
   CURRENCIES,
   LEGAL_TYPES,
-  PARTNER_GROUPS,
   PARTNER_SCOPES,
-  provincesOf,
-  SERVICE_PROVIDER_TYPES,
   TAX_REGISTRY,
   TENANT_DEFAULT_CURRENCY,
 } from "@/mock-data/businessPartners";
@@ -128,6 +125,7 @@ export const blankCredit = (): BpCreditTerm => ({
   autoLockAfterExpiry: true,
   approvedBy: "",
   status: "Active",
+  remark: "",
 });
 export const blankPayment = (): BpPaymentTerm => ({
   rid: newRowId(),
@@ -138,11 +136,13 @@ export const blankPayment = (): BpPaymentTerm => ({
   effectiveFrom: "",
   effectiveTo: "",
   status: "Active",
+  remark: "",
 });
 export const blankSalesman = (): BpSalesman => ({
   rid: newRowId(),
   staffId: "",
   staffName: "",
+  leader: "",
   department: "",
   serviceCode: "",
   serviceName: "",
@@ -162,6 +162,7 @@ export const blankContact = (): BpContact => ({
   address: "",
   primaryContact: false,
   status: "Active",
+  remark: "",
 });
 export const blankBank = (): BpBankAccount => ({
   rid: newRowId(),
@@ -174,6 +175,7 @@ export const blankBank = (): BpBankAccount => ({
   accountNo: "",
   accountHolder: "",
   currency: "",
+  remark: "",
 });
 export const blankDocument = (): BpDocument => ({
   rid: newRowId(),
@@ -271,6 +273,7 @@ const oldContact = (c: Loose): BpContact => ({
   address: str(c["address"]),
   primaryContact: c["primaryContact"] === true,
   status: c["status"] === "Inactive" ? "Inactive" : "Active",
+  remark: str(c["remark"]),
 });
 /** Salesman saved by any earlier version (incl. the old hard-coded list) → current row. */
 const oldSalesman = (s: Loose): BpSalesman => {
@@ -280,6 +283,7 @@ const oldSalesman = (s: Loose): BpSalesman => {
     rid: str(s["rid"]) || newRowId(),
     staffId: e?.id ?? str(s["staffId"]),
     staffName: e?.name ?? name,
+    leader: e ? leaderNameOf(e.id) : str(s["leader"]),
     department: str(s["department"]) || (e ? departmentName(e.departmentId) : ""),
     serviceCode: str(s["serviceCode"]),
     serviceName: str(s["serviceName"]),
@@ -391,11 +395,6 @@ const isBlankRow = <T extends { rid: string }>(row: T, blank: () => T) => {
   return Object.entries(row).every(([k, v]) => k === "rid" || v === b[k]);
 };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE = /^\+?[\d ]+$/;
-const POSTCODE = /^\d{1,10}$/;
-/** Typing filters: Phone keeps digits, spaces and a leading +; Post Code keeps digits (max 10). */
-export const sanitizePhone = (v: string) => v.replace(/[^\d+ ]/g, "").replace(/(?!^)\+/g, "");
-export const sanitizePostcode = (v: string) => v.replace(/\D/g, "").slice(0, 10);
 
 /** Row checks for one table → first problem, e.g. "Row 2: Service Code is required." */
 function checkRows<T extends { rid: string }>(
@@ -433,7 +432,6 @@ export function validateBusinessPartner(
   req("country", "Country", "Country");
   req("currency", "Currency", "Currency");
   req("businessCategory", "Business Category", "Business Category");
-  req("partnerGroup", "Partner Group", "Partner Group");
 
   const code = d.bpCode.trim().toUpperCase();
   if (!code) e["bpCode"] = tr("Nhập BP Code.", "BP Code is required.");
@@ -484,22 +482,6 @@ export function validateBusinessPartner(
       );
   }
 
-  if (d.email.trim() && !EMAIL.test(d.email.trim()))
-    e["email"] = tr("Email không hợp lệ.", "Invalid email.");
-  // Province must belong to the chosen Country.
-  if (d.province && !provincesOf(d.country).includes(d.province))
-    e["province"] = tr(
-      `Province "${d.province}" không thuộc ${d.country || "Country đã chọn"}.`,
-      `Province "${d.province}" is not in ${d.country || "the selected Country"}.`,
-    );
-  // Numbers only (Phone may start with + and use spaces as separators).
-  if (d.phone.trim() && !PHONE.test(d.phone.trim()))
-    e["phone"] = tr(
-      "Phone chỉ gồm số (có thể bắt đầu bằng +).",
-      "Phone may only contain digits (optionally starting with +).",
-    );
-  if (d.postcode.trim() && !POSTCODE.test(d.postcode.trim()))
-    e["postcode"] = tr("Post Code chỉ gồm số.", "Post Code may only contain digits.");
   if (d.roles.length === 0)
     e["roles"] = tr("Chọn ít nhất một vai trò.", "Select at least one role.");
 
@@ -530,7 +512,7 @@ export function validateBusinessPartner(
   const banks = (p: "customer" | "vendor") => {
     set(
       `${p}.contacts`,
-      checkRows(d[p].contacts, blankContact, [["fullName", "Full Name"]], (r) =>
+      checkRows(d[p].contacts, blankContact, [], (r) =>
         r.email && !EMAIL.test(r.email) ? tr("Email không hợp lệ.", "Invalid email.") : null,
       ) ??
         (pruned(d[p].contacts, blankContact).filter((c) => c.primaryContact).length > 1
@@ -629,7 +611,7 @@ const SCALARS: [keyof BusinessPartnerRecord, string][] = [
   ["taxCode", "Tax Code"],
   ["identityNo", "Identity Number"],
   ["form", "Form"],
-  ["invoiceSerial", "Serial"],
+  ["invoiceSerial", "Invoice Serial"],
   ["localName", "Local Name"],
   ["englishName", "English Name"],
   ["localAddress", "Local Address"],
@@ -651,7 +633,7 @@ const SCALARS: [keyof BusinessPartnerRecord, string][] = [
   ["defaultPaymentTerm", "Default Payment Term"],
   ["creditLimit", "Credit Limit"],
   ["creditLimitCurrency", "Credit Limit Currency"],
-  ["note", "Notes"],
+  ["note", "Remark"],
 ];
 const fmt = (v: unknown) => (Array.isArray(v) ? v.join(", ") : String(v ?? ""));
 
@@ -682,6 +664,7 @@ const CONTACT_COLS: Cols = [
   ["address", "Address"],
   ["primaryContact", "Primary Contact"],
   ["status", "Status"],
+  ["remark", "Remark"],
 ];
 const BANK_COLS: Cols = [
   ["bankCode", "Bank Code"],
@@ -693,12 +676,14 @@ const BANK_COLS: Cols = [
   ["accountNo", "Account No."],
   ["accountHolder", "Account Holder"],
   ["currency", "Currency"],
+  ["remark", "Remark"],
 ];
 const SALES_COLS: Cols = [
   ["staffName", "Staff"],
+  ["leader", "Leader"],
   ["department", "Department"],
   ...SERVICE,
-  ["remark", "Notes"],
+  ["remark", "Remark"],
 ];
 const TABLES: TableSpec[] = [
   {
@@ -711,7 +696,7 @@ const TABLES: TableSpec[] = [
       ["validDate", "Valid Date"],
       ["expiryDate", "Expiry Date"],
       ["fileName", "Attachment"],
-      ["remark", "Notes"],
+      ["remark", "Remark"],
     ],
   },
   {
@@ -723,13 +708,13 @@ const TABLES: TableSpec[] = [
       ["creditTerm", "Credit Term"],
       ["creditDays", "Credit Days"],
       ["creditLimit", "Credit Limit"],
-      ["currency", "Currency"],
       ["woAccessFrom", "WO Access From"],
       ["woAccessTo", "WO Access To"],
       ["woAccessPolicy", "WO Access Policy"],
       ["autoLockAfterExpiry", "Auto Lock After Expiry"],
       ["approvedBy", "Approved By"],
       ["status", "Status"],
+      ["remark", "Remark"],
     ],
   },
   {
@@ -757,10 +742,10 @@ const TABLES: TableSpec[] = [
     cols: [
       ...SERVICE,
       ["paymentTerm", "Payment Term"],
-      ["currency", "Currency"],
       ["effectiveFrom", "Effective From"],
       ["effectiveTo", "Effective To"],
       ["status", "Status"],
+      ["remark", "Remark"],
     ],
   },
   {
@@ -864,13 +849,20 @@ export const businessPartnerService = {
       roles: roleOrder.filter((r) => d.roles.includes(r)),
       documents: pruned(d.documents, blankDocument),
       customer: {
-        creditTerms: pruned(d.customer.creditTerms, blankCredit),
+        // Term amounts follow the partner Currency of General Information.
+        creditTerms: pruned(d.customer.creditTerms, blankCredit).map((r) => ({
+          ...r,
+          currency: d.currency,
+        })),
         contacts: pruned(d.customer.contacts, blankContact),
         banks: pruned(d.customer.banks, blankBank),
         salesmen: pruned(d.customer.salesmen, blankSalesman),
       },
       vendor: {
-        paymentTerms: pruned(d.vendor.paymentTerms, blankPayment),
+        paymentTerms: pruned(d.vendor.paymentTerms, blankPayment).map((r) => ({
+          ...r,
+          currency: d.currency,
+        })),
         contacts: pruned(d.vendor.contacts, blankContact),
         banks: pruned(d.vendor.banks, blankBank),
         salesmen: pruned(d.vendor.salesmen, blankSalesman),
@@ -957,18 +949,12 @@ const bpDraftOfRow = (r: Record<string, string>): BusinessPartnerDraft => {
     // Same pre-fill as the form when the English address is left empty.
     englishAddress: r["englishAddress"] || toEnglishAddress(localAddress),
     country: pick(r["country"], COUNTRIES) || "",
-    province: r["province"] ?? "",
-    postcode: r["postcode"] ?? "",
-    email: r["email"] ?? "",
-    phone: r["phone"] ?? "",
     currency,
     currencies: [currency],
     businessCategory: pickAll(r["businessCategory"], BUSINESS_CATEGORIES).filter(
       (x): x is string => !!x,
     ),
-    partnerGroup: pick(r["partnerGroup"], PARTNER_GROUPS) || "",
     partnerScope: pick(r["partnerScope"], PARTNER_SCOPES) || "",
-    serviceProviderType: pick(r["serviceProviderType"], SERVICE_PROVIDER_TYPES) || "",
     defaultPaymentTerm: r["defaultPaymentTerm"] ?? "",
     creditLimit,
     creditLimitCurrency: creditLimit ? currency : "",
@@ -997,7 +983,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
     {
       key: "taxCode",
       header: "Tax Code",
-      example: "0312345678",
+      example: "0301116791",
       aliases: ["Tax ID", "Mã số thuế"],
     },
     {
@@ -1026,10 +1012,6 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
     },
     { key: "englishAddress", header: "English Address", example: "" },
     { key: "country", header: "Country", required: true, example: "Vietnam" },
-    { key: "province", header: "Province", example: "Ho Chi Minh City" },
-    { key: "postcode", header: "Postcode", example: "" },
-    { key: "email", header: "Email", example: "contact@abc.vn" },
-    { key: "phone", header: "Phone", example: "028 3823 0000" },
     { key: "currency", header: "Currency", example: "VND" },
     {
       key: "businessCategory",
@@ -1037,14 +1019,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
       required: true,
       example: "Logistics; Trading",
     },
-    { key: "partnerGroup", header: "Partner Group", required: true, example: "SME" },
     { key: "partnerScope", header: "Partner Scope", example: "Domestic", aliases: ["Scope"] },
-    {
-      key: "serviceProviderType",
-      header: "Service Provider Type",
-      example: "",
-      aliases: ["Provider Type"],
-    },
     {
       key: "defaultPaymentTerm",
       header: "Payment Term",
@@ -1053,7 +1028,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
     },
     { key: "creditLimit", header: "Credit Limit", example: "" },
     { key: "status", header: "Status", example: "Active", aliases: ["Trạng thái"] },
-    { key: "note", header: "Note", example: "", aliases: ["Notes"] },
+    { key: "note", header: "Remark", example: "", aliases: ["Note", "Notes"] },
   ],
   existingKeys: () =>
     new Set(
@@ -1070,9 +1045,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
     one("legalType", LEGAL_TYPES);
     one("country", COUNTRIES);
     one("currency", CURRENCIES);
-    one("partnerGroup", PARTNER_GROUPS);
     one("partnerScope", PARTNER_SCOPES);
-    one("serviceProviderType", SERVICE_PROVIDER_TYPES);
     one("status", STATUSES);
     if (pickAll(r["roles"], BP_ROLES).includes(null))
       e.push({ field: "roles", error: oneOf("Use", BP_ROLES) + " (separate with ;)" });
@@ -1105,15 +1078,9 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
         `${i + 1} Lê Lợi, Quận 1, TP. Hồ Chí Minh`,
         "",
         "Vietnam",
-        "Ho Chi Minh City",
-        "",
-        `contact${n}@sample.vn`,
-        "",
         "VND",
         vendor ? "Logistics" : "Trading; Retail",
-        vendor ? "Carrier" : "SME",
         "Domestic",
-        vendor ? "Trucking" : "",
         "",
         "",
         i % 8 === 7 ? "Inactive" : "Active",
@@ -1122,7 +1089,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
     });
     rows[4]![0] = "IMP-BP01"; // duplicate BP Code
     rows[10]![2] = "Partner"; // unknown role
-    rows[15]![12] = "not-an-email"; // invalid email
+    rows[15]![1] = "Government"; // unknown Legal Type
     return rows;
   },
 });

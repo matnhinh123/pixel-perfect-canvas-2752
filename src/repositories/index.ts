@@ -28,7 +28,7 @@ import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
 import { seedFixedCosts, seedFixedCostSummaries } from "@/mock-data/fixedCost";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
 import { seedVehicleMasters } from "@/mock-data/vehicleMaster";
-import { seedBusinessPartners } from "@/mock-data/businessPartners";
+import { seedBusinessPartners, seedPetrolimexTienGiang } from "@/mock-data/businessPartners";
 import { seedLocations, type LocationMasterRecord } from "@/mock-data/locations";
 import { createCollection, readJson, subscribeKey, writeJson } from "./storage";
 
@@ -47,9 +47,13 @@ export const costGroupRepository = createCollection<CostGroupRecord>(
   seedCostGroups,
 );
 export const costItemRepository = createCollection<CostItemRecord>("cost-items.v4", seedCostItems);
-export const fixedCostRepository = createCollection<FixedCostRecord>("fixed-costs", seedFixedCosts);
+// ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
+export const fixedCostRepository = createCollection<FixedCostRecord>(
+  "fixed-costs.v2",
+  seedFixedCosts,
+);
 export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
-  "fixed-cost-summaries",
+  "fixed-cost-summaries.v2",
   seedFixedCostSummaries,
 );
 /** Location master; Routing stop pickers read active locations from it. */
@@ -74,6 +78,12 @@ export const businessPartnerRepository = createCollection<BusinessPartnerRecord>
   "business-partners",
   seedBusinessPartners,
 );
+// Demo partners added after the first seed: inserted once when missing (a deleted one stays deleted).
+{
+  const have = new Set(businessPartnerRepository.all().map((b) => b.id));
+  const add = seedPetrolimexTienGiang().filter((b) => !have.has(b.id));
+  if (add.length) businessPartnerRepository.insertMany(add);
+}
 export const importHistoryRepository = createCollection<ImportBatch>(
   "import-history",
   seedImportHistory,

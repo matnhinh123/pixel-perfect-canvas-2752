@@ -158,3 +158,21 @@ describe("Change History", () => {
     expect(auditRepository.all().length).toBe(after);
   });
 });
+
+describe("Petrolimex Tiền Giang demo partners", () => {
+  it("are valid Vendor partners with the registry tax codes", async () => {
+    const { seedPetrolimexTienGiang } = await import("@/mock-data/businessPartners");
+    const { draftOf } = await import("@/services/businessPartnerService");
+    const rows = seedPetrolimexTienGiang();
+    expect(rows.map((r) => r.taxCode)).toEqual([
+      "1200100370",
+      "1200100370-010",
+      "1200100370-016",
+      "1200100370-017",
+    ]);
+    for (const r of rows) {
+      expect(r.roles).toEqual(["Vendor"]);
+      expect(validateBusinessPartner(draftOf(r), r.id)).toEqual({});
+    }
+  });
+});

@@ -56,4 +56,6 @@ export interface Employee {
   id: string;
   name: string;
   departmentId: string;
+  /** Employee id of the direct leader (none for department heads). */
+  leaderId?: string;
 }

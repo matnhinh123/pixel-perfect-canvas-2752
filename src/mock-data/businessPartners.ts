@@ -7,7 +7,7 @@ import type {
   BpSalesman,
   BusinessPartnerRecord,
 } from "@/types";
-import { EMPLOYEES, departmentName } from "./staff";
+import { EMPLOYEES, departmentName, leaderNameOf } from "./staff";
 
 export const LEGAL_TYPES = ["Company", "Individual", "Representative"] as const;
 export const COUNTRIES = ["Vietnam", "Singapore", "China", "Japan", "Korea", "Thailand", "USA"];
@@ -42,7 +42,22 @@ export const PROVINCES_BY_COUNTRY: Record<string, string[]> = {
 export const provincesOf = (country: string) => PROVINCES_BY_COUNTRY[country] ?? [];
 export const CURRENCIES = ["VND", "USD", "EUR", "SGD", "JPY", "CNY"];
 export const INVOICE_LANGUAGES = ["Vietnamese", "English", "Bilingual"];
+/** Business Category options, in the order of the design; the earlier values follow. */
 export const BUSINESS_CATEGORIES = [
+  "Forwarder",
+  "Shipper",
+  "Carrier",
+  "Agent",
+  "Consignee",
+  "Trucker",
+  "Individual (Person)",
+  "Branch / Internal Unit",
+  "Terminal / Depot Operator",
+  "Other",
+  "Financial Partner",
+  "Government / Authority",
+  "Technology Partner",
+  "Owner / Shareholder",
   "Logistics",
   "Manufacturing",
   "Trading",
@@ -50,7 +65,6 @@ export const BUSINESS_CATEGORIES = [
   "Shipping Line",
   "Airline",
   "Customs Broker",
-  "Other",
 ];
 export const PARTNER_SCOPES = ["Domestic", "International", "Both"];
 export const PARTNER_GROUPS = ["Key Account", "SME", "Agent", "Carrier", "Supplier", "Internal"];
@@ -117,6 +131,7 @@ const credit = (
   autoLockAfterExpiry: true,
   approvedBy: "Finance Manager",
   status: "Active",
+  remark: "",
   ...p,
 });
 const pay = (
@@ -129,6 +144,7 @@ const pay = (
   effectiveFrom: "2026-01-01",
   effectiveTo: "2026-12-31",
   status: "Active",
+  remark: "",
   ...p,
 });
 /** Sales assignment from the staff master; the service is optional. */
@@ -138,6 +154,7 @@ const sales = (rid: string, staffId: string, serviceCode = "", serviceName = "")
     rid,
     staffId,
     staffName: e?.name ?? "",
+    leader: leaderNameOf(staffId),
     department: e ? departmentName(e.departmentId) : "",
     serviceCode,
     serviceName,
@@ -157,28 +174,29 @@ const contact = (rid: string, p: Partial<BpContact> & Pick<BpContact, "fullName"
   address: "",
   primaryContact: false,
   status: "Active",
+  remark: "",
   ...p,
 });
 
-/** Mock of the tax authority lookup behind "Get Info" (Company only): MST → registered name/address. */
+/**
+ * Mock of the tax authority lookup behind "Get Info" (Company only): MST → registered name/address.
+ * Real companies, as published in the national business / tax registry, so the demo shows true data.
+ */
 export const TAX_REGISTRY: Record<
   string,
   { localName: string; englishName: string; localAddress: string }
 > = {
-  "0312345678": {
-    localName: "Công ty TNHH Điện tử Sao Việt",
-    englishName: "Sao Viet Electronics Co., Ltd",
-    localAddress: "Lô C5, KCN Tân Thuận, Quận 7, TP. Hồ Chí Minh",
+  // Gemadept Corporation (HOSE: GMD) — enterprise registration, 35th amendment (25/05/2026).
+  "0301116791": {
+    localName: "Công ty Cổ phần Gemadept",
+    englishName: "Gemadept Corporation",
+    localAddress: "Số 2bis-4-6 Lê Thánh Tôn, Phường Sài Gòn, Thành phố Hồ Chí Minh",
   },
-  "0301234567": {
-    localName: "Công ty Cổ phần Vận tải Biển Phương Nam",
-    englishName: "Phuong Nam Shipping Joint Stock Company",
-    localAddress: "12 Tôn Đức Thắng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
-  },
-  "0105678901": {
-    localName: "Công ty TNHH Thương mại Hà Thành",
-    englishName: "Ha Thanh Trading Company Limited",
-    localAddress: "88 Láng Hạ, Quận Đống Đa, Hà Nội",
+  // Vietnam National Petroleum Group (Petrolimex, HOSE: PLX).
+  "0100107370": {
+    localName: "Tập đoàn Xăng dầu Việt Nam",
+    englishName: "Vietnam National Petroleum Group",
+    localAddress: "Số 1 Khâm Thiên, Phường Văn Miếu - Quốc Tử Giám, Thành phố Hà Nội",
   },
 };
 
@@ -408,8 +426,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             serviceName: "Sea Freight",
             creditTerm: "NET45",
             creditDays: "45",
-            creditLimit: "50000",
-            currency: "USD",
+            creditLimit: "1250000000",
             woAccessFrom: "2026-08-01T08:00",
             woAccessTo: "2026-08-15T18:00",
             woAccessPolicy: "Temporary Allow",
@@ -429,6 +446,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             accountNo: "0071001234567",
             accountHolder: "QTL LOGISTICS CO LTD",
             currency: "VND",
+            remark: "",
           },
         ],
       },
@@ -444,7 +462,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             serviceCode: "FRT-SEA",
             serviceName: "Sea Freight",
             paymentTerm: "NET45",
-            currency: "USD",
           }),
         ],
         contacts: [
@@ -463,4 +480,117 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
     },
     "2026-07-20T03:00:00.000Z",
   ),
+  ...seedPetrolimexTienGiang(),
 ];
+
+/**
+ * Petrolimex Tiền Giang (Công ty Xăng dầu Tiền Giang, MST 1200100370) and some of its petrol
+ * stations, as listed in the public tax registry (masothue / thongtincongty). Tiền Giang merged into
+ * Đồng Tháp in 2025; the registry still shows some of the old addresses.
+ */
+export const PETROLIMEX_TG_IDS = [
+  "BP-PLX-TG",
+  "BP-PLX-TG-CH11",
+  "BP-PLX-TG-CH18",
+  "BP-PLX-TG-CH19",
+];
+export function seedPetrolimexTienGiang(): BusinessPartnerRecord[] {
+  const at = "2026-10-13T03:00:00.000Z";
+  const vendor = (p: Partial<BusinessPartnerRecord["vendor"]> = {}) => ({
+    paymentTerms: [],
+    contacts: [],
+    banks: [],
+    salesmen: [],
+    ...p,
+  });
+  const station = (
+    id: string,
+    bpCode: string,
+    taxCode: string,
+    no: number,
+    localAddress: string,
+    status: "Active" | "Inactive",
+    note = "",
+  ) =>
+    bp(
+      {
+        id,
+        bpCode,
+        taxCode,
+        invoiceSerial: "",
+        localName: `Cửa hàng Xăng dầu số ${no} - Công ty Xăng dầu Tiền Giang`,
+        englishName: `Petrolimex Tien Giang - Petrol Station No. ${no}`,
+        email: "",
+        localAddress,
+        status,
+        businessCategory: ["Trading"],
+        roles: ["Vendor"],
+        partnerGroup: "",
+        province: "",
+        tax: "VAT 10%",
+        note,
+        vendor: vendor(),
+      },
+      at,
+    );
+  return [
+    bp(
+      {
+        id: "BP-PLX-TG",
+        bpCode: "PLX-TG",
+        taxCode: "1200100370",
+        invoiceSerial: "",
+        localName: "Công ty Xăng dầu Tiền Giang",
+        englishName: "Petrolimex Tien Giang",
+        email: "tiengiang@petrolimex.com.vn",
+        phone: "0273 3872981",
+        localAddress: "Số 488 Đinh Bộ Lĩnh, Phường 9, Thành phố Mỹ Tho, Tỉnh Tiền Giang",
+        businessCategory: ["Trading"],
+        roles: ["Vendor"],
+        partnerGroup: "",
+        province: "",
+        tax: "VAT 10%",
+        vendor: vendor({
+          contacts: [
+            contact("k1", {
+              gender: "Mr.",
+              fullName: "Phan Thanh Tâm",
+              contactRole: "Director",
+              telephone: "0273 3872981",
+              email: "tiengiang@petrolimex.com.vn",
+              address: "Số 488 Đinh Bộ Lĩnh, Phường 9, Thành phố Mỹ Tho, Tỉnh Tiền Giang",
+              primaryContact: true,
+              remark: "Legal representative (Chairman cum General Director)",
+            }),
+          ],
+        }),
+      },
+      at,
+    ),
+    station(
+      "BP-PLX-TG-CH11",
+      "PLX-TG-CH11",
+      "1200100370-010",
+      11,
+      "Ngã ba Bình Ân, Huyện Gò Công Đông, Tỉnh Tiền Giang",
+      "Active",
+    ),
+    station(
+      "BP-PLX-TG-CH18",
+      "PLX-TG-CH18",
+      "1200100370-016",
+      18,
+      "Ấp 12, Xã Long Trung, Huyện Cai Lậy, Tỉnh Tiền Giang",
+      "Active",
+    ),
+    station(
+      "BP-PLX-TG-CH19",
+      "PLX-TG-CH19",
+      "1200100370-017",
+      19,
+      "Khu 7, Thị trấn Cai Lậy, Huyện Cai Lậy, Tỉnh Tiền Giang",
+      "Inactive",
+      "Tax code terminated (station closed) per the tax registry.",
+    ),
+  ];
+}

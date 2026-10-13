@@ -39,6 +39,7 @@ export interface BpCreditTerm extends Row {
   autoLockAfterExpiry: boolean;
   approvedBy: string;
   status: CreditStatus;
+  remark: string;
 }
 
 /** Vendor tab: payment terms per service (AP account 331). */
@@ -51,12 +52,15 @@ export interface BpPaymentTerm extends Row {
   effectiveFrom: string;
   effectiveTo: string;
   status: "Active" | "Inactive";
+  remark: string;
 }
 
 /** Sales Assignment of one role: staff from the staff master; the service is optional. */
 export interface BpSalesman extends Row {
   staffId: string;
   staffName: string;
+  /** Read-only: the staff's direct leader, filled when the staff is picked. */
+  leader: string;
   department: string;
   serviceCode: string;
   serviceName: string;
@@ -78,6 +82,7 @@ export interface BpContact extends Row {
   /** One primary contact per role. */
   primaryContact: boolean;
   status: "Active" | "Inactive";
+  remark: string;
 }
 
 export interface BpBankAccount extends Row {
@@ -90,6 +95,7 @@ export interface BpBankAccount extends Row {
   accountNo: string;
   accountHolder: string;
   currency: string;
+  remark: string;
 }
 
 /**

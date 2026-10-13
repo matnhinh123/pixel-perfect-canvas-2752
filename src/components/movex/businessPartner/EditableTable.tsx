@@ -13,7 +13,8 @@ export interface ColDef<T> {
   /** Minimum column width in px. */
   width: number;
   /** "file": pick a file from the computer; the cell keeps its file name. */
-  kind: "text" | "number" | "date" | "datetime" | "select" | "bool" | "file";
+  /** "readonly": shown, never edited (filled by `derive`). */
+  kind: "text" | "number" | "date" | "datetime" | "select" | "bool" | "file" | "readonly";
   options?: readonly string[];
   /** Unit shown to the right of the input (e.g. "Day", "VND"). */
   suffix?: string;
@@ -72,6 +73,16 @@ export function EditableTable<T extends { rid: string }>({
             aria-label={c.label}
             onCheckedChange={(on) => set(r.rid, c.key, on === true)}
           />
+        </div>
+      );
+    if (c.kind === "readonly")
+      return (
+        <div
+          className={cn(cell, "flex items-center bg-muted/50", !v && "text-muted-foreground")}
+          aria-label={c.label}
+          title={v ? String(v) : undefined}
+        >
+          <span className="truncate">{v ? String(v) : "—"}</span>
         </div>
       );
     if (c.kind === "file")

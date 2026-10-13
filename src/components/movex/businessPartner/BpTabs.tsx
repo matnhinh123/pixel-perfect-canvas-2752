@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useCollection } from "@/hooks/use-store";
 import { serviceRepository } from "@/repositories";
 import {
@@ -12,7 +12,12 @@ import {
   GENDERS,
   WO_ACCESS_POLICIES,
 } from "@/mock-data/businessPartners";
-import { DEPARTMENTS as STAFF_DEPARTMENTS, EMPLOYEES, departmentName } from "@/mock-data/staff";
+import {
+  DEPARTMENTS as STAFF_DEPARTMENTS,
+  EMPLOYEES,
+  departmentName,
+  leaderNameOf,
+} from "@/mock-data/staff";
 import {
   blankBank,
   blankContact,
@@ -30,6 +35,7 @@ import type {
   BpPaymentTerm,
   BpSalesman,
 } from "@/types";
+import { cn } from "@/lib/utils";
 import { EditableTable, type ColDef } from "./EditableTable";
 
 type Draft = BusinessPartnerDraft;
@@ -40,6 +46,55 @@ interface TabProps {
   errors: Errors;
 }
 type Role = "customer" | "vendor";
+
+/**
+ * Sub menu of a role tab: one table at a time instead of four stacked ones. A section with a
+ * validation error shows a red dot, and the menu jumps to the first such section after a save.
+ */
+function SectionMenu({
+  sections,
+  errors,
+}: {
+  sections: { key: string; label: string; errorKey: string; body: ReactNode }[];
+  errors: Errors;
+}) {
+  const [active, setActive] = useState(sections[0]!.key);
+  const withError = sections.filter((x) => errors[x.errorKey]).map((x) => x.key);
+  const errorSig = withError.join("|");
+  useEffect(() => {
+    if (withError.length && !withError.includes(active)) setActive(withError[0]!);
+    // Only when the set of sections with errors changes (i.e. after a save attempt).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errorSig]);
+  const current = sections.find((x) => x.key === active) ?? sections[0]!;
+  return (
+    <div className="space-y-4">
+      <div role="tablist" className="inline-flex flex-wrap gap-1 rounded-lg border bg-muted/60 p-1">
+        {sections.map((x) => (
+          <button
+            key={x.key}
+            type="button"
+            role="tab"
+            aria-selected={x.key === current.key}
+            onClick={() => setActive(x.key)}
+            className={cn(
+              "relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+              x.key === current.key
+                ? "bg-card text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {x.label}
+            {errors[x.errorKey] && (
+              <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" />
+            )}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel">{current.body}</div>
+    </div>
+  );
+}
 
 /** Active services (code + name) offered by every "Service Code / Service Name" cell. */
 function useServiceOptions() {
@@ -83,7 +138,7 @@ export function DocumentsTab({ d, set, errors }: TabProps) {
     { key: "validDate", label: "Valid Date", width: 140, kind: "date" },
     { key: "expiryDate", label: "Expiry Date", width: 140, kind: "date" },
     { key: "fileName", label: "Attachment", width: 220, kind: "file" },
-    { key: "remark", label: "Notes", width: 180, kind: "text" },
+    { key: "remark", label: "Remark", width: 180, kind: "text" },
   ];
   return (
     <EditableTable
@@ -106,7 +161,7 @@ function ContactTable({ role, d, set, errors }: TabProps & { role: Role }) {
     { key: "serviceCode", label: "Service Code", width: 160, kind: "select", options: svc.codes },
     { key: "serviceName", label: "Service Name", width: 180, kind: "select", options: svc.names },
     { key: "gender", label: "Gender", width: 100, kind: "select", options: GENDERS },
-    { key: "fullName", label: "Full Name", required: true, width: 200, kind: "text" },
+    { key: "fullName", label: "Full Name", width: 200, kind: "text" },
     { key: "identityNo", label: "Identity No.", width: 150, kind: "text" },
     { key: "telephone", label: "Telephone", width: 150, kind: "text" },
     { key: "mobilePhone", label: "Mobile Phone", width: 150, kind: "text" },
@@ -121,6 +176,7 @@ function ContactTable({ role, d, set, errors }: TabProps & { role: Role }) {
     { key: "address", label: "Address", width: 240, kind: "text" },
     { key: "primaryContact", label: "Primary Contact", width: 110, kind: "bool" },
     { key: "status", label: "Status", width: 120, kind: "select", options: ["Active", "Inactive"] },
+    { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];
   return (
     <EditableTable
@@ -162,6 +218,7 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
       kind: "select",
       options: EMPLOYEES.map((e) => e.name),
     },
+    { key: "leader", label: "Leader", width: 190, kind: "readonly" },
     {
       key: "department",
       label: "Department",
@@ -171,7 +228,7 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
     },
     { key: "serviceCode", label: "Service Code", width: 170, kind: "select", options: svc.codes },
     { key: "serviceName", label: "Service Name", width: 190, kind: "select", options: svc.names },
-    { key: "remark", label: "Notes", width: 220, kind: "text" },
+    { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];
   return (
     <EditableTable
@@ -183,7 +240,11 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
       derive={(r, key, v) => {
         if (key === "staffName") {
           const e = EMPLOYEES.find((x) => x.name === v);
-          return { staffId: e?.id ?? "", department: e ? departmentName(e.departmentId) : "" };
+          return {
+            staffId: e?.id ?? "",
+            leader: e ? leaderNameOf(e.id) : "",
+            department: e ? departmentName(e.departmentId) : "",
+          };
         }
         return svc.derive(r, key, v);
       }}
@@ -220,6 +281,7 @@ function BankTable({ role, d, set, errors }: TabProps & { role: Role }) {
     { key: "accountNo", label: "Account No.", required: true, width: 170, kind: "text" },
     { key: "accountHolder", label: "Account Holder", width: 200, kind: "text" },
     { key: "currency", label: "Currency", width: 110, kind: "select", options: CURRENCIES },
+    { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];
   return (
     <EditableTable
@@ -240,6 +302,28 @@ function BankTable({ role, d, set, errors }: TabProps & { role: Role }) {
 }
 
 // ---------------------------------------------------------------- Customer (AR 131)
+
+/** Contact Info, Bank Account and Sales Assignment sections of a role tab. */
+const roleSections = (role: Role, d: Draft, set: TabProps["set"], errors: Errors) => [
+  {
+    key: "contacts",
+    label: "Contact Info",
+    errorKey: `${role}.contacts`,
+    body: <ContactTable role={role} d={d} set={set} errors={errors} />,
+  },
+  {
+    key: "banks",
+    label: "Bank Account",
+    errorKey: `${role}.banks`,
+    body: <BankTable role={role} d={d} set={set} errors={errors} />,
+  },
+  {
+    key: "sales",
+    label: "Sales Assignment",
+    errorKey: `${role}.salesmen`,
+    body: <SalesTable role={role} d={d} set={set} errors={errors} />,
+  },
+];
 
 export function CustomerTab({ d, set, errors }: TabProps) {
   const svc = useServiceOptions();
@@ -262,8 +346,14 @@ export function CustomerTab({ d, set, errors }: TabProps) {
       options: CREDIT_TERMS,
     },
     { key: "creditDays", label: "Credit Days", width: 130, kind: "number", suffix: "Day" },
-    { key: "creditLimit", label: "Credit Limit", width: 170, kind: "number" },
-    { key: "currency", label: "Currency", width: 110, kind: "select", options: CURRENCIES },
+    // Amounts are in the partner Currency of General Information.
+    {
+      key: "creditLimit",
+      label: "Credit Limit",
+      width: 190,
+      kind: "number",
+      suffix: d.currency || "VND",
+    },
     { key: "woAccessFrom", label: "WO Access From", width: 200, kind: "datetime" },
     { key: "woAccessTo", label: "WO Access To", width: 200, kind: "datetime" },
     {
@@ -282,28 +372,37 @@ export function CustomerTab({ d, set, errors }: TabProps) {
       kind: "select",
       options: ["Active", "Scheduled", "Inactive"],
     },
+    { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];
   return (
-    <div className="space-y-4">
-      <EditableTable
-        title="Credit Term"
-        rows={d.customer.creditTerms}
-        onChange={(creditTerms) => set({ customer: { ...d.customer, creditTerms } })}
-        blank={blankCredit}
-        columns={cols}
-        derive={(r, key, v) => {
-          if (key === "creditTerm") {
-            const days = /^NET(\d+)$/.exec(String(v));
-            return { creditDays: days ? String(Number(days[1])) : v ? "0" : "" };
-          }
-          return svc.derive(r, key, v);
-        }}
-        error={errors["customer.creditTerms"]}
-      />
-      <ContactTable role="customer" d={d} set={set} errors={errors} />
-      <BankTable role="customer" d={d} set={set} errors={errors} />
-      <SalesTable role="customer" d={d} set={set} errors={errors} />
-    </div>
+    <SectionMenu
+      errors={errors}
+      sections={[
+        {
+          key: "credit",
+          label: "Credit Term",
+          errorKey: "customer.creditTerms",
+          body: (
+            <EditableTable
+              title="Credit Term"
+              rows={d.customer.creditTerms}
+              onChange={(creditTerms) => set({ customer: { ...d.customer, creditTerms } })}
+              blank={blankCredit}
+              columns={cols}
+              derive={(r, key, v) => {
+                if (key === "creditTerm") {
+                  const days = /^NET(\d+)$/.exec(String(v));
+                  return { creditDays: days ? String(Number(days[1])) : v ? "0" : "" };
+                }
+                return svc.derive(r, key, v);
+              }}
+              error={errors["customer.creditTerms"]}
+            />
+          ),
+        },
+        ...roleSections("customer", d, set, errors),
+      ]}
+    />
   );
 }
 
@@ -329,25 +428,33 @@ export function VendorTab({ d, set, errors }: TabProps) {
       kind: "select",
       options: CREDIT_TERMS,
     },
-    { key: "currency", label: "Currency", width: 110, kind: "select", options: CURRENCIES },
     { key: "effectiveFrom", label: "Effective From", width: 160, kind: "date" },
     { key: "effectiveTo", label: "Effective To", width: 160, kind: "date" },
     { key: "status", label: "Status", width: 120, kind: "select", options: ["Active", "Inactive"] },
+    { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];
   return (
-    <div className="space-y-4">
-      <EditableTable
-        title="Payment Term"
-        rows={d.vendor.paymentTerms}
-        onChange={(paymentTerms) => set({ vendor: { ...d.vendor, paymentTerms } })}
-        blank={blankPayment}
-        columns={cols}
-        derive={svc.derive}
-        error={errors["vendor.paymentTerms"]}
-      />
-      <ContactTable role="vendor" d={d} set={set} errors={errors} />
-      <BankTable role="vendor" d={d} set={set} errors={errors} />
-      <SalesTable role="vendor" d={d} set={set} errors={errors} />
-    </div>
+    <SectionMenu
+      errors={errors}
+      sections={[
+        {
+          key: "payment",
+          label: "Payment Term",
+          errorKey: "vendor.paymentTerms",
+          body: (
+            <EditableTable
+              title="Payment Term"
+              rows={d.vendor.paymentTerms}
+              onChange={(paymentTerms) => set({ vendor: { ...d.vendor, paymentTerms } })}
+              blank={blankPayment}
+              columns={cols}
+              derive={svc.derive}
+              error={errors["vendor.paymentTerms"]}
+            />
+          ),
+        },
+        ...roleSections("vendor", d, set, errors),
+      ]}
+    />
   );
 }
