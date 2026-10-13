@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuditLogRouteImport } from './routes/audit-log'
 import { Route as CogsRouteImport } from './routes/cogs'
-import { Route as Cost2RouteImport } from './routes/cost-2'
 import { Route as ExchangeRateRouteImport } from './routes/exchange-rate'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as VariableCostRouteImport } from './routes/variable-cost'
@@ -52,11 +51,6 @@ const AuditLogRoute = AuditLogRouteImport.update({
 const CogsRoute = CogsRouteImport.update({
   id: '/cogs',
   path: '/cogs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const Cost2Route = Cost2RouteImport.update({
-  id: '/cost-2',
-  path: '/cost-2',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExchangeRateRoute = ExchangeRateRouteImport.update({
@@ -189,7 +183,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
   '/cogs': typeof CogsRoute
-  '/cost-2': typeof Cost2Route
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
   '/variable-cost': typeof VariableCostRoute
@@ -220,7 +213,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
   '/cogs': typeof CogsRoute
-  '/cost-2': typeof Cost2Route
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
   '/variable-cost': typeof VariableCostRoute
@@ -252,7 +244,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
   '/cogs': typeof CogsRoute
-  '/cost-2': typeof Cost2Route
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
   '/variable-cost': typeof VariableCostRoute
@@ -285,7 +276,6 @@ export interface FileRouteTypes {
     | '/'
     | '/audit-log'
     | '/cogs'
-    | '/cost-2'
     | '/exchange-rate'
     | '/pricing'
     | '/variable-cost'
@@ -316,7 +306,6 @@ export interface FileRouteTypes {
     | '/'
     | '/audit-log'
     | '/cogs'
-    | '/cost-2'
     | '/exchange-rate'
     | '/pricing'
     | '/variable-cost'
@@ -347,7 +336,6 @@ export interface FileRouteTypes {
     | '/'
     | '/audit-log'
     | '/cogs'
-    | '/cost-2'
     | '/exchange-rate'
     | '/pricing'
     | '/variable-cost'
@@ -379,7 +367,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuditLogRoute: typeof AuditLogRoute
   CogsRoute: typeof CogsRoute
-  Cost2Route: typeof Cost2Route
   ExchangeRateRoute: typeof ExchangeRateRoute
   PricingRoute: typeof PricingRoute
   VariableCostRoute: typeof VariableCostRoute
@@ -428,13 +415,6 @@ declare module '@tanstack/react-router' {
       path: '/cogs'
       fullPath: '/cogs'
       preLoaderRoute: typeof CogsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cost-2': {
-      id: '/cost-2'
-      path: '/cost-2'
-      fullPath: '/cost-2'
-      preLoaderRoute: typeof Cost2RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/exchange-rate': {
@@ -619,7 +599,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditLogRoute: AuditLogRoute,
   CogsRoute: CogsRoute,
-  Cost2Route: Cost2Route,
   ExchangeRateRoute: ExchangeRateRoute,
   PricingRoute: PricingRoute,
   VariableCostRoute: VariableCostRoute,
