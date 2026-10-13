@@ -1,8 +1,9 @@
-// Pick a location's coordinates by clicking the map (Leaflet, Esri tiles) or typing them.
+// Pick a location's coordinates by searching a place, clicking the map (Leaflet, Esri tiles) or
+// typing them.
 import { useEffect, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import type * as Leaflet from "leaflet";
-import { Check, Loader2, MapPin } from "lucide-react";
+import { Check, Loader2, MapPin, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +21,166 @@ const TILES =
 const VIETNAM: [number, number] = [16.0, 106.5];
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
 const parse = (v: string) => (v.trim() === "" ? NaN : Number(v));
+
+interface PlaceHit {
+  id: string;
+  name: string;
+  address: string;
+  lat?: number;
+  lng?: number;
+  /** Vietmap hits carry a ref id; their coordinates come from a second "place" call. */
+  refId?: string;
+}
+
+let vietmapReady: Promise<boolean> | null = null;
+/** Whether the server has a Vietmap key (checked once). */
+const hasVietmap = () =>
+  (vietmapReady ??= fetch("/api/vietmap/status")
+    .then((r) => (r.ok ? r.json() : { configured: false }))
+    .then((j: { configured?: boolean }) => !!j.configured)
+    .catch(() => false));
+
+/** Place search: Vietmap (through the server proxy) when configured, else OpenStreetMap Nominatim. */
+async function searchPlaces(text: string, signal: AbortSignal): Promise<PlaceHit[]> {
+  if (await hasVietmap()) {
+    const r = await fetch(`/api/vietmap/search?text=${encodeURIComponent(text)}`, { signal });
+    if (!r.ok) throw new Error("search failed");
+    const items = (await r.json()) as { id: string; name: string; address: string }[];
+    return items.map((x) => ({ id: x.id, name: x.name, address: x.address, refId: x.id }));
+  }
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("q", text);
+  url.searchParams.set("limit", "6");
+  url.searchParams.set("accept-language", "vi,en");
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new Error("search failed");
+  const items = (await r.json()) as {
+    place_id: number;
+    name?: string;
+    display_name: string;
+    lat: string;
+    lon: string;
+  }[];
+  return items.map((x) => ({
+    id: String(x.place_id),
+    name: x.name || x.display_name.split(",")[0]!,
+    address: x.display_name,
+    lat: Number(x.lat),
+    lng: Number(x.lon),
+  }));
+}
+
+/** Coordinates of a hit (Vietmap needs the place details call). */
+async function coordsOf(hit: PlaceHit): Promise<{ lat: number; lng: number }> {
+  if (Number.isFinite(hit.lat) && Number.isFinite(hit.lng)) return { lat: hit.lat!, lng: hit.lng! };
+  const r = await fetch(`/api/vietmap/place?refid=${encodeURIComponent(hit.refId ?? hit.id)}`);
+  if (!r.ok) throw new Error("place failed");
+  const p = (await r.json()) as { lat: number; lng: number };
+  return { lat: p.lat, lng: p.lng };
+}
+
+/** "Search a place" box: type a name / address, pick a result to move the pin there. */
+function PlaceSearch({ onPick }: { onPick: (p: { lat: number; lng: number }) => void }) {
+  const { t } = useT();
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<PlaceHit[]>([]);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const text = q.trim();
+    if (text.length < 3) {
+      setHits([]);
+      setBusy(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setBusy(true);
+    setError(false);
+    // Debounced: one request after the user stops typing.
+    const timer = setTimeout(() => {
+      searchPlaces(text, ctrl.signal)
+        .then((r) => {
+          setHits(r);
+          setOpen(true);
+        })
+        .catch((e: unknown) => {
+          if ((e as Error).name !== "AbortError") setError(true);
+        })
+        .finally(() => setBusy(false));
+    }, 450);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [q]);
+
+  const pick = (h: PlaceHit) => {
+    setOpen(false);
+    setQ(h.name);
+    coordsOf(h)
+      .then(onPick)
+      .catch(() => setError(true));
+  };
+
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={q}
+        className="pl-9 pr-9"
+        placeholder={t(
+          "Tìm địa điểm (tên, địa chỉ)… VD: Cảng Cát Lái",
+          "Search a place (name or address)… e.g. Cat Lai Port",
+        )}
+        aria-label={t("Tìm địa điểm", "Search a place")}
+        onChange={(e) => setQ(e.target.value)}
+        onFocus={() => hits.length && setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && hits[0]) {
+            e.preventDefault();
+            pick(hits[0]);
+          }
+          if (e.key === "Escape") setOpen(false);
+        }}
+      />
+      {busy && (
+        <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+      )}
+      {open && q.trim().length >= 3 && !busy && (
+        <div className="absolute z-[1000] mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
+          {hits.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-muted-foreground">
+              {t("Không tìm thấy địa điểm.", "No place found.")}
+            </p>
+          ) : (
+            hits.map((h) => (
+              <button
+                key={h.id}
+                type="button"
+                className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-accent"
+                onClick={() => pick(h)}
+              >
+                <span className="text-sm font-medium">{h.name}</span>
+                <span className="line-clamp-1 text-xs text-muted-foreground">{h.address}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {error && (
+        <p className="mt-1 text-xs font-medium text-destructive">
+          {t(
+            "Không tìm được địa điểm lúc này — có thể chọn trên bản đồ hoặc nhập toạ độ.",
+            "Place search is unavailable right now — pick on the map or type the coordinates.",
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function MapPickerDialog({
   open,
@@ -42,8 +203,8 @@ export function MapPickerDialog({
           <DialogTitle>{t("Chọn vị trí trên bản đồ", "Pick location on map")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Nhấp vào bản đồ để đặt ghim, hoặc nhập trực tiếp vĩ độ / kinh độ.",
-              "Click the map to drop the pin, or type latitude / longitude directly.",
+              "Tìm địa điểm, nhấp vào bản đồ để đặt ghim, hoặc nhập trực tiếp vĩ độ / kinh độ.",
+              "Search a place, click the map to drop the pin, or type latitude / longitude directly.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -148,6 +309,13 @@ function Picker({
 
   return (
     <>
+      <PlaceSearch
+        onPick={(p) => {
+          setLatText(String(round(p.lat)));
+          setLngText(String(round(p.lng)));
+          map?.setView([p.lat, p.lng], 16);
+        }}
+      />
       <div className="relative h-[380px] overflow-hidden rounded-lg border bg-muted">
         <div ref={setEl} className="absolute inset-0" />
         {!map && !failed && (
