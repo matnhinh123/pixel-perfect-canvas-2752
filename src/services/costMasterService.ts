@@ -283,21 +283,3 @@ export const costItemService = {
 };
 
 export const costItemsInGroup = (groupId: string) => items().filter((c) => c.groupId === groupId);
-
-/**
- * Cost Groups shown as tabs on the Cost page: every group that holds Cost Codes or has no sub
- * groups. A group that only gathers sub groups (a Parent Cost Group) gets no tab of its own.
- * Order: catalog order, each group's sub groups right after its position.
- */
-export function costGroupTabs(
-  list: CostGroupRecord[] = groups(),
-  costs: CostItemRecord[] = items(),
-): CostGroupRecord[] {
-  const used = new Set(costs.map((c) => c.groupId));
-  const hasKids = new Set(list.map((g) => g.parentId).filter(Boolean));
-  const isTab = (g: CostGroupRecord) => used.has(g.id) || !hasKids.has(g.id);
-  return list
-    .filter((g) => !g.parentId)
-    .flatMap((top) => [top, ...list.filter((g) => g.parentId === top.id)])
-    .filter(isTab);
-}
