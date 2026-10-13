@@ -37,15 +37,8 @@ import type { CostItemRecord } from "@/types";
 type Mode = "view" | "edit";
 
 export const Route = createFileRoute("/cost/$id")({
-  // `group`: Cost Group id pre-filled on a new Cost (from the group tab it was added in).
-  // `from=cost-2`: opened from the "Cost 2" page, so Back / breadcrumb return there.
-  validateSearch: (
-    s: Record<string, unknown>,
-  ): { mode?: Mode; group?: string; from?: "cost-2" } => ({
-    ...(s["mode"] === "view" || s["mode"] === "edit" ? { mode: s["mode"] } : {}),
-    ...(typeof s["group"] === "string" && s["group"] ? { group: s["group"] } : {}),
-    ...(s["from"] === "cost-2" ? { from: "cost-2" as const } : {}),
-  }),
+  validateSearch: (s: Record<string, unknown>): { mode?: Mode } =>
+    s["mode"] === "view" || s["mode"] === "edit" ? { mode: s["mode"] } : {},
   head: ({ params }) => ({
     meta: [{ title: params.id === "new" ? "Create Cost — MoveX" : "Cost Detail — MoveX" }],
   }),
@@ -54,8 +47,7 @@ export const Route = createFileRoute("/cost/$id")({
 
 function CostPage() {
   const { id } = Route.useParams();
-  const { mode, from } = Route.useSearch();
-  const listPath = from === "cost-2" ? "/cost-2" : "/cost";
+  const { mode } = Route.useSearch();
   const all = useCollection(costItemRepository);
   const source = id === "new" ? null : (all.find((r) => r.id === id && !r.deleted) ?? null);
   if (id !== "new" && !source)
@@ -66,7 +58,7 @@ function CostPage() {
           title="Cost not found"
           action={
             <Button asChild size="sm">
-              <Link to={listPath}>Back to list</Link>
+              <Link to="/cost">Back to list</Link>
             </Button>
           }
         />
@@ -83,9 +75,6 @@ function CostPage() {
 }
 
 function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnly: boolean }) {
-  const { group: presetGroup, from } = Route.useSearch();
-  const listPath = from === "cost-2" ? "/cost-2" : "/cost";
-  const keepFrom = from ? { from } : {};
   const navigate = useNavigate();
   const isNew = !source;
   const groupsAll = useCollection(costGroupRepository);
@@ -94,13 +83,7 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
   const services = useMemo(() => servicesAll.filter((s) => !s.deleted), [servicesAll]);
 
   const initial = useMemo<CostItemDraft>(
-    () =>
-      source
-        ? draftOfCostItem(source)
-        : {
-            ...newCostItemDraft(),
-            groupId: groups.some((g) => g.id === presetGroup) ? presetGroup! : "",
-          },
+    () => (source ? draftOfCostItem(source) : newCostItemDraft()),
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const [d, setD] = useState(initial);
@@ -151,12 +134,8 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
 
   const back = () =>
     source
-      ? void navigate({
-          to: "/cost/$id",
-          params: { id: source.id },
-          search: { mode: "view", ...keepFrom },
-        })
-      : void navigate({ to: listPath });
+      ? void navigate({ to: "/cost/$id", params: { id: source.id }, search: { mode: "view" } })
+      : void navigate({ to: "/cost" });
 
   const save = () => {
     setFormError(null);
@@ -164,11 +143,7 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
       const saved = costItemService.save(d, source?.id);
       guard.allowNext();
       toast.success(isNew ? `Cost ${saved.code} added` : `Cost ${saved.code} saved`);
-      void navigate({
-        to: "/cost/$id",
-        params: { id: saved.id },
-        search: { mode: "view", ...keepFrom },
-      });
+      void navigate({ to: "/cost/$id", params: { id: saved.id }, search: { mode: "view" } });
     } catch (err) {
       if (err instanceof BusinessRuleError) {
         setErrors(err.fieldErrors);
@@ -182,7 +157,7 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
     <div>
       <FormPageHeader
         crumbs={[
-          { label: "Cost", to: listPath },
+          { label: "Cost", to: "/cost" },
           ...(source ? [{ label: source.code }] : []),
           { label: isNew ? "Add New" : readOnly ? "Detail" : "Edit" },
         ]}
@@ -197,7 +172,7 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
         badge={source ? <StatusBadge status={source.status} /> : undefined}
         dirty={dirty}
         readOnly={readOnly}
-        onBack={() => (readOnly || isNew ? void navigate({ to: listPath }) : back())}
+        onBack={() => (readOnly || isNew ? void navigate({ to: "/cost" }) : back())}
         onCancel={back}
         onSave={save}
         extra={
@@ -209,11 +184,7 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
               </Button>
               {readOnly && (
                 <Button asChild size="lg">
-                  <Link
-                    to="/cost/$id"
-                    params={{ id: source.id }}
-                    search={{ mode: "edit", ...keepFrom }}
-                  >
+                  <Link to="/cost/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
                     <Pencil className="h-4 w-4" />
                     Edit
                   </Link>
