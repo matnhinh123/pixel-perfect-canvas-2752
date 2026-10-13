@@ -20,7 +20,7 @@ import {
   FormPageHeader,
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
-import { FormGroup, ReadOnlyScope, S3, S6, S12 } from "@/components/movex/general/FormParts";
+import { FormGroup, ReadOnlyScope, S3, S12 } from "@/components/movex/general/FormParts";
 import { MapPickerDialog } from "@/components/movex/location/MapPickerDialog";
 import { useCollection } from "@/hooks/use-store";
 import { locationRepository } from "@/repositories";
@@ -294,6 +294,44 @@ function LocationForm({
                 <Input placeholder="Enter Province/City" {...text("province")} />
               )}
             </Field>
+            <Field label="Address" required error={errors["address"]} className={S3}>
+              <Input placeholder="Enter Address" {...text("address")} />
+            </Field>
+            <Field label="Latitude, Longitude" error={errors["coords"]} className={S3}>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMapOpen(true)}
+                  className={cn(
+                    "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-input bg-card px-3 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    "group-disabled:pointer-events-none group-disabled:bg-muted/40",
+                    errors["coords"] && "border-destructive",
+                    hasCoords ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">
+                    {hasCoords
+                      ? `${d.lat}, ${d.lng}`
+                      : readOnly
+                        ? "—"
+                        : t("Click để chọn vị trí trên bản đồ", "Click to pick a spot on the map")}
+                  </span>
+                </button>
+                {hasCoords && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="group-disabled:hidden"
+                    aria-label={t("Xoá toạ độ", "Clear coordinates")}
+                    onClick={() => patch({ lat: NaN, lng: NaN })}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </Field>
             <Field
               label="UN/LOCODE"
               required={isPort}
@@ -356,42 +394,6 @@ function LocationForm({
                 <Tag tone={origin === "Standard" ? "Auto" : origin}>{origin}</Tag>
               </div>
             </Field>
-
-            <Field label="Latitude, Longitude" error={errors["coords"]} className={S6}>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMapOpen(true)}
-                  className={cn(
-                    "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-input bg-card px-3 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                    "group-disabled:pointer-events-none group-disabled:bg-muted/40",
-                    errors["coords"] && "border-destructive",
-                    hasCoords ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">
-                    {hasCoords
-                      ? `${d.lat}, ${d.lng}`
-                      : readOnly
-                        ? "—"
-                        : t("Click để chọn vị trí trên bản đồ", "Click to pick a spot on the map")}
-                  </span>
-                </button>
-                {hasCoords && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="group-disabled:hidden"
-                    aria-label={t("Xoá toạ độ", "Clear coordinates")}
-                    onClick={() => patch({ lat: NaN, lng: NaN })}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </Field>
             <Field label="Status" className={S3}>
               <SwitchRow
                 checked={d.status === "Active"}
@@ -401,9 +403,6 @@ function LocationForm({
               />
             </Field>
 
-            <Field label="Address" required error={errors["address"]} className={S12}>
-              <Input placeholder="Enter Address" {...text("address")} />
-            </Field>
             <Field label="Remark" className={S12}>
               <Textarea rows={2} placeholder="Enter Remark" {...text("remark")} />
             </Field>
