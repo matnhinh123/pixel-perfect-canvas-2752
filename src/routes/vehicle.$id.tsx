@@ -1,10 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
-import { History, Pencil, Plus, Power, Save, Trash2, X, XCircle } from "lucide-react";
+import { History, Pencil, Plus, Power, Save, ScanLine, Trash2, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   EmptyState,
   Field,
@@ -24,19 +23,25 @@ import {
   CollapsiblePanel,
   FormGroup,
   ReadOnlyScope,
+  S2,
   S3,
+  S4,
   S6,
+  S12,
 } from "@/components/movex/general/FormParts";
+import { SuggestInput } from "@/components/movex/general/SuggestInput";
+import { ScanCertificateDialog } from "@/components/movex/vehicle/ScanCertificateDialog";
 import { DimensionInput, UnitInput } from "@/components/movex/vehicle/VehicleInputs";
 import { useVehicleAlertDays, useVehicles } from "@/components/movex/vehicle/useVehicleData";
 import { BusinessRuleError } from "@/services/crudService";
 import {
-  blankMapping,
+  baseTypeOf,
   daysUntil,
   draftOfVehicle,
   expiryState,
   fieldsLostOnTypeChange,
-  maxDistanceKm,
+  fuelUnitOf,
+  cargoVolumeM3,
   newVehicleDraft,
   showsField,
   SPEC_FIELDS,
@@ -48,20 +53,16 @@ import {
 import {
   ACQUISITION_CURRENCIES,
   FUEL_TYPES,
+  TRAILER_BODY_TYPES,
   TRUCK_TYPES,
-  VEHICLE_TYPE_LABELS,
   VEHICLE_TYPES,
 } from "@/mock-data/vehicleMaster";
-import {
-  TRAILER_TYPES,
-  type ContainerSizeMapping,
-  type VehicleMasterRecord,
-  type VehicleMasterType,
-} from "@/types";
+import { TRAILER_TYPES, type VehicleMasterRecord, type VehicleMasterType } from "@/types";
 import { formatDate } from "@/lib/format";
 import { CC } from "@/mock-data/commonCodes";
 import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 type Mode = "view" | "edit";
 
@@ -104,25 +105,6 @@ function VehiclePage() {
   );
 }
 
-function SwitchRow({
-  checked,
-  onChange,
-  on,
-  off,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  on: string;
-  off: string;
-}) {
-  return (
-    <div className="flex h-9 items-center gap-2">
-      <Switch checked={checked} onCheckedChange={onChange} />
-      <span className="text-sm">{checked ? on : off}</span>
-    </div>
-  );
-}
-
 /** "Expired" / "Due in 12 days" note under an expiry date (same threshold as the list and alerts). */
 function ExpiryHint({ ymd }: { ymd: string }): ReactNode {
   const { t } = useT();
@@ -141,22 +123,20 @@ function ExpiryHint({ ymd }: { ymd: string }): ReactNode {
   return undefined;
 }
 
-/** Fuel Rate / Fuel Capacity units follow the Fuel Type (gas → kg, electric → kWh, else litres). */
-function fuelUnitOf(fuelType: string): { rate: string; capacity: string } {
-  const f = fuelType.toLowerCase();
-  if (f.includes("electric")) return { rate: "kWh/100km", capacity: "kWh" };
-  if (f.includes("cng")) return { rate: "kg/100km", capacity: "kg" };
-  return { rate: "l/100km", capacity: "liter" };
-}
+/** Dimensions & Weight: a size (wider) next to its mass. */
+const DIM = "sm:col-span-6 lg:col-span-7";
+const MASS = "sm:col-span-6 lg:col-span-5";
 
 /** Specifications has data worth showing unfolded when editing. */
 const SPEC_DATA: (keyof VehicleDraft)[] = [
+  "overallDimension",
   "containerDimension",
+  "kerbMass",
   "authorizedPayload",
   "authorizedTowedMass",
-  "rfidTag",
   "buyingDate",
   "acquisitionCost",
+  "contractNumber",
 ];
 
 function VehicleForm({
@@ -169,12 +149,28 @@ function VehicleForm({
   const { t } = useT();
   const vehicleTypes = useCodeOptions(CC.VEHICLE_TYPE, VEHICLE_TYPES);
   const trailerSizes = useCodeOptions(CC.TRAILER_SIZE, TRAILER_TYPES);
+  const trailerTypes = useCodeOptions(CC.TRAILER_TYPE, TRAILER_BODY_TYPES);
   const truckTypes = useCodeOptions(CC.TRUCK_TYPE, TRUCK_TYPES);
   const vehicleGroups = useCodeOptions(CC.VEHICLE_GROUP, VEHICLE_GROUP_OPTIONS);
   const fuelTypes = useCodeOptions(CC.FUEL_TYPE, FUEL_TYPES);
+  // Brand is typed freely; the brands already entered on the other vehicles drop down as suggestions.
+  const fleet = useVehicles();
+  const brandSuggestions = useMemo(
+    () =>
+      [
+        ...new Set(
+          fleet
+            .filter((v) => v.id !== source?.id)
+            .map((v) => v.tradeMark.trim().toUpperCase())
+            .filter(Boolean),
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
+    [fleet, source?.id],
+  );
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const isNew = !source;
   const initial = useMemo<VehicleDraft>(
     () => (source ? draftOfVehicle(source) : newVehicleDraft()),
@@ -232,7 +228,18 @@ function VehicleForm({
   );
 
   /** SR-VEH-02 / 17: leaving a type whose filled fields would be hidden asks first. */
-  const changeType = async (next: VehicleMasterType | "") => {
+  /** Fields read from the inspection certificate (ticked in the scan dialog). */
+  const applyScan = (p: Partial<VehicleDraft>) => {
+    patch(p);
+    toast.success(
+      t(
+        `Đã điền ${Object.keys(p).length} trường từ giấy kiểm định — kiểm tra lại trước khi lưu.`,
+        `Filled ${Object.keys(p).length} fields from the certificate — check them before saving.`,
+      ),
+    );
+  };
+
+  const changeType = async (next: string) => {
     const lost = fieldsLostOnTypeChange(d, next);
     if (lost.length) {
       const r = await confirm({
@@ -245,20 +252,12 @@ function VehicleForm({
       });
       if (r !== "confirm") return;
     }
-    // Choosing HEAD with no mapping yet starts the table with one empty row (SR-VEH-15).
-    patch({
-      vehicleType: next,
-      ...(next === "HEAD" && d.containerMappings.length === 0
-        ? { containerMappings: [blankMapping()] }
-        : {}),
-    });
+    patch({ vehicleType: next });
   };
 
-  const setMappings = (containerMappings: ContainerSizeMapping[]) => patch({ containerMappings });
-  const setMapping = (rid: string, p: Partial<ContainerSizeMapping>) =>
-    setMappings(d.containerMappings.map((m) => (m.rid === rid ? { ...m, ...p } : m)));
-
-  const maxDistance = maxDistanceKm(d.fuelRate, d.fuelCapacity);
+  const hasFuel = shows("fuelType");
+  const insuranceSpan = hasFuel ? S12 : S6;
+  const cargoVolume = cargoVolumeM3(d.containerDimension);
   const fuelUnit = fuelUnitOf(d.fuelType);
   const specError = SPEC_FIELDS.some((k) => errors[k]);
   const specHasData = SPEC_DATA.some((k) => String(initial[k] ?? "").trim() !== "");
@@ -355,36 +354,44 @@ function VehicleForm({
         onCancel={back}
         onSave={save}
         extra={
-          source && (
-            <>
-              <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
-                <History className="h-4 w-4" />
-                {t("Lịch sử", "History")}
+          <>
+            {!readOnly && (
+              <Button variant="outline" size="lg" onClick={() => setScanOpen(true)}>
+                <ScanLine className="h-4 w-4" />
+                {t("Scan giấy kiểm định", "Scan certificate")}
               </Button>
-              {readOnly && (
-                <>
-                  <Button variant="outline" size="lg" onClick={() => void toggleStatus()}>
-                    <Power className="h-4 w-4" />
-                    {source.status === "Active" ? "Deactivate" : "Activate"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    onClick={() => void navigate({ to: "/vehicle" })}
-                  >
-                    <X className="h-4 w-4" />
-                    Cancel
-                  </Button>
-                  <Button asChild size="lg">
-                    <Link to="/vehicle/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
-                      <Pencil className="h-4 w-4" />
-                      Edit
-                    </Link>
-                  </Button>
-                </>
-              )}
-            </>
-          )
+            )}
+            {source && (
+              <>
+                <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
+                  <History className="h-4 w-4" />
+                  {t("Lịch sử", "History")}
+                </Button>
+                {readOnly && (
+                  <>
+                    <Button variant="outline" size="lg" onClick={() => void toggleStatus()}>
+                      <Power className="h-4 w-4" />
+                      {source.status === "Active" ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={() => void navigate({ to: "/vehicle" })}
+                    >
+                      <X className="h-4 w-4" />
+                      Cancel
+                    </Button>
+                    <Button asChild size="lg">
+                      <Link to="/vehicle/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </Link>
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+          </>
         }
       />
       <FormErrorBanner message={formError} errors={errors} />
@@ -392,63 +399,69 @@ function VehicleForm({
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
         <Panel title="General Information" bodyClassName="space-y-6">
           <FormGroup title="Vehicle Identification">
-            <Field label="Vehicle Type" required error={errors["vehicleType"]} className={S3}>
+            <Field label="Vehicle Type" required error={errors["vehicleType"]} className={S2}>
               <NativeSelect
                 value={d.vehicleType}
-                onChange={(v) => void changeType(v as VehicleMasterType | "")}
+                onChange={(v) => void changeType(v)}
                 options={["", ...withCurrent(vehicleTypes, d.vehicleType)]}
-                labels={{ "": readOnly ? "—" : "Chọn loại phương tiện", ...VEHICLE_TYPE_LABELS }}
+                labels={{ "": readOnly ? "—" : "Chọn loại phương tiện" }}
                 className="w-full"
                 invalid={!!errors["vehicleType"]}
               />
             </Field>
             {shows("trailerType") && (
-              <Field label="Trailer Type" error={errors["trailerType"]} className={S3}>
-                <NativeSelect {...select("trailerType", trailerSizes, "Chọn cỡ rơ-moóc")} />
+              <Field
+                label="Trailer Type"
+                error={errors["trailerType"]}
+                className={S2}
+                info={t(
+                  "Loại rơ-moóc: Skeletal (xương, chở container), Flatbed (sàn), Low Bed (lùn), Side Wall (lửng), Box (thùng kín), Dump (ben), Tank (bồn).",
+                  "Trailer body type: Skeletal (container chassis), Flatbed, Low Bed, Side Wall, Box, Dump, Tank.",
+                )}
+              >
+                <NativeSelect {...select("trailerType", trailerTypes, "Chọn loại rơ-moóc")} />
               </Field>
             )}
             {shows("vehicleGroup") && (
-              <Field label="Vehicle Group" error={errors["vehicleGroup"]} className={S3}>
+              <Field label="Vehicle Group" error={errors["vehicleGroup"]} className={S2}>
                 <NativeSelect {...select("vehicleGroup", vehicleGroups, "Chọn nhóm xe")} />
               </Field>
             )}
             {shows("truckType") && (
-              <Field label="Truck Type" required error={errors["truckType"]} className={S3}>
+              <Field label="Truck Type" required error={errors["truckType"]} className={S2}>
                 <NativeSelect {...select("truckType", truckTypes, "Chọn hạng tải xe")} />
               </Field>
             )}
-            {/* Keep the next fields on a new row. */}
-            <div className="hidden lg:col-span-12 lg:block" />
-
             <Field
-              label="Plate Number"
-              required
-              error={errors["plateNumber"]}
-              className={S3}
+              label="Brand Name"
+              className={S2}
               info={t(
-                "Biển số Việt Nam, duy nhất. VD: 51C-123.45, 30A-12345, 29LD-123.45",
-                "Vietnamese plate, unique. e.g. 51C-123.45, 30A-12345, 29LD-123.45",
+                "Nhãn hiệu xe (hãng sản xuất) như trên giấy đăng ký / đăng kiểm. VD: HINO, HYUNDAI.",
+                "Vehicle brand (manufacturer) as on the registration / inspection papers. e.g. HINO, HYUNDAI.",
               )}
             >
-              <Input placeholder="VD: 51C-123.45" maxLength={12} {...text("plateNumber", true)} />
-            </Field>
-            <Field
-              label="Chassis Number (VIN)"
-              required
-              error={errors["chassisNumber"]}
-              className={S3}
-              info={t(
-                "Số khung, chỉ chữ và số, duy nhất.",
-                "Chassis number: letters and digits only, unique.",
-              )}
-            >
-              <Input
-                placeholder="Nhập số khung (chỉ chữ và số)"
-                maxLength={17}
-                {...text("chassisNumber", true)}
+              <SuggestInput
+                value={d.tradeMark}
+                onChange={(v) => patch({ tradeMark: v })}
+                suggestions={brandSuggestions}
+                placeholder="Nhập nhãn hiệu xe"
+                upper
               />
             </Field>
-            <Field label="Production Year" error={errors["productionYear"]} className={S3}>
+            {shows("modelCode") && (
+              <Field
+                label="Model Name"
+                error={errors["modelCode"]}
+                className={S2}
+                info={t(
+                  "Tên / số loại xe như trên giấy đăng ký. VD: HD210, Canter TF8.5",
+                  "Model as on the registration papers. e.g. HD210, Canter TF8.5",
+                )}
+              >
+                <Input placeholder="VD: HD210, Canter TF8.5" {...text("modelCode")} />
+              </Field>
+            )}
+            <Field label="Production Year" error={errors["productionYear"]} className={S2}>
               <Input
                 inputMode="numeric"
                 maxLength={4}
@@ -458,64 +471,128 @@ function VehicleForm({
                 onChange={(e) => patch({ productionYear: e.target.value.replace(/\D/g, "") })}
               />
             </Field>
+            {/* Identity numbers on their own row. */}
+            <div className="hidden lg:col-span-12 lg:block" />
+            <Field
+              label="Plate Number"
+              required
+              error={errors["plateNumber"]}
+              className={S4}
+              info={t(
+                "Biển số Việt Nam, duy nhất. VD: 51C-123.45, 30A-12345, 29LD-123.45",
+                "Vietnamese plate, unique. e.g. 51C-123.45, 30A-12345, 29LD-123.45",
+              )}
+            >
+              <Input placeholder="VD: 51C-123.45" maxLength={12} {...text("plateNumber", true)} />
+            </Field>
+            <Field
+              label="Chassis Number (VIN)"
+              error={errors["chassisNumber"]}
+              className={S4}
+              info={t(
+                "Số khung (không bắt buộc): chỉ chữ và số, không trùng xe khác.",
+                "Chassis number (optional): letters and digits only, unique.",
+              )}
+            >
+              <Input placeholder="Nhập số khung" maxLength={17} {...text("chassisNumber", true)} />
+            </Field>
+            {shows("engineNumber") && (
+              <Field label="Engine Number" className={S4}>
+                <Input placeholder="Nhập số máy" {...text("engineNumber")} />
+              </Field>
+            )}
           </FormGroup>
-
-          {/* Fuel: the type decides the units of the rate and the capacity. */}
-          {shows("fuelType") && (
-            <FormGroup title="Fuel">
-              <Field label="Fuel Type" className={S3}>
-                <NativeSelect {...select("fuelType", fuelTypes, "Chọn loại nhiên liệu")} />
-              </Field>
-              <Field label="Fuel Rate" error={errors["fuelRate"]} className={S3}>
-                {unit("fuelRate", fuelUnit.rate, "Nhập định mức tiêu hao")}
-              </Field>
-              <Field label="Fuel Capacity" error={errors["fuelCapacity"]} className={S3}>
-                {unit("fuelCapacity", fuelUnit.capacity, "Nhập dung tích bình dầu")}
-              </Field>
-              <Field
-                label="Quãng đường tối đa"
-                className={S3}
-                info={
-                  maxDistance ? "Fuel Capacity ÷ Fuel Rate × 100" : "Cần Fuel Rate và Fuel Capacity"
-                }
-              >
-                <UnitInput
-                  readOnly
-                  unit="km"
-                  value={maxDistance}
-                  placeholder="Cần Fuel Rate và Fuel Capacity"
-                />
-              </Field>
-            </FormGroup>
-          )}
 
           <FormGroup title="Registration & Inspection Information">
             <Field
-              label="Inspection Expiration Date"
-              className={S3}
-              hint={<ExpiryHint ymd={d.inspectionExpiry} />}
-            >
-              {dateInput("inspectionExpiry")}
-            </Field>
-            <Field
               label="Registration Expiration Date"
-              className={S3}
+              className={S2}
               hint={<ExpiryHint ymd={d.registrationExpiry} />}
             >
               {dateInput("registrationExpiry")}
             </Field>
             <Field
-              label="Lifetime Limit"
+              label="Vehicle Inspection No"
+              error={errors["inspectionNo"]}
               className={S3}
-              hint={<ExpiryHint ymd={d.lifetimeLimit} />}
               info={t(
-                "Niên hạn sử dụng: quá hạn thì xe không được điều.",
-                "Legal service life: past this date the vehicle cannot be dispatched.",
+                "Số quản lý phương tiện trên giấy đăng kiểm: chữ, số, gạch nối.",
+                "Vehicle inspection number on the certificate: letters, digits, hyphens.",
               )}
             >
-              {dateInput("lifetimeLimit")}
+              <Input placeholder="Nhập số quản lý phương tiện" {...text("inspectionNo")} />
             </Field>
+            <Field
+              label="Inspection Report No"
+              required
+              error={errors["inspectionReportNo"]}
+              className={S3}
+              info={t(
+                "Số giấy chứng nhận kiểm định: chữ, số, gạch nối.",
+                "Inspection certificate number: letters, digits, hyphens.",
+              )}
+            >
+              <Input placeholder="Nhập số chứng nhận kiểm định" {...text("inspectionReportNo")} />
+            </Field>
+            <Field
+              label="Inspection Expiration Date"
+              className={S2}
+              hint={<ExpiryHint ymd={d.inspectionExpiry} />}
+            >
+              {dateInput("inspectionExpiry")}
+            </Field>
+            {shows("lifetimeLimit") && (
+              <Field
+                label="Lifetime Limit"
+                className={S2}
+                hint={<ExpiryHint ymd={d.lifetimeLimit} />}
+                info={t(
+                  "Niên hạn sử dụng: quá hạn thì xe không được điều.",
+                  "Legal service life: past this date the vehicle cannot be dispatched.",
+                )}
+              >
+                {dateInput("lifetimeLimit")}
+              </Field>
+            )}
           </FormGroup>
+
+          {/* Two columns: Fuel | Insurance; a trailer has no fuel, so Insurance takes the full width. */}
+          <div className={cn("grid gap-6", hasFuel && "lg:grid-cols-2")}>
+            {/* Fuel: the type decides the units of the rate and the capacity. */}
+            {hasFuel && (
+              <FormGroup title="Fuel">
+                <Field label="Fuel Type" className={S6}>
+                  <NativeSelect {...select("fuelType", fuelTypes, "Chọn loại nhiên liệu")} />
+                </Field>
+                <Field label="Fuel Rate" error={errors["fuelRate"]} className={S6}>
+                  {unit("fuelRate", fuelUnit.rate, "Nhập định mức tiêu hao")}
+                </Field>
+                <Field label="Fuel Capacity" error={errors["fuelCapacity"]} className={S6}>
+                  {unit("fuelCapacity", fuelUnit.capacity, "Nhập dung tích bình dầu")}
+                </Field>
+              </FormGroup>
+            )}
+
+            <FormGroup title="Insurance">
+              <Field
+                label="Liability Insurance Number"
+                className={insuranceSpan}
+                info={t(
+                  "Số bảo hiểm trách nhiệm dân sự (bắt buộc theo luật).",
+                  "Compulsory civil liability insurance number.",
+                )}
+              >
+                <Input placeholder="Nhập số bảo hiểm TNDS" {...text("liabilityInsuranceNumber")} />
+              </Field>
+              <Field
+                label="Comprehensive Policy Number"
+                className={insuranceSpan}
+                info={t("Số bảo hiểm vật chất xe.", "Vehicle physical damage policy number.")}
+              >
+                <Input placeholder="Nhập số bảo hiểm vật chất" {...text("policyNumber")} />
+              </Field>
+            </FormGroup>
+          </div>
         </Panel>
 
         <CollapsiblePanel
@@ -523,197 +600,164 @@ function VehicleForm({
           defaultOpen={readOnly || (!isNew && specHasData)}
           forceOpen={specError}
         >
-          <FormGroup title="Load Capacity">
-            <Field
-              label="Cargo / Container Dimensions"
-              className={S6}
-              info={t(
-                "Kích thước lòng thùng, dùng kiểm tra hàng có xếp vừa xe khi điều phối.",
-                "Inner cargo space, used to check that the load fits when dispatching.",
+          {/* Two columns: Dimensions & Weight | Asset. */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Each size sits next to its mass: Overall ↔ Kerb Mass, Cargo box ↔ Payload. */}
+            <FormGroup title="Dimensions & Weight">
+              {shows("trailerSize") && (
+                <>
+                  <Field
+                    label="Trailer Size"
+                    required
+                    error={errors["trailerSize"]}
+                    className={MASS}
+                    info={t(
+                      'Cỡ rơ-moóc (20 ft / 40 ft…), danh sách lấy từ Common Code "Vehicle - Trailer Size".',
+                      'Trailer size (20 ft / 40 ft…), list from Common Code "Vehicle - Trailer Size".',
+                    )}
+                  >
+                    <NativeSelect {...select("trailerSize", trailerSizes, "Chọn cỡ rơ-moóc")} />
+                  </Field>
+                  <Field
+                    label="Trailer Axles"
+                    error={errors["trailerAxles"]}
+                    className={MASS}
+                    info={t(
+                      "Số trục của rơ-moóc (VD: 2, 3).",
+                      "Number of axles of the trailer (e.g. 2, 3).",
+                    )}
+                  >
+                    <Input
+                      inputMode="numeric"
+                      maxLength={1}
+                      placeholder="VD: 3"
+                      value={d.trailerAxles}
+                      aria-invalid={!!errors["trailerAxles"] || undefined}
+                      onChange={(e) => patch({ trailerAxles: e.target.value.replace(/\D/g, "") })}
+                    />
+                  </Field>
+                  <div className="hidden lg:col-span-12 lg:block" />
+                </>
               )}
-            >
-              <DimensionInput
-                value={d.containerDimension}
-                onChange={(v) => patch({ containerDimension: v })}
-              />
-            </Field>
-            <Field
-              label="Authorized Payload"
-              error={errors["authorizedPayload"]}
-              className={S3}
-              info={t(
-                "Tải trọng cho phép theo đăng kiểm (kg), độc lập với Truck Type.",
-                "Legal payload per inspection (kg), independent of Truck Type.",
-              )}
-            >
-              {unit("authorizedPayload", "kg", "Nhập tải trọng cho phép")}
-            </Field>
-            {shows("authorizedTowedMass") && (
               <Field
-                label="Authorized Towed Mass"
-                error={errors["authorizedTowedMass"]}
-                className={S3}
+                label="Overall Dimension"
+                className={DIM}
+                info={t(
+                  "Kích thước bao ngoài của cả xe (ghi trên giấy đăng kiểm): dùng kiểm tra xe qua cầu, hầm, đường hạn chế chiều cao / chiều dài.",
+                  "Outer size of the whole vehicle (on the inspection certificate): checked against height / length limits of bridges, tunnels and roads.",
+                )}
               >
-                {unit("authorizedTowedMass", "kg", "Nhập khối lượng kéo theo cho phép")}
+                <DimensionInput
+                  value={d.overallDimension}
+                  onChange={(v) => patch({ overallDimension: v })}
+                />
               </Field>
-            )}
-          </FormGroup>
-
-          <FormGroup title="Equipment">
-            <Field
-              label="ETC / RFID Tag"
-              className={S3}
-              info={t(
-                "Thẻ thu phí không dừng (VETC / ePass).",
-                "Electronic toll collection tag (VETC / ePass).",
-              )}
-            >
-              <Input placeholder="Nhập mã thẻ ETC" {...text("rfidTag")} />
-            </Field>
-            <Field
-              label="GPS / Journey Monitoring Device"
-              className={S3}
-              info={t(
-                "Thiết bị giám sát hành trình, bắt buộc với xe kinh doanh vận tải.",
-                "Journey monitoring device, required for transport business vehicles.",
-              )}
-            >
-              <SwitchRow
-                checked={d.telematics}
-                onChange={(v) => patch({ telematics: v })}
-                on="Yes"
-                off="No"
-              />
-            </Field>
-          </FormGroup>
-
-          <FormGroup title="Asset">
-            <Field label="Buying Date" className={S3}>
-              {dateInput("buyingDate")}
-            </Field>
-            <Field label="Acquisition Cost" error={errors["acquisitionCost"]} className={S3}>
-              <div className="flex">
-                <Input
-                  inputMode="decimal"
-                  className="rounded-r-none"
-                  placeholder="Nhập giá mua xe"
-                  value={d.acquisitionCost}
-                  aria-invalid={!!errors["acquisitionCost"] || undefined}
-                  onChange={(e) =>
-                    patch({ acquisitionCost: e.target.value.replace(/[^\d.]/g, "") })
-                  }
-                />
-                <NativeSelect
-                  className="w-24 rounded-l-none border-l-0 bg-muted"
-                  value={d.acquisitionCurrency}
-                  onChange={(v) => patch({ acquisitionCurrency: v })}
-                  options={ACQUISITION_CURRENCIES}
-                />
-              </div>
-            </Field>
-          </FormGroup>
-        </CollapsiblePanel>
-
-        {shows("containerMappings") && (
-          <Panel
-            title="Container Size Mapping"
-            actions={
-              !readOnly && (
-                <Button
-                  size="sm"
-                  type="button"
-                  disabled={d.containerMappings.length >= trailerSizes.length}
-                  title={
-                    d.containerMappings.length >= trailerSizes.length
-                      ? t("Đã khai đủ các Trailer Type.", "Every Trailer Type is already mapped.")
-                      : undefined
-                  }
-                  onClick={() => setMappings([...d.containerMappings, blankMapping()])}
+              {shows("kerbMass") && (
+                <Field
+                  label="Kerb Mass"
+                  error={errors["kerbMass"]}
+                  className={MASS}
+                  info={t(
+                    "Khối lượng bản thân: xe không chở hàng (kg). Cộng Authorized Payload ra khối lượng toàn bộ.",
+                    "Unladen mass of the vehicle (kg). Plus Authorized Payload gives the gross mass.",
+                  )}
                 >
-                  <Plus className="h-4 w-4" />
-                  Add
-                </Button>
-              )
-            }
-          >
-            {d.containerMappings.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                {readOnly ? "Chưa khai tổ hợp nào" : "Chưa khai tổ hợp nào. Bấm Add để thêm."}
-              </p>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="bg-muted/60 text-left text-xs font-semibold">
-                      <th className="w-12 px-3 py-2">No.</th>
-                      <th className="px-3 py-2">Head</th>
-                      <th className="px-3 py-2">
-                        Trailer Type<span className="ml-0.5 text-destructive">*</span>
-                      </th>
-                      <th className="px-3 py-2">
-                        Vehicle Group<span className="ml-0.5 text-destructive">*</span>
-                      </th>
-                      {!readOnly && <th className="w-12 px-3 py-2" />}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.containerMappings.map((m, i) => (
-                      <tr key={m.rid} className="border-t">
-                        <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
-                        <td className="px-3 py-2">
-                          <Input disabled value={d.plateNumber} placeholder="Head" />
-                        </td>
-                        <td className="px-3 py-2">
-                          <NativeSelect
-                            value={m.trailerType}
-                            onChange={(v) =>
-                              setMapping(m.rid, {
-                                trailerType: v as ContainerSizeMapping["trailerType"],
-                              })
-                            }
-                            options={["", ...withCurrent(trailerSizes, m.trailerType)]}
-                            labels={{ "": readOnly ? "—" : "Chọn cỡ rơ-moóc" }}
-                            className="w-full"
-                            invalid={!!errors["containerMappings"] && !m.trailerType}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <NativeSelect
-                            value={m.vehicleGroup}
-                            onChange={(v) => setMapping(m.rid, { vehicleGroup: v })}
-                            options={["", ...withCurrent(vehicleGroups, m.vehicleGroup)]}
-                            labels={{ "": readOnly ? "—" : "Chọn nhóm xe" }}
-                            className="w-full"
-                            invalid={!!errors["containerMappings"] && !m.vehicleGroup}
-                          />
-                        </td>
-                        {!readOnly && (
-                          <td className="px-3 py-2 text-center">
-                            <button
-                              type="button"
-                              aria-label={t("Xoá dòng", "Delete row")}
-                              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                              onClick={() =>
-                                setMappings(d.containerMappings.filter((x) => x.rid !== m.rid))
-                              }
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {errors["containerMappings"] && (
-              <p className="mt-2 text-xs font-medium text-destructive">
-                {errors["containerMappings"]}
-              </p>
-            )}
-          </Panel>
-        )}
+                  {unit("kerbMass", "kg", "VD: 4200")}
+                </Field>
+              )}
+              {shows("containerDimension") && (
+                <Field
+                  label="Cargo / Container Dimensions"
+                  className={DIM}
+                  info={t(
+                    "Kích thước lòng thùng chở hàng (bên trong): dùng kiểm tra hàng có xếp vừa xe.",
+                    "Inner size of the cargo box: checks that a load fits.",
+                  )}
+                >
+                  <DimensionInput
+                    value={d.containerDimension}
+                    onChange={(v) => patch({ containerDimension: v })}
+                  />
+                </Field>
+              )}
+              {shows("authorizedPayload") && (
+                <Field
+                  label="Authorized Payload"
+                  error={errors["authorizedPayload"]}
+                  // A head has no cargo box: Payload takes the left column so Towed Mass sits
+                  // right under Kerb Mass, same width.
+                  className={!shows("containerDimension") && shows("kerbMass") ? DIM : MASS}
+                  info={t(
+                    "Khối lượng hàng chuyên chở cho phép (CPLN) trên giấy kiểm định (kg), độc lập với Truck Type. Với đầu kéo là tải trọng đặt lên mâm kéo.",
+                    "Authorized cargo pay mass on the inspection certificate (kg), independent of Truck Type. For a head: the load on the fifth wheel.",
+                  )}
+                >
+                  {unit("authorizedPayload", "kg", "VD: 5000")}
+                </Field>
+              )}
+              {shows("containerDimension") && (
+                <Field
+                  label="Cargo Volume"
+                  className={DIM}
+                  info={t(
+                    "Số khối lòng thùng (m³), tự tính = Dài × Rộng × Cao của Cargo / Container Dimensions.",
+                    "Cargo box volume (m³), calculated = Length × Width × Height of the cargo dimensions.",
+                  )}
+                >
+                  <UnitInput
+                    readOnly
+                    unit="m³"
+                    value={cargoVolume}
+                    placeholder={t("Cần đủ Dài, Rộng, Cao lòng thùng", "Needs the cargo L, W, H")}
+                  />
+                </Field>
+              )}
+              {shows("authorizedTowedMass") && (
+                <Field
+                  label="Authorized Towed Mass"
+                  error={errors["authorizedTowedMass"]}
+                  className={MASS}
+                  info={t(
+                    "Khối lượng kéo theo cho phép của đầu kéo: moóc + container + hàng (kg).",
+                    "Towed mass a head may pull: trailer + container + cargo (kg).",
+                  )}
+                >
+                  {unit("authorizedTowedMass", "kg", "VD: 32000")}
+                </Field>
+              )}
+            </FormGroup>
+            <div className="space-y-6">
+              <FormGroup title="Asset">
+                <Field label="Buying Date" className={S6}>
+                  {dateInput("buyingDate")}
+                </Field>
+                <Field label="Acquisition Cost" error={errors["acquisitionCost"]} className={S6}>
+                  <div className="flex">
+                    <Input
+                      inputMode="decimal"
+                      className="rounded-r-none"
+                      placeholder="Nhập giá mua xe"
+                      value={d.acquisitionCost}
+                      aria-invalid={!!errors["acquisitionCost"] || undefined}
+                      onChange={(e) =>
+                        patch({ acquisitionCost: e.target.value.replace(/[^\d.]/g, "") })
+                      }
+                    />
+                    <NativeSelect
+                      className="w-24 rounded-l-none border-l-0 bg-muted"
+                      value={d.acquisitionCurrency}
+                      onChange={(v) => patch({ acquisitionCurrency: v })}
+                      options={ACQUISITION_CURRENCIES}
+                    />
+                  </div>
+                </Field>
+                <Field label="Contract Number" className={S6}>
+                  <Input placeholder="Nhập số hợp đồng" {...text("contractNumber")} />
+                </Field>
+              </FormGroup>
+            </div>
+          </div>
+        </CollapsiblePanel>
       </ReadOnlyScope>
 
       {!readOnly && (
@@ -734,6 +778,12 @@ function VehicleForm({
         </div>
       )}
 
+      <ScanCertificateDialog
+        open={scanOpen && !readOnly}
+        onOpenChange={setScanOpen}
+        current={d}
+        onApply={applyScan}
+      />
       {source && (
         <AuditHistoryDrawer
           open={historyOpen}

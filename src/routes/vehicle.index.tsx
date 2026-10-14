@@ -7,11 +7,18 @@ import { AlertDaysControl } from "@/components/movex/vehicle/VehicleAlerts";
 import { useVehicleAlertDays, useVehicles } from "@/components/movex/vehicle/useVehicleData";
 import {
   expiryState,
+  fuelUnitOf,
+  cargoVolumeM3,
   VEHICLE_GROUP_OPTIONS,
   vehicleCrud,
   vehicleImportConfig,
 } from "@/services/vehicleMasterService";
-import { TRUCK_TYPES, VEHICLE_TYPES } from "@/mock-data/vehicleMaster";
+import {
+  FUEL_TYPES,
+  TRAILER_BODY_TYPES,
+  TRUCK_TYPES,
+  VEHICLE_TYPES,
+} from "@/mock-data/vehicleMaster";
 import { formatDate } from "@/lib/format";
 import { CC } from "@/mock-data/commonCodes";
 import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
@@ -71,8 +78,25 @@ function Expiry({ ymd, t, days }: { ymd: string; t: T; days: number }) {
   );
 }
 
-/** SMD.VH.01 columns, in the spec's order; the four audit columns are hidden by default. */
-const columnsFor = (t: T, days: number): ListColumn<Row>[] => [
+/** Thousands separators for a stored number ("—" when empty). */
+const num = (v: string, unit = "") =>
+  v ? `${Number(v).toLocaleString()}${unit ? ` ${unit}` : ""}` : dash;
+
+/**
+ * Same fields, labels and order as the Vehicle detail form (Plate Number pinned first). The main
+ * columns show by default; every other field of the form can be turned on in the column settings.
+ */
+interface Lists {
+  types: string[];
+  trailerSizes: string[];
+  trailerTypes: string[];
+  groups: string[];
+  truckTypes: string[];
+  brands: string[];
+  fuelTypes: string[];
+}
+
+const columnsFor = (t: T, days: number, o: Lists): ListColumn<Row>[] => [
   {
     key: "plateNumber",
     label: "Plate Number",
@@ -82,20 +106,30 @@ const columnsFor = (t: T, days: number): ListColumn<Row>[] => [
     value: (r) => r.plateNumber,
     render: (r) => <span className="font-semibold text-primary">{r.plateNumber}</span>,
   },
+  // ---------------------------------------------------------------- Vehicle Identification
   {
     key: "vehicleType",
     label: "Vehicle Type",
     type: "enum",
-    options: [...VEHICLE_TYPES],
+    options: o.types,
     width: 120,
     value: (r) => r.vehicleType,
     render: (r) => (r.vehicleType ? <Tag>{r.vehicleType}</Tag> : dash),
   },
   {
+    key: "trailerType",
+    label: "Trailer Type",
+    type: "enum",
+    options: o.trailerTypes,
+    width: 120,
+    value: (r) => r.trailerType,
+    render: (r) => (r.trailerType ? <Tag>{r.trailerType}</Tag> : dash),
+  },
+  {
     key: "vehicleGroup",
     label: "Vehicle Group",
     type: "enum",
-    options: [...VEHICLE_GROUP_OPTIONS],
+    options: o.groups,
     width: 130,
     value: (r) => r.vehicleGroup,
     render: (r) => r.vehicleGroup || dash,
@@ -104,19 +138,37 @@ const columnsFor = (t: T, days: number): ListColumn<Row>[] => [
     key: "truckType",
     label: "Truck Type",
     type: "enum",
-    options: TRUCK_TYPES,
+    options: o.truckTypes,
     width: 120,
     value: (r) => r.truckType,
     render: (r) => (r.truckType ? <Tag>{r.truckType}</Tag> : dash),
   },
   {
-    key: "trailerType",
-    label: "Trailer Type",
+    key: "tradeMark",
+    label: "Brand Name",
     type: "enum",
-    options: [...TRAILER_TYPES],
+    options: o.brands,
     width: 120,
-    value: (r) => r.trailerType,
-    render: (r) => (r.trailerType ? <Tag>{r.trailerType}</Tag> : dash),
+    value: (r) => r.tradeMark,
+    render: (r) => r.tradeMark || dash,
+  },
+  {
+    key: "modelCode",
+    label: "Model Name",
+    type: "text",
+    width: 150,
+    defaultHidden: true,
+    value: (r) => r.modelCode,
+    render: (r) => r.modelCode || dash,
+  },
+  {
+    key: "productionYear",
+    label: "Production Year",
+    type: "text",
+    width: 130,
+    defaultHidden: true,
+    value: (r) => r.productionYear,
+    render: (r) => r.productionYear || dash,
   },
   {
     key: "chassisNumber",
@@ -126,13 +178,15 @@ const columnsFor = (t: T, days: number): ListColumn<Row>[] => [
     value: (r) => r.chassisNumber,
   },
   {
-    key: "authorizedPayload",
-    label: "Authorized Payload (kg)",
+    key: "engineNumber",
+    label: "Engine Number",
     type: "text",
-    width: 170,
-    value: (r) => r.authorizedPayload,
-    render: (r) => (r.authorizedPayload ? Number(r.authorizedPayload).toLocaleString() : dash),
+    width: 150,
+    defaultHidden: true,
+    value: (r) => r.engineNumber,
+    render: (r) => r.engineNumber || dash,
   },
+  // ---------------------------------------------------------------- Registration & Inspection
   {
     key: "registrationExpiry",
     label: "Registration Expiration Date",
@@ -142,12 +196,186 @@ const columnsFor = (t: T, days: number): ListColumn<Row>[] => [
     render: (r) => <Expiry ymd={r.registrationExpiry} t={t} days={days} />,
   },
   {
+    key: "inspectionNo",
+    label: "Vehicle Inspection No",
+    type: "text",
+    width: 170,
+    defaultHidden: true,
+    value: (r) => r.inspectionNo,
+    render: (r) => r.inspectionNo || dash,
+  },
+  {
+    key: "inspectionReportNo",
+    label: "Inspection Report No",
+    type: "text",
+    width: 170,
+    value: (r) => r.inspectionReportNo,
+    render: (r) => r.inspectionReportNo || dash,
+  },
+  {
     key: "inspectionExpiry",
     label: "Inspection Expiration Date",
     type: "date",
     width: 190,
     value: (r) => r.inspectionExpiry,
     render: (r) => <Expiry ymd={r.inspectionExpiry} t={t} days={days} />,
+  },
+  {
+    key: "lifetimeLimit",
+    label: "Lifetime Limit",
+    type: "date",
+    width: 140,
+    defaultHidden: true,
+    value: (r) => r.lifetimeLimit,
+    render: (r) => <Expiry ymd={r.lifetimeLimit} t={t} days={days} />,
+  },
+  // ---------------------------------------------------------------- Fuel
+  {
+    key: "fuelType",
+    label: "Fuel Type",
+    type: "enum",
+    options: o.fuelTypes,
+    width: 110,
+    defaultHidden: true,
+    value: (r) => r.fuelType,
+    render: (r) => r.fuelType || dash,
+  },
+  {
+    key: "fuelRate",
+    label: "Fuel Rate",
+    type: "text",
+    width: 130,
+    defaultHidden: true,
+    value: (r) => r.fuelRate,
+    render: (r) => num(r.fuelRate, fuelUnitOf(r.fuelType).rate),
+  },
+  {
+    key: "fuelCapacity",
+    label: "Fuel Capacity",
+    type: "text",
+    width: 130,
+    defaultHidden: true,
+    value: (r) => r.fuelCapacity,
+    render: (r) => num(r.fuelCapacity, fuelUnitOf(r.fuelType).capacity),
+  },
+  // ---------------------------------------------------------------- Insurance
+  {
+    key: "liabilityInsuranceNumber",
+    label: "Liability Insurance Number",
+    type: "text",
+    width: 200,
+    defaultHidden: true,
+    value: (r) => r.liabilityInsuranceNumber,
+    render: (r) => r.liabilityInsuranceNumber || dash,
+  },
+  {
+    key: "policyNumber",
+    label: "Comprehensive Policy Number",
+    type: "text",
+    width: 210,
+    defaultHidden: true,
+    value: (r) => r.policyNumber,
+    render: (r) => r.policyNumber || dash,
+  },
+  // ---------------------------------------------------------------- Dimensions & Weight
+  {
+    key: "trailerSize",
+    label: "Trailer Size",
+    type: "enum",
+    options: o.trailerSizes,
+    width: 120,
+    value: (r) => r.trailerSize,
+    render: (r) => r.trailerSize || dash,
+  },
+  {
+    key: "trailerAxles",
+    label: "Trailer Axles",
+    type: "text",
+    width: 120,
+    defaultHidden: true,
+    value: (r) => r.trailerAxles,
+    render: (r) => r.trailerAxles || dash,
+  },
+  {
+    key: "overallDimension",
+    label: "Overall Dimension (mm)",
+    type: "text",
+    width: 180,
+    defaultHidden: true,
+    value: (r) => r.overallDimension,
+    render: (r) => r.overallDimension || dash,
+  },
+  {
+    key: "containerDimension",
+    label: "Cargo / Container Dimensions (mm)",
+    type: "text",
+    width: 230,
+    defaultHidden: true,
+    value: (r) => r.containerDimension,
+    render: (r) => r.containerDimension || dash,
+  },
+  {
+    key: "cargoVolume",
+    label: "Cargo Volume (m³)",
+    type: "text",
+    width: 150,
+    defaultHidden: true,
+    value: (r) => cargoVolumeM3(r.containerDimension),
+    render: (r) => cargoVolumeM3(r.containerDimension) || dash,
+  },
+  {
+    key: "kerbMass",
+    label: "Kerb Mass (kg)",
+    type: "text",
+    width: 130,
+    defaultHidden: true,
+    value: (r) => r.kerbMass,
+    render: (r) => num(r.kerbMass),
+  },
+  {
+    key: "authorizedPayload",
+    label: "Authorized Payload (kg)",
+    type: "text",
+    width: 170,
+    value: (r) => r.authorizedPayload,
+    render: (r) => num(r.authorizedPayload),
+  },
+  {
+    key: "authorizedTowedMass",
+    label: "Authorized Towed Mass (kg)",
+    type: "text",
+    width: 190,
+    defaultHidden: true,
+    value: (r) => r.authorizedTowedMass,
+    render: (r) => num(r.authorizedTowedMass),
+  },
+  // ---------------------------------------------------------------- Asset
+  {
+    key: "buyingDate",
+    label: "Buying Date",
+    type: "date",
+    width: 130,
+    defaultHidden: true,
+    value: (r) => r.buyingDate,
+    render: (r) => (r.buyingDate ? formatDate(r.buyingDate) : dash),
+  },
+  {
+    key: "acquisitionCost",
+    label: "Acquisition Cost",
+    type: "text",
+    width: 170,
+    defaultHidden: true,
+    value: (r) => r.acquisitionCost,
+    render: (r) => num(r.acquisitionCost, r.acquisitionCost ? r.acquisitionCurrency : ""),
+  },
+  {
+    key: "contractNumber",
+    label: "Contract Number",
+    type: "text",
+    width: 160,
+    defaultHidden: true,
+    value: (r) => r.contractNumber,
+    render: (r) => r.contractNumber || dash,
   },
   {
     key: "status",
@@ -201,9 +429,33 @@ function VehicleList() {
   const navigate = useNavigate();
   const rows = useVehicles();
   const days = useVehicleAlertDays();
-  // `t` is recreated every render; the language is the real dependency.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const columns = useMemo(() => columnsFor(t, days), [lang, days]);
+  const trailerSizes = useCodeOptions(CC.TRAILER_SIZE, TRAILER_TYPES);
+  const trailerTypes = useCodeOptions(CC.TRAILER_TYPE, TRAILER_BODY_TYPES);
+  const groups = useCodeOptions(CC.VEHICLE_GROUP, VEHICLE_GROUP_OPTIONS);
+  // Brand is free text: the filter offers the brands found in the data.
+  const brands = useMemo(
+    () =>
+      [...new Set(rows.map((r) => r.tradeMark.trim()).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [rows],
+  );
+  const fuelTypes = useCodeOptions(CC.FUEL_TYPE, FUEL_TYPES);
+  const columns = useMemo(
+    () =>
+      columnsFor(t, days, {
+        types: vehicleTypes,
+        trailerSizes,
+        trailerTypes,
+        groups,
+        truckTypes,
+        brands,
+        fuelTypes,
+      }),
+    // `t` is recreated every render; the language is the real dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lang, days, vehicleTypes, trailerSizes, trailerTypes, groups, truckTypes, brands, fuelTypes],
+  );
   const open = (r: Row, mode: "view" | "edit") =>
     void navigate({ to: "/vehicle/$id", params: { id: r.id }, search: { mode } });
 
@@ -220,8 +472,14 @@ function VehicleList() {
       }
       rows={rows}
       columns={columns}
-      searchPlaceholder="Tìm theo biển số, số khung, số máy"
-      searchValues={(r) => [r.plateNumber, r.chassisNumber]}
+      searchPlaceholder="Tìm theo biển số, số khung, số máy, số đăng kiểm"
+      searchValues={(r) => [
+        r.plateNumber,
+        r.chassisNumber,
+        r.engineNumber,
+        r.inspectionNo,
+        r.inspectionReportNo,
+      ]}
       quickFilters={[
         {
           key: "type",

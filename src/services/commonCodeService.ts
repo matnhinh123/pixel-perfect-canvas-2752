@@ -7,6 +7,7 @@ import type { CommonCodeOption, CommonCodeRecord } from "@/types";
 import { tr } from "@/lib/i18n";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, stampUpdate } from "./crudService";
+import { propagateRenames } from "./commonCodeSync";
 
 const activeNames = (rec: CommonCodeRecord | undefined) =>
   rec?.options.filter((o) => o.active && o.name.trim()).map((o) => o.name.trim());
@@ -83,6 +84,16 @@ export function validateCommonCode(rec: CommonCodeRecord, d: CommonCodeDraft) {
       "Cần ít nhất một lựa chọn đang Active.",
       "At least one option must be active.",
     );
+  // System options of a Customizable list keep their name and attribute and cannot be removed.
+  for (const code of rec.lockedOptions ?? []) {
+    const was = rec.options.find((o) => o.code === code);
+    const now = d.options.find((o) => o.code === code);
+    if (was && (!now || now.name !== was.name || now.attribute !== was.attribute))
+      e["options"] = tr(
+        `"${was.name}" là lựa chọn hệ thống: không được đổi tên, đổi Attribute hay xoá.`,
+        `"${was.name}" is a system option: it cannot be renamed, re-attributed or removed.`,
+      );
+  }
   if (rec.kind === "Fixed") {
     // Fixed lists: same options, same names — only Active / Remark / Attribute may change.
     const before = new Map(rec.options.map((o) => [o.code, o.name]));
@@ -97,6 +108,9 @@ export function validateCommonCode(rec: CommonCodeRecord, d: CommonCodeDraft) {
   }
   return e;
 }
+
+/** Records rewritten by the last save (renamed options), for the screen message. */
+export let lastSyncedRecords = 0;
 
 export const commonCodeService = {
   save(id: string, d: CommonCodeDraft): CommonCodeRecord {
@@ -114,6 +128,12 @@ export const commonCodeService = {
       );
     const next = stampUpdate({ ...rec, ...clean });
     commonCodeRepository.update(id, () => next);
+    // Records store option names: a rename is applied to every record that uses the old name.
+    const renames = clean.options.flatMap((o): [string, string][] => {
+      const was = rec.options.find((x) => x.code === o.code);
+      return was && was.name !== o.name ? [[was.name, o.name]] : [];
+    });
+    lastSyncedRecords = propagateRenames(id, renames);
 
     const base = { entityType: "Common Code" as const, entityId: id, entityLabel: rec.code };
     const out: AuditInput[] = [];
@@ -172,6 +192,14 @@ export const commonCodeService = {
           oldValue: p.name,
           newValue: "—",
         });
+    if (lastSyncedRecords)
+      out.push({
+        ...base,
+        action: "UPDATE",
+        field: "Records synced",
+        oldValue: renames.map(([a]) => a).join(", "),
+        newValue: `${renames.map(([, b]) => b).join(", ")} (${lastSyncedRecords} records)`,
+      });
     auditService.logMany(out);
     return next;
   },

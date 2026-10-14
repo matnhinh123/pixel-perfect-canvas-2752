@@ -171,6 +171,7 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
 function BusinessPartnerList() {
   const { t, lang } = useT();
   const businessCategories = useCodeOptions(CC.BUSINESS_CATEGORY, BUSINESS_CATEGORIES);
+  const legalTypes = useCodeOptions(CC.LEGAL_TYPE, LEGAL_TYPES);
   const navigate = useNavigate();
   const all = useCollection(businessPartnerRepository);
   // Records saved by older versions are normalized (e.g. single Business Category → list).
@@ -198,6 +199,14 @@ function BusinessPartnerList() {
           options: ["Active", "Inactive"].map((s) => ({
             label: s,
             conditions: [{ field: "status", operator: "eq", value: s }],
+          })),
+        },
+        {
+          key: "legalType",
+          allLabel: t("Loại pháp lý: Tất cả", "Legal Type: All"),
+          options: legalTypes.map((lt) => ({
+            label: lt,
+            conditions: [{ field: "legalType", operator: "eq", value: lt }],
           })),
         },
         {

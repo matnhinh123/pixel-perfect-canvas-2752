@@ -290,10 +290,67 @@ function LanguageMenu() {
   );
 }
 
+/** Top-level modules (the level of "Master Data"); only Master Data is part of this demo. */
+const MODULES: { key: string; label: string; icon: string; to?: string }[] = [
+  { key: "master-data", label: "Master Data", icon: "🗂️", to: "/business-partner" },
+  { key: "operations", label: "Operations", icon: "🚛" },
+  { key: "finance", label: "Finance", icon: "💰" },
+];
+
+/** Sidebar on Home: Home itself + the modules (no module menu until one is picked). */
+function ModuleMenu({ collapsed }: { collapsed: boolean }) {
+  const { t } = useT();
+  const row = cn(
+    "flex items-center gap-3 rounded-xl px-4 py-2.5 text-[15px] font-semibold",
+    collapsed && "justify-center px-0",
+  );
+  return (
+    <nav className="mt-2 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
+      <Link to="/" className={cn(row, "bg-brand text-white shadow-md")}>
+        <span className="w-6 text-center text-lg leading-none">🏠</span>
+        {!collapsed && t("Trang chủ", "Home")}
+      </Link>
+      {!collapsed && (
+        <div className="mt-3 px-4 text-xs font-semibold uppercase tracking-wide text-white/60">
+          {t("Phân hệ", "Modules")}
+        </div>
+      )}
+      {MODULES.map((m) =>
+        m.to ? (
+          <Link
+            key={m.key}
+            to={m.to}
+            className={cn(row, "text-white/95 transition-colors hover:bg-white/10")}
+          >
+            <span className="w-6 text-center text-lg leading-none">{m.icon}</span>
+            {!collapsed && m.label}
+          </Link>
+        ) : (
+          <div
+            key={m.key}
+            className={cn(row, "cursor-not-allowed text-white/45")}
+            title={t("Ngoài phạm vi demo", "Not in this demo")}
+          >
+            <span className="w-6 text-center text-lg leading-none opacity-60">{m.icon}</span>
+            {!collapsed && (
+              <>
+                {m.label}
+                <span className="ml-auto text-[11px] font-medium">{t("Sắp có", "Soon")}</span>
+              </>
+            )}
+          </div>
+        ),
+      )}
+    </nav>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useT();
   const confirm = useConfirm();
   const navigate = useNavigate();
+  // Home ("/") sits above the modules: until one is picked the sidebar lists the modules only.
+  const atHome = useRouterState({ select: (s) => s.location.pathname }) === "/";
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => setCollapsed(readJson<boolean>(COLLAPSE_KEY, false)), []);
   const toggle = () =>
@@ -331,7 +388,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             to="/"
             className="text-[28px] font-extrabold leading-none tracking-tight text-white"
-            title="Dashboard"
+            title={t("Trang chủ", "Home")}
           >
             {collapsed ? (
               <>
@@ -369,76 +426,87 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <div className="px-3">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3 text-left text-[15px] font-bold text-brand shadow-sm",
-                  collapsed && "justify-center px-0",
-                )}
-              >
-                <Home className="h-5 w-5" />
-                {!collapsed && (
-                  <>
-                    <span>Master Data</span>
-                    <EllipsisVertical className="ml-auto h-4 w-4 text-muted-foreground" />
-                  </>
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel>{t("Phân hệ", "Modules")}</DropdownMenuLabel>
-              <DropdownMenuItem>
-                <Home className="h-4 w-4 text-brand" />
-                Master Data
-                <Check className="ml-auto h-4 w-4" />
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                Operations {t("(ngoài phạm vi demo)", "(not in this demo)")}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                Finance {t("(ngoài phạm vi demo)", "(not in this demo)")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void navigate({ to: "/" })}>
-                Dashboard
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void navigate({ to: "/audit-log" })}>
-                Audit Log
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {atHome ? (
+          <ModuleMenu collapsed={collapsed} />
+        ) : (
+          <>
+            <div className="px-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3 text-left text-[15px] font-bold text-brand shadow-sm",
+                      collapsed && "justify-center px-0",
+                    )}
+                  >
+                    <Home className="h-5 w-5" />
+                    {!collapsed && (
+                      <>
+                        <span>Master Data</span>
+                        <EllipsisVertical className="ml-auto h-4 w-4 text-muted-foreground" />
+                      </>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuItem onClick={() => void navigate({ to: "/" })}>
+                    <span className="w-4 text-center">🏠</span>
+                    {t("Trang chủ", "Home")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>{t("Phân hệ", "Modules")}</DropdownMenuLabel>
+                  <DropdownMenuItem>
+                    <Home className="h-4 w-4 text-brand" />
+                    Master Data
+                    <Check className="ml-auto h-4 w-4" />
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled>
+                    Operations {t("(ngoài phạm vi demo)", "(not in this demo)")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled>
+                    Finance {t("(ngoài phạm vi demo)", "(not in this demo)")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => void navigate({ to: "/dashboard" })}>
+                    Dashboard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void navigate({ to: "/audit-log" })}>
+                    Audit Log
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
-        <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
-          {NAV.map((n) => {
-            if (n.children) return <NavGroup key={n.to} item={n} collapsed={collapsed} />;
-            const item = (
-              <Link
-                key={n.to}
-                to={n.to}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-4 py-2.5 text-[15px] font-semibold text-white/95 transition-colors hover:bg-white/10",
-                  collapsed && "justify-center px-0",
-                )}
-                activeProps={{ className: "bg-brand! text-white shadow-md" }}
-              >
-                <span className="w-6 text-center text-lg leading-none">{n.icon}</span>
-                {!collapsed && n.label}
-              </Link>
-            );
-            return collapsed ? (
-              <Tooltip key={n.to}>
-                <TooltipTrigger asChild>{item}</TooltipTrigger>
-                <TooltipContent side="right">{n.label}</TooltipContent>
-              </Tooltip>
-            ) : (
-              item
-            );
-          })}
-        </nav>
+            <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
+              {NAV.map((n) => {
+                if (n.children) return <NavGroup key={n.to} item={n} collapsed={collapsed} />;
+                const item = (
+                  <Link
+                    key={n.to}
+                    to={n.to}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-4 py-2.5 text-[15px] font-semibold text-white/95 transition-colors hover:bg-white/10",
+                      collapsed && "justify-center px-0",
+                    )}
+                    activeProps={{ className: "bg-brand! text-white shadow-md" }}
+                  >
+                    <span className="w-6 text-center text-lg leading-none">{n.icon}</span>
+                    {!collapsed && n.label}
+                  </Link>
+                );
+                return collapsed ? (
+                  <Tooltip key={n.to}>
+                    <TooltipTrigger asChild>{item}</TooltipTrigger>
+                    <TooltipContent side="right">{n.label}</TooltipContent>
+                  </Tooltip>
+                ) : (
+                  item
+                );
+              })}
+            </nav>
+          </>
+        )}
 
         <div
           className={cn(

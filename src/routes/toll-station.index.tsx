@@ -139,25 +139,11 @@ function TollStationList() {
         render: (g) => <Tag tone={sourceOf(g)}>{sourceOf(g)}</Tag>,
       },
       {
-        key: "vietmapId",
-        label: "Vietmap ID",
+        key: "mapPosition",
+        label: "Map Position",
         type: "text",
-        value: (g) => g.vietmapId ?? "",
-        defaultHidden: true,
-        render: (g) => <span className="font-mono text-xs">{g.vietmapId || "—"}</span>,
-      },
-      {
-        key: "lat",
-        label: "Latitude",
-        type: "number",
-        value: (g) => (Number.isFinite(g.lat) ? g.lat : null),
-        defaultHidden: true,
-      },
-      {
-        key: "lng",
-        label: "Longitude",
-        type: "number",
-        value: (g) => (Number.isFinite(g.lng) ? g.lng : null),
+        value: (g) =>
+          Number.isFinite(g.lat) && Number.isFinite(g.lng) ? `${g.lat}, ${g.lng}` : "",
         defaultHidden: true,
       },
       {
@@ -271,8 +257,8 @@ function TollStationList() {
       title="Toll Station"
       rows={rows}
       columns={columns}
-      searchPlaceholder="Search code, name, Vietmap ID..."
-      searchValues={(g) => [g.code, g.name, g.vietmapId ?? ""]}
+      searchPlaceholder="Search code, name..."
+      searchValues={(g) => [g.code, g.name]}
       quickFilters={quickFilters}
       showRefresh={false}
       crud={tollStationCrud}

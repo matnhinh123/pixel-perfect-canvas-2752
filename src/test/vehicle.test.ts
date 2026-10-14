@@ -8,16 +8,24 @@ import {
   showsField,
   validateVehicle,
   vehicleExpiryAlerts,
+  cargoVolumeM3,
+  baseTypeOf,
   vehicleService,
   type VehicleDraft,
 } from "@/services/vehicleMasterService";
 import type { VehicleMasterRecord } from "@/types";
+import { commonCodeRepository } from "@/repositories";
+import { CC } from "@/mock-data/commonCodes";
+import { commonCodeService, validateCommonCode } from "@/services/commonCodeService";
 
 const valid = (p: Partial<VehicleDraft> = {}): VehicleDraft => ({
   ...newVehicleDraft(),
   vehicleType: "TRAILER",
   plateNumber: "99R-123.45",
   chassisNumber: "TESTVIN0001",
+  trailerType: "Skeletal",
+  trailerSize: "40 ft",
+  inspectionReportNo: "KD-2026-0001",
   ...p,
 });
 
@@ -38,9 +46,9 @@ describe("Vehicle master", () => {
     expect(expiryState("", now)).toBe("none");
   });
 
-  it("requires exactly Vehicle Type, Plate Number and VIN", () => {
+  it("requires exactly Vehicle Type, Plate Number and Inspection Report No", () => {
     const empty = validateVehicle(newVehicleDraft());
-    expect(Object.keys(empty).sort()).toEqual(["chassisNumber", "plateNumber", "vehicleType"]);
+    expect(Object.keys(empty).sort()).toEqual(["inspectionReportNo", "plateNumber", "vehicleType"]);
     expect(validateVehicle(valid())).toEqual({});
   });
 
@@ -50,7 +58,35 @@ describe("Vehicle master", () => {
     expect(validateVehicle(valid({ vehicleType: "HEAD" }))["truckType"]).toBeUndefined();
   });
 
-  it("checks plate / VIN formats and uniqueness", () => {
+  it("requires Trailer Size for a TRAILER (Trailer Type = body type, optional)", () => {
+    expect(validateVehicle(valid({ trailerSize: "" }))["trailerSize"]).toBeDefined();
+    expect(validateVehicle(valid({ trailerType: "" }))).toEqual({});
+    expect(
+      validateVehicle(valid({ vehicleType: "HEAD", trailerSize: "" }))["trailerSize"],
+    ).toBeUndefined();
+  });
+
+  it("Trailer Axles: whole number 1–9, trailers only", () => {
+    expect(validateVehicle(valid({ trailerAxles: "3" }))).toEqual({});
+    expect(validateVehicle(valid({ trailerAxles: "0" }))["trailerAxles"]).toBeDefined();
+    expect(validateVehicle(valid({ trailerAxles: "12" }))["trailerAxles"]).toBeDefined();
+    expect(showsField("TRUCK", "trailerAxles")).toBe(false);
+  });
+
+  it("moves a size stored in Trailer Type (before the split) to Trailer Size", () => {
+    const old = { ...valid({ trailerType: "40 ft", trailerSize: "" }), id: "VH-OLD" } as never;
+    const n = normalizeVehicle(old);
+    expect(n.trailerSize).toBe("40 ft");
+    expect(n.trailerType).toBe("");
+  });
+
+  it("a trailer has no cargo box, cargo volume or kerb mass", () => {
+    expect(showsField("TRAILER", "containerDimension")).toBe(false);
+    expect(showsField("TRAILER", "kerbMass")).toBe(false);
+    expect(showsField("TRUCK", "kerbMass")).toBe(true);
+  });
+
+  it("checks plate / VIN / code formats and uniqueness", () => {
     expect(validateVehicle(valid({ plateNumber: "ABC" }))["plateNumber"]).toBeDefined();
     for (const p of ["61C-123.45", "30A-12345", "29LD-123.45"])
       expect(validateVehicle(valid({ plateNumber: p }))["plateNumber"]).toBeUndefined();
@@ -58,33 +94,37 @@ describe("Vehicle master", () => {
       /exist|tồn tại/i,
     );
     expect(validateVehicle(valid({ chassisNumber: "VIN-01" }))["chassisNumber"]).toBeDefined();
+    expect(
+      validateVehicle(
+        valid({ vehicleType: "TRUCK", truckType: "5 tấn", modelCode: "Canter TF8.5" }),
+      )["modelCode"],
+    ).toBeUndefined();
+    expect(
+      validateVehicle(valid({ vehicleType: "TRUCK", truckType: "5 tấn", modelCode: "HD@210" }))[
+        "modelCode"
+      ],
+    ).toBeDefined();
+    expect(
+      validateVehicle(valid({ vehicleType: "TRUCK", truckType: "5 tấn", kerbMass: "0" }))[
+        "kerbMass"
+      ],
+    ).toBeDefined();
     expect(validateVehicle(valid({ productionYear: "1850" }))["productionYear"]).toBeDefined();
   });
 
   it("shows fields by vehicle type", () => {
     expect(showsField("TRUCK", "truckType")).toBe(true);
     expect(showsField("HEAD", "vehicleGroup")).toBe(false);
-    expect(showsField("HEAD", "containerMappings")).toBe(true);
     expect(showsField("TRAILER", "fuelType")).toBe(false);
+    expect(showsField("TRAILER", "engineNumber")).toBe(false);
     expect(showsField("TRAILER", "trailerType")).toBe(true);
     expect(showsField("", "truckType")).toBe(false);
     const truck = valid({ vehicleType: "TRUCK", truckType: "5 tấn", fuelRate: "20" });
     expect(fieldsLostOnTypeChange(truck, "TRAILER")).toEqual(["Truck Type", "Fuel Rate"]);
   });
 
-  it("validates the head's Container Size Mapping rows", () => {
-    const head = (rows: VehicleDraft["containerMappings"]) =>
-      validateVehicle(valid({ vehicleType: "HEAD", containerMappings: rows }));
-    expect(head([])).toEqual({});
-    expect(
-      head([{ rid: "a", trailerType: "20 ft", vehicleGroup: "" }])["containerMappings"],
-    ).toBeDefined();
-    expect(
-      head([
-        { rid: "a", trailerType: "20 ft", vehicleGroup: "Group 02" },
-        { rid: "b", trailerType: "20 ft", vehicleGroup: "Group 04" },
-      ])["containerMappings"],
-    ).toMatch(/already|đã được/);
+  it("no longer shows the Container Size Mapping", () => {
+    expect(showsField("HEADER", "containerMappings")).toBe(false);
   });
 
   it("clears the fields a type hides when saving", () => {
@@ -93,12 +133,12 @@ describe("Vehicle master", () => {
         plateNumber: "98R-111.22",
         chassisNumber: "TESTVIN0002",
         vehicleType: "TRAILER",
-        trailerType: "40 ft",
+        trailerType: "Skeletal",
         truckType: "5 tấn",
         fuelRate: "22",
       }),
     );
-    expect(saved.trailerType).toBe("40 ft");
+    expect(saved.trailerType).toBe("Skeletal");
     expect(saved.truckType).toBe("");
     expect(saved.fuelRate).toBe("");
   });
@@ -119,13 +159,13 @@ describe("Vehicle master", () => {
       tachograph: true,
     } as unknown as VehicleMasterRecord;
     const n = normalizeVehicle(legacy);
-    expect(n.vehicleType).toBe("HEAD");
+    expect(n.vehicleType).toBe("HEADER");
     expect(n.vehicleGroup).toBe("");
     expect(n).not.toHaveProperty("ownership");
-    // Dropped fields go; a stored Tachograph flag counts as the GPS device.
-    expect(n).not.toHaveProperty("engineNumber");
+    // Unknown fields go (Engine Number is kept; old equipment flags are dropped).
+    expect(n.engineNumber).toBe("D6CB1234567");
     expect(n).not.toHaveProperty("tachograph");
-    expect(n.telematics).toBe(true);
+    expect(n).not.toHaveProperty("telematics");
     expect(
       normalizeVehicle({ ...legacy, vehicleType: "Truck" } as unknown as VehicleMasterRecord)
         .vehicleType,
@@ -150,5 +190,72 @@ describe("Vehicle master", () => {
       ["Inspection", "soon"],
     ]);
     expect(vehicleExpiryAlerts([{ ...v, status: "Inactive" }], 30, now)).toEqual([]);
+  });
+});
+
+describe("Vehicle Type from Common Code", () => {
+  it("a type added in Common Code behaves like its base type (attribute)", () => {
+    const vt = commonCodeRepository.get(CC.VEHICLE_TYPE)!;
+    commonCodeService.save(vt.id, {
+      remark: vt.remark,
+      options: [
+        ...vt.options,
+        { code: "BP0699", name: "REEFER TRUCK", attribute: "TRUCK", remark: "", active: true },
+      ],
+    });
+    expect(baseTypeOf("REEFER TRUCK")).toBe("TRUCK");
+    expect(showsField("REEFER TRUCK", "truckType")).toBe(true);
+    expect(showsField("REEFER TRUCK", "trailerType")).toBe(false);
+    expect(validateVehicle(valid({ vehicleType: "REEFER TRUCK" }))["truckType"]).toBeDefined();
+    expect(
+      normalizeVehicle({ ...valid({ vehicleType: "Reefer Truck" }) } as VehicleMasterRecord)
+        .vehicleType,
+    ).toBe("REEFER TRUCK");
+  });
+
+  it("keeps TRUCK / HEADER / TRAILER locked: no rename, no removal", () => {
+    const vt = commonCodeRepository.get(CC.VEHICLE_TYPE)!;
+    expect(vt.kind).toBe("Customizable");
+    const renamed = vt.options.map((o) => (o.name === "HEADER" ? { ...o, name: "TRACTOR" } : o));
+    expect(validateCommonCode(vt, { remark: "", options: renamed })["options"]).toMatch(/system/);
+    const removed = vt.options.filter((o) => o.name !== "TRAILER");
+    expect(validateCommonCode(vt, { remark: "", options: removed })["options"]).toMatch(/system/);
+    const off = vt.options.map((o) => (o.name === "TRAILER" ? { ...o, active: false } : o));
+    expect(validateCommonCode(vt, { remark: "", options: off })["options"]).toBeUndefined();
+  });
+});
+
+describe("Fields per vehicle type (as on the real certificates)", () => {
+  it("a head has no cargo box; a trailer has no engine, fuel or service-life limit", () => {
+    expect(showsField("HEAD", "containerDimension")).toBe(false);
+    expect(showsField("HEAD", "authorizedPayload")).toBe(true);
+    expect(showsField("HEAD", "authorizedTowedMass")).toBe(true);
+    expect(showsField("TRAILER", "lifetimeLimit")).toBe(false);
+    expect(showsField("TRAILER", "engineNumber")).toBe(false);
+    expect(showsField("TRAILER", "authorizedPayload")).toBe(true);
+    expect(showsField("TRUCK", "containerDimension")).toBe(true);
+    expect(showsField("TRUCK", "lifetimeLimit")).toBe(true);
+    expect(showsField("TRAILER", "trailerSize")).toBe(true);
+    expect(showsField("TRUCK", "trailerSize")).toBe(false);
+    expect(showsField("TRAILER", "modelCode")).toBe(false);
+    expect(showsField("HEADER", "modelCode")).toBe(true);
+  });
+});
+
+describe("Cargo volume", () => {
+  it("is L × W × H of the cargo box in m³ (2 decimals), empty until complete", () => {
+    expect(cargoVolumeM3("5200×2100×2050")).toBe("22.39");
+    expect(cargoVolumeM3("6200×2350×2400")).toBe("34.97");
+    expect(cargoVolumeM3("5200×2100×")).toBe("");
+    expect(cargoVolumeM3("")).toBe("");
+  });
+});
+
+describe("HEADER is the head base type", () => {
+  it("shows the head fields for HEADER (and old stored HEAD)", () => {
+    expect(baseTypeOf("HEADER")).toBe("HEAD");
+    expect(baseTypeOf("HEAD")).toBe("HEAD");
+    expect(showsField("HEADER", "authorizedTowedMass")).toBe(true);
+    expect(validateVehicle(valid({ vehicleType: "HEADER", trailerType: "" }))).toEqual({});
   });
 });

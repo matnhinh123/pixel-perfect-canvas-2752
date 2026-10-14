@@ -39,9 +39,16 @@ export function UnitInput({
   );
 }
 
-const DIM_LABELS = ["Length", "Width", "Height"];
+const DIM_PARTS = [
+  { tag: "L", label: "Length", placeholder: "Dài" },
+  { tag: "W", label: "Width", placeholder: "Rộng" },
+  { tag: "H", label: "Height", placeholder: "Cao" },
+];
 
-/** "Length × Width × Height" in mm, stored as `L×W×H` (empty parts allowed while typing). */
+/**
+ * "Length × Width × Height" in mm, stored as `L×W×H` (empty parts allowed while typing). Each part
+ * carries its letter (L / W / H) so it is clear which number is which.
+ */
 export function DimensionInput({
   value,
   onChange,
@@ -60,14 +67,20 @@ export function DimensionInput({
         {parts.map((p, i) => (
           <div key={i} className="flex min-w-0 flex-1 items-center">
             {i > 0 && <span className="px-0.5 text-muted-foreground">×</span>}
+            <span
+              className="ml-1.5 shrink-0 rounded bg-muted px-1 text-[10px] font-bold leading-4 text-muted-foreground"
+              title={DIM_PARTS[i]!.label}
+            >
+              {DIM_PARTS[i]!.tag}
+            </span>
             <input
               inputMode="numeric"
-              aria-label={DIM_LABELS[i]}
-              placeholder="9999"
+              aria-label={DIM_PARTS[i]!.label}
+              placeholder={DIM_PARTS[i]!.placeholder}
               value={p}
               onChange={(e) => set(i, e.target.value)}
               className={cn(
-                "h-[34px] w-full min-w-0 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:bg-muted/40 disabled:text-foreground disabled:placeholder:text-transparent",
+                "h-[34px] w-full min-w-0 bg-transparent px-1.5 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:bg-muted/40 disabled:text-foreground disabled:placeholder:text-transparent",
               )}
             />
           </div>

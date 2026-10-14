@@ -16,10 +16,11 @@ type Row = CommonCodeRecord;
 
 const columns: ListColumn<Row>[] = [
   {
+    // Hidden by default (system code); can be shown from the column settings.
     key: "code",
     label: "Common Code",
     type: "text",
-    pinned: true,
+    defaultHidden: true,
     width: 140,
     value: (r) => r.code,
     render: (r) => <span className="font-semibold text-primary">{r.code}</span>,
@@ -28,6 +29,7 @@ const columns: ListColumn<Row>[] = [
     key: "name",
     label: "Common Name",
     type: "text",
+    pinned: true,
     width: 260,
     value: (r) => r.name,
     className: "font-medium",

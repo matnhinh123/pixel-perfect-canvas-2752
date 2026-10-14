@@ -8,7 +8,9 @@ import {
   CheckCircle2,
   History,
   Lock,
+  MapPin,
   Pencil,
+  X,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +43,8 @@ import {
 import { useEntityActions } from "@/components/movex/general/useEntityActions";
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { LocationAutocomplete } from "@/components/movex/routing/LocationAutocomplete";
+import { MapPickerDialog } from "@/components/movex/location/MapPickerDialog";
+import { cn } from "@/lib/utils";
 import { useCollection } from "@/hooks/use-store";
 import { locationRepository, tollStationRepository } from "@/repositories";
 import type { TollGateRecord } from "@/mock-data/tollCatalog";
@@ -282,11 +286,9 @@ function TollStationView({ station }: { station: TollGateRecord }) {
             <InfoRow label="Source">
               <Tag tone={sourceOf(station)}>{sourceOf(station)}</Tag>
             </InfoRow>
-            <InfoRow label="Vietmap ID">
-              {station.vietmapId ? <span className="font-mono">{station.vietmapId}</span> : null}
+            <InfoRow label="Map Position">
+              {hasCoords ? `${station.lat}, ${station.lng}` : null}
             </InfoRow>
-            <InfoRow label="Latitude">{hasCoords ? station.lat : null}</InfoRow>
-            <InfoRow label="Longitude">{hasCoords ? station.lng : null}</InfoRow>
             <div className="sm:col-span-3">
               <InfoRow label="Remark">{station.remark}</InfoRow>
             </div>
@@ -328,6 +330,8 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
     [locationsAll, d.locationId],
   );
   const picked = d.locationId ? locations.find((l) => l.id === d.locationId) : undefined;
+  const hasCoords = Number.isFinite(d.lat) && Number.isFinite(d.lng);
+  const [mapOpen, setMapOpen] = useState(false);
 
   const dirty =
     JSON.stringify(d) !== JSON.stringify(initial) || status !== (source?.status ?? "Active");
@@ -341,7 +345,6 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
       return n;
     });
   };
-  const num = (v: string) => (v.trim() === "" ? NaN : Number(v));
 
   const back = () =>
     source
@@ -450,31 +453,42 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 }
               />
             </Field>
-            <Field label="Latitude" error={errors["lat"]}>
-              <Input
-                type="number"
-                step="any"
-                value={Number.isFinite(d.lat) ? d.lat : ""}
-                placeholder={picked ? "From location" : "e.g. 10.8622"}
-                onChange={(e) => set("lat", num(e.target.value))}
-              />
-            </Field>
-            <Field label="Longitude" error={errors["lng"]}>
-              <Input
-                type="number"
-                step="any"
-                value={Number.isFinite(d.lng) ? d.lng : ""}
-                placeholder={picked ? "From location" : "e.g. 106.7905"}
-                onChange={(e) => set("lng", num(e.target.value))}
-              />
-            </Field>
-            <Field label="Vietmap ID" error={errors["vietmapId"]}>
-              <Input
-                value={d.vietmapId ?? ""}
-                placeholder="e.g. vm-toll-100231"
-                aria-invalid={!!errors["vietmapId"] || undefined}
-                onChange={(e) => set("vietmapId", e.target.value)}
-              />
+            <Field
+              label="Map Position"
+              error={errors["lat"] ?? errors["lng"]}
+              info="Gate position as “Latitude, Longitude”. Click to pick it on the map; choosing a Location fills its position."
+            >
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMapOpen(true)}
+                  className={cn(
+                    "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-input bg-card px-3 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    (errors["lat"] || errors["lng"]) && "border-destructive",
+                    hasCoords ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">
+                    {hasCoords
+                      ? `${d.lat}, ${d.lng}`
+                      : picked
+                        ? "Location has no position — click to pick on the map"
+                        : "Click to pick a spot on the map"}
+                  </span>
+                </button>
+                {hasCoords && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Clear position"
+                    onClick={() => setD((p) => ({ ...p, lat: NaN, lng: NaN }))}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </Field>
             <Field label="Source">
               <div className="flex h-9 items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 text-sm">
@@ -498,9 +512,24 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
             </Field>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Coordinates are filled from the location when it has them; adjust to the gate position
-            if needed.
+            The map position is filled from the location when it has one; pick the exact gate on the
+            map if needed.
           </p>
+          <MapPickerDialog
+            open={mapOpen}
+            onOpenChange={setMapOpen}
+            lat={d.lat}
+            lng={d.lng}
+            onConfirm={(p) => {
+              setD((x) => ({ ...x, lat: p.lat, lng: p.lng }));
+              setErrors((e) => {
+                const n = { ...e };
+                delete n["lat"];
+                delete n["lng"];
+                return n;
+              });
+            }}
+          />
         </Panel>
 
         <Panel

@@ -39,4 +39,9 @@ export interface CommonCodeRecord extends BaseRecord {
   /** Attributes an option can carry (DEFAULT, or the parent values of a dependent list). */
   attributes: CommonCodeAttribute[];
   options: CommonCodeOption[];
+  /**
+   * Option codes the system relies on inside a Customizable list: they cannot be renamed, given
+   * another attribute or removed (only deactivated). E.g. TRUCK / HEAD / TRAILER of Vehicle Type.
+   */
+  lockedOptions?: string[];
 }

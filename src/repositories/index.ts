@@ -28,7 +28,7 @@ import {
 import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
 import { seedFixedCosts, seedFixedCostSummaries } from "@/mock-data/fixedCost";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
-import { seedVehicleMasters } from "@/mock-data/vehicleMaster";
+import { seedFiveTonTrucks, seedVehicleMasters } from "@/mock-data/vehicleMaster";
 import { seedBusinessPartners, seedPetrolimexTienGiang } from "@/mock-data/businessPartners";
 import {
   SEED_CODE_FIXES,
@@ -85,10 +85,16 @@ export const tollStationRepository = createCollection<TollGateRecord>(
 );
 /** Vehicle master (one row per physical vehicle). */
 export const vehicleMasterRepository = createCollection<VehicleMasterRecord>(
-  // ".v4": paperwork-only fields dropped, demo seed gains payload / cargo space / ETC tag / lifetime.
-  "vehicle-masters.v4",
+  // ".v5": registration / insurance / identification fields are back — reload the demo seed.
+  "vehicle-masters.v5",
   seedVehicleMasters,
 );
+// Demo fleet of 5-ton trucks: added once when missing (a deleted one stays deleted).
+{
+  const have = new Set(vehicleMasterRepository.all().map((v) => v.id));
+  const add = seedFiveTonTrucks().filter((v) => !have.has(v.id));
+  if (add.length) vehicleMasterRepository.insertMany(add);
+}
 /** Business Partner master (customers and vendors — one partner, several roles). */
 export const businessPartnerRepository = createCollection<BusinessPartnerRecord>(
   "business-partners",
@@ -105,10 +111,88 @@ export const commonCodeRepository = createCollection<CommonCodeRecord>(
   "common-codes",
   seedCommonCodes,
 );
-// Location Sub-Type and vehicle Trade Mark were removed: retire the stored types once.
-for (const code of [CC.LOCATION_SUB_TYPE, CC.TRADE_MARK]) {
-  const t = commonCodeRepository.get(code);
+// Location Sub-Type was removed: retire the stored type once.
+{
+  const t = commonCodeRepository.get(CC.LOCATION_SUB_TYPE);
   if (t && !t.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: true }));
+}
+// Vehicle Brand (formerly "Trade Mark") is back: restore the type retired earlier (or add it when
+// missing) and give the stored type its new name.
+{
+  const t = commonCodeRepository.get(CC.TRADE_MARK);
+  const seed = seedCommonCodes().find((x) => x.id === CC.TRADE_MARK);
+  // Name / usage labels follow the system ("Trade Mark" → "Vehicle Brand", field "Brand Name").
+  if (t && seed && (t.name !== seed.name || JSON.stringify(t.usage) !== JSON.stringify(seed.usage)))
+    commonCodeRepository.update(t.id, (p) => ({ ...p, name: seed.name, usage: seed.usage }));
+  if (t?.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: false }));
+  if (!t && seed) commonCodeRepository.insert(seed);
+}
+// Vehicle Type became Customizable (new types pick a base type as attribute); stored list follows.
+{
+  const vt = commonCodeRepository.get(CC.VEHICLE_TYPE);
+  if (vt && vt.kind === "Fixed") {
+    const seed = seedCommonCodes().find((x) => x.id === CC.VEHICLE_TYPE);
+    if (seed)
+      commonCodeRepository.update(vt.id, (p) => ({
+        ...p,
+        kind: "Customizable",
+        remark: seed.remark,
+        attributes: seed.attributes,
+        lockedOptions: seed.lockedOptions ?? [],
+        options: p.options.map((o) => ({
+          ...o,
+          attribute: ["TRUCK", "HEAD", "TRAILER"].includes(o.name) ? o.name : "TRUCK",
+        })),
+      }));
+  }
+}
+// Trailer Size became Customizable (sizes such as 45 ft can be added / renamed) and is used by the
+// Trailer Size field; Trailer Type got its own list (body type). Stored lists follow once.
+{
+  const seeds = seedCommonCodes();
+  const ts = commonCodeRepository.get(CC.TRAILER_SIZE);
+  const seed = seeds.find((x) => x.id === CC.TRAILER_SIZE);
+  if (
+    ts &&
+    seed &&
+    (ts.kind === "Fixed" || JSON.stringify(ts.usage) !== JSON.stringify(seed.usage))
+  )
+    commonCodeRepository.update(ts.id, (p) => ({
+      ...p,
+      kind: "Customizable",
+      remark: seed.remark,
+      usage: seed.usage,
+    }));
+  // Container Size Mapping was removed: Vehicle Group no longer lists it as a usage.
+  const vg = commonCodeRepository.get(CC.VEHICLE_GROUP);
+  const vgSeed = seeds.find((x) => x.id === CC.VEHICLE_GROUP);
+  if (vg && vgSeed && JSON.stringify(vg.usage) !== JSON.stringify(vgSeed.usage))
+    commonCodeRepository.update(vg.id, (p) => ({ ...p, usage: vgSeed.usage }));
+  const tt = seeds.find((x) => x.id === CC.TRAILER_TYPE);
+  if (tt && !commonCodeRepository.get(CC.TRAILER_TYPE)) commonCodeRepository.insert(tt);
+}
+// Vehicle Type "HEAD" is shown as "HEADER": stored option list + vehicles follow once.
+{
+  const vt = commonCodeRepository.get(CC.VEHICLE_TYPE);
+  const toHeader = (s: string) => (s === "HEAD" ? "HEADER" : s);
+  if (
+    vt &&
+    (vt.options.some((o) => o.name === "HEAD" || o.attribute === "HEAD") ||
+      vt.attributes.some((a) => a.code === "HEAD"))
+  )
+    commonCodeRepository.update(vt.id, (p) => ({
+      ...p,
+      remark: p.remark.replace(/\bHEAD\b/g, "HEADER"),
+      attributes: p.attributes.map((a) => ({ code: toHeader(a.code), name: toHeader(a.name) })),
+      options: p.options.map((o) => ({
+        ...o,
+        name: toHeader(o.name),
+        attribute: toHeader(o.attribute),
+      })),
+    }));
+  for (const v of vehicleMasterRepository.all())
+    if (v.vehicleType === "HEAD")
+      vehicleMasterRepository.update(v.id, (p) => ({ ...p, vehicleType: "HEADER" }));
 }
 // Location Type "Port" was renamed "Seaport": stored option + stored locations follow once.
 {

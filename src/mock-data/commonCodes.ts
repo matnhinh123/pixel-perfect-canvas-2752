@@ -21,7 +21,14 @@ import {
   LEGAL_TYPES,
   WO_ACCESS_POLICIES,
 } from "./businessPartners";
-import { FUEL_TYPES, TRUCK_TYPES, VEHICLE_MASTER_GROUPS, VEHICLE_TYPES } from "./vehicleMaster";
+import {
+  FUEL_TYPES,
+  TRADE_MARKS,
+  TRAILER_BODY_TYPES,
+  TRUCK_TYPES,
+  VEHICLE_MASTER_GROUPS,
+  VEHICLE_TYPES,
+} from "./vehicleMaster";
 import { LOCATION_TYPES } from "./locationCatalog";
 import { COST_TAX_EVIDENCES, COST_TAX_TARIFFS, COST_UOM_CATALOG } from "./costMaster";
 import { FIXED_COST_TYPES, FIXED_COST_VEHICLE_TYPES } from "./fixedCost";
@@ -44,8 +51,8 @@ export const CC = {
   TRUCK_TYPE: "VH10",
   VEHICLE_GROUP: "VH11",
   FUEL_TYPE: "VH12",
-  /** Removed (Trade Mark dropped from the vehicle master); kept to retire the stored type. */
   TRADE_MARK: "VH13",
+  TRAILER_TYPE: "VH14",
   // Location
   LOCATION_TYPE: "BP16",
   /** Removed (one Location Type only); kept to retire the stored type. */
@@ -70,6 +77,9 @@ export const CC = {
 } as const;
 
 const AT = "2026-07-01T03:00:00.000Z";
+/** Vehicle Type: the attribute is the base type whose fields the vehicle form shows. */
+export const VEHICLE_TYPE_REMARK =
+  "Attribute = base type (TRUCK / HEADER / TRAILER) that decides which fields the vehicle form shows. TRUCK / HEADER / TRAILER are system options.";
 const BP = "Business Partner";
 const VH = "Vehicle";
 const LC = "Location";
@@ -160,27 +170,39 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
     [BP, "Customer / Vendor › Contact Info", "Gender"],
   ]),
   // ---------------------------------------------------------------- Vehicle
-  type(
-    CC.VEHICLE_TYPE,
-    "Vehicle Type",
-    "Fixed",
-    VEHICLE_TYPES,
-    [
-      [VH, "Vehicle Create / Edit", "Vehicle Type"],
-      [VH, "Vehicle List", "Vehicle Type filter"],
-    ],
-    "TRUCK / HEAD / TRAILER decide which fields the vehicle form shows.",
-  ),
+  {
+    ...type(
+      CC.VEHICLE_TYPE,
+      "Vehicle Type",
+      "Customizable",
+      VEHICLE_TYPES.map((t) => [t, t] as const),
+      [
+        [VH, "Vehicle Create / Edit", "Vehicle Type"],
+        [VH, "Vehicle List", "Vehicle Type filter"],
+      ],
+      VEHICLE_TYPE_REMARK,
+      VEHICLE_TYPES,
+    ),
+    // TRUCK / HEADER / TRAILER drive the vehicle form: locked (BP0601–BP0603).
+    lockedOptions: VEHICLE_TYPES.map(
+      (_, i) => `${CC.VEHICLE_TYPE}${String(i + 1).padStart(2, "0")}`,
+    ),
+  },
   type(
     CC.TRAILER_SIZE,
     "Vehicle - Trailer Size",
-    "Fixed",
+    "Customizable",
     TRAILER_TYPES,
-    [
-      [VH, "Vehicle Create / Edit", "Trailer Type"],
-      [VH, "Vehicle Create / Edit › Container Size Mapping", "Trailer Type"],
-    ],
-    "Matched between trailers and the head's Container Size Mapping.",
+    [[VH, "Vehicle Create / Edit › Specifications", "Trailer Size"]],
+    "Size of a trailer (20 ft / 40 ft…). Renaming a size updates the vehicles that use it.",
+  ),
+  type(
+    CC.TRAILER_TYPE,
+    "Vehicle - Trailer Type",
+    "Customizable",
+    TRAILER_BODY_TYPES,
+    [[VH, "Vehicle Create / Edit", "Trailer Type"]],
+    "Body type of a trailer: Skeletal (xương, chở container), Flatbed (sàn), Low Bed (lùn), Side Wall (lửng), Box (thùng kín), Dump (ben), Tank (bồn).",
   ),
   type(CC.TRUCK_TYPE, "Truck Type", "Customizable", TRUCK_TYPES, [
     [VH, "Vehicle Create / Edit", "Truck Type"],
@@ -188,10 +210,12 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
   ]),
   type(CC.VEHICLE_GROUP, "Vehicle Group", "Customizable", VEHICLE_MASTER_GROUPS, [
     [VH, "Vehicle Create / Edit", "Vehicle Group"],
-    [VH, "Vehicle Create / Edit › Container Size Mapping", "Vehicle Group"],
   ]),
   type(CC.FUEL_TYPE, "Fuel Type", "Customizable", FUEL_TYPES, [
     [VH, "Vehicle Create / Edit › Fuel", "Fuel Type"],
+  ]),
+  type(CC.TRADE_MARK, "Vehicle Brand", "Customizable", TRADE_MARKS, [
+    [VH, "Vehicle Create / Edit › Vehicle Identification", "Brand Name"],
   ]),
   // ---------------------------------------------------------------- Location
   type(
