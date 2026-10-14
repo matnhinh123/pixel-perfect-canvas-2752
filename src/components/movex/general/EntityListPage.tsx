@@ -54,6 +54,7 @@ import { useEntityActions } from "./useEntityActions";
 import type { ListColumn, QuickFilter } from "./types";
 import { ListLangProvider, type ListLang } from "./listLang";
 import { useLang } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/format";
 
 export interface ExtraRowAction<T> {
   label: string;
@@ -185,9 +186,55 @@ function QuickFilterSelect({
   );
 }
 
+const AUDIT_KEYS = ["createdAt", "createdBy", "updatedAt", "updatedBy"];
+const stamp = (iso: string) => (iso ? formatDateTime(iso) : "—");
+
+/**
+ * Every list ends with the same four audit columns (Created At / By, Updated At / By); a screen's own
+ * definitions of these keys are replaced so all lists label and format them alike.
+ */
+function withAuditColumns<T extends BaseRecord>(columns: ListColumn<T>[]): ListColumn<T>[] {
+  return [
+    ...columns.filter((c) => !AUDIT_KEYS.includes(c.key)),
+    {
+      key: "createdAt",
+      label: "Created At",
+      type: "date",
+      width: 160,
+      value: (r) => (r.createdAt ?? "").slice(0, 10),
+      exportValue: (r) => stamp(r.createdAt),
+      render: (r) => <span className="text-xs text-muted-foreground">{stamp(r.createdAt)}</span>,
+    },
+    {
+      key: "createdBy",
+      label: "Created By",
+      type: "text",
+      width: 150,
+      value: (r) => r.createdBy ?? "",
+    },
+    {
+      key: "updatedAt",
+      label: "Updated At",
+      type: "date",
+      width: 160,
+      value: (r) => (r.updatedAt ?? "").slice(0, 10),
+      exportValue: (r) => stamp(r.updatedAt),
+      render: (r) => <span className="text-xs text-muted-foreground">{stamp(r.updatedAt)}</span>,
+    },
+    {
+      key: "updatedBy",
+      label: "Updated By",
+      type: "text",
+      width: 150,
+      value: (r) => r.updatedBy ?? "",
+    },
+  ];
+}
+
 /** The standard list screen used by Routing, Service, Cost (+ derived lists). Configure, don't copy. */
 export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) {
-  const { screen, columns, crud } = p;
+  const { screen, crud } = p;
+  const columns = useMemo(() => withAuditColumns(p.columns), [p.columns]);
   const allKeys = useMemo(() => columns.map((c) => c.key), [columns]);
   const { pref, setPref, reset } = useColumnPreference(
     screen,

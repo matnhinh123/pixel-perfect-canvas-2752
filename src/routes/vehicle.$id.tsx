@@ -422,14 +422,14 @@ function VehicleForm({
                 <NativeSelect {...select("trailerType", trailerTypes, "Chọn loại rơ-moóc")} />
               </Field>
             )}
-            {shows("vehicleGroup") && (
-              <Field label="Vehicle Group" error={errors["vehicleGroup"]} className={S2}>
-                <NativeSelect {...select("vehicleGroup", vehicleGroups, "Chọn nhóm xe")} />
-              </Field>
-            )}
             {shows("truckType") && (
               <Field label="Truck Type" required error={errors["truckType"]} className={S2}>
                 <NativeSelect {...select("truckType", truckTypes, "Chọn hạng tải xe")} />
+              </Field>
+            )}
+            {shows("vehicleGroup") && (
+              <Field label="Vehicle Group" error={errors["vehicleGroup"]} className={S2}>
+                <NativeSelect {...select("vehicleGroup", vehicleGroups, "Chọn nhóm xe")} />
               </Field>
             )}
             <Field

@@ -18,7 +18,9 @@ describe("BP Code convention", () => {
   it("rejects a duplicate BP Code and requires a role", () => {
     const d = { ...newBusinessPartnerDraft(), bpCode: "qtl" };
     const e = validateBusinessPartner(d);
-    expect(e["bpCode"]).toMatch(/exist|tồn tại/i);
+    // The message names the partner that already has it: BP Code – Local Name.
+    const qtl = seedBusinessPartners().find((b) => b.bpCode === "QTL")!;
+    expect(e["bpCode"]).toContain(`QTL – ${qtl.localName}`);
     expect(e["roles"]).toBeTruthy();
   });
 });
@@ -38,7 +40,8 @@ describe("WO access window", () => {
 describe("Profile rules", () => {
   it("rejects a duplicate Tax Code (case/space-insensitive)", () => {
     const d = { ...newBusinessPartnerDraft(), taxCode: " 0316 497684 " };
-    expect(validateBusinessPartner(d)["taxCode"]).toMatch(/QTL/);
+    const qtl = seedBusinessPartners().find((b) => b.bpCode === "QTL")!;
+    expect(validateBusinessPartner(d)["taxCode"]).toContain(`QTL – ${qtl.localName}`);
     expect(validateBusinessPartner(d, "BP-6")["taxCode"]).toBeUndefined();
   });
 

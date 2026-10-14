@@ -16,6 +16,7 @@ import {
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
 import { FormGroup, ReadOnlyScope, S3, S12 } from "@/components/movex/general/FormParts";
+import { SearchableSelect } from "@/components/movex/general/SearchableSelect";
 import { LocationCodeInput } from "@/components/movex/location/LocationCodeInput";
 import { MapPickerDialog } from "@/components/movex/location/MapPickerDialog";
 import { useCollection } from "@/hooks/use-store";
@@ -177,9 +178,7 @@ function LocationForm({
         if (seq !== geoSeq.current) return;
         if (!r) throw new Error("empty");
         setD((x) => {
-          // A standard code fixes the Country; the spot then only fills Province / Address.
-          const locked = !!findStandardCode(x.code) && x.codeType !== "Local Code";
-          const country = locked || !r.country ? x.country : r.country;
+          const country = r.country || x.country;
           return {
             ...x,
             country,
@@ -433,21 +432,26 @@ function LocationForm({
               info={
                 std
                   ? t(
-                      `Theo ${std.kind} ${std.code}: không đổi được.`,
-                      `Set by ${std.kind} ${std.code}: locked.`,
+                      `Điền sẵn theo ${std.kind} ${std.code}; có thể đổi.`,
+                      `Filled from ${std.kind} ${std.code}; can be changed.`,
                     )
                   : undefined
               }
             >
-              <NativeSelect
+              <SearchableSelect
                 {...select("country", LOCATION_COUNTRIES, "Select Country")}
-                disabled={!!std}
+                searchPlaceholder={t("Gõ để tìm quốc gia…", "Type to search…")}
+                emptyText={t("Không có quốc gia phù hợp", "No matching country")}
                 onChange={(v) => patch({ country: v, province: "" })}
               />
             </Field>
             <Field label="Province/City" error={errors["province"]} className={S3}>
               {d.country === "Vietnam" ? (
-                <NativeSelect {...select("province", provinces, "Select Province/City")} />
+                <SearchableSelect
+                  {...select("province", provinces, "Select Province/City")}
+                  searchPlaceholder={t("Gõ để tìm tỉnh / thành phố…", "Type to search…")}
+                  emptyText={t("Không có tỉnh / thành phố phù hợp", "No matching province / city")}
+                />
               ) : (
                 <Input placeholder="Enter Province/City" {...text("province")} />
               )}

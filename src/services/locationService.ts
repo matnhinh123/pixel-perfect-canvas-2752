@@ -5,7 +5,7 @@ import {
   normalizeLocation,
   type LocationMasterRecord,
 } from "@/mock-data/locations";
-import { COUNTRY_ISO2, LOCATION_COUNTRIES, LOCATION_TYPES } from "@/mock-data/locationCatalog";
+import { LOCATION_COUNTRIES, LOCATION_TYPES } from "@/mock-data/locationCatalog";
 import {
   CODE_KINDS,
   codeKindOf,
@@ -214,11 +214,6 @@ export function validateLocation(d: LocationDraft, id?: string): Record<string, 
     e["code"] = tr(
       `${code} là ${std.kind} (${std.name}) — chọn Code Type ${std.kind} hoặc đặt mã khác.`,
       `${code} is a ${std.kind} (${std.name}) — choose Code Type ${std.kind} or another code.`,
-    );
-  else if (std && d.country.trim() && COUNTRY_ISO2[d.country.trim()] !== std.iso2)
-    e["code"] = tr(
-      `${std.kind} ${std.code} thuộc quốc gia ${std.country || std.iso2}, không khớp Country.`,
-      `${std.kind} ${std.code} belongs to ${std.country || std.iso2}, not the chosen Country.`,
     );
   // The Location Type must fit what the standard code handles (UN/LOCODE functions / airport).
   if (std && std.kind === d.codeType && d.locationType && !typeFits(d, d.locationType))

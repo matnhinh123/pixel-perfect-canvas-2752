@@ -126,15 +126,6 @@ const columnsFor = (t: T, days: number, o: Lists): ListColumn<Row>[] => [
     render: (r) => (r.trailerType ? <Tag>{r.trailerType}</Tag> : dash),
   },
   {
-    key: "vehicleGroup",
-    label: "Vehicle Group",
-    type: "enum",
-    options: o.groups,
-    width: 130,
-    value: (r) => r.vehicleGroup,
-    render: (r) => r.vehicleGroup || dash,
-  },
-  {
     key: "truckType",
     label: "Truck Type",
     type: "enum",
@@ -142,6 +133,15 @@ const columnsFor = (t: T, days: number, o: Lists): ListColumn<Row>[] => [
     width: 120,
     value: (r) => r.truckType,
     render: (r) => (r.truckType ? <Tag>{r.truckType}</Tag> : dash),
+  },
+  {
+    key: "vehicleGroup",
+    label: "Vehicle Group",
+    type: "enum",
+    options: o.groups,
+    width: 130,
+    value: (r) => r.vehicleGroup,
+    render: (r) => r.vehicleGroup || dash,
   },
   {
     key: "tradeMark",

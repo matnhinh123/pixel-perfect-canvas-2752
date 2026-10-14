@@ -414,6 +414,12 @@ function checkRows<T extends { rid: string }>(
   return null;
 }
 
+/** "BP-0012 – Công ty TNHH ABC (Inactive)": the partner a duplicate value already belongs to. */
+const partnerLabel = (b: BusinessPartnerRecord) =>
+  `${b.bpCode} – ${b.localName.trim() || b.englishName?.trim() || "(no name)"}${
+    b.status === "Inactive" ? tr(" (đang Inactive)", " (Inactive)") : ""
+  }`;
+
 export function validateBusinessPartner(
   d: BusinessPartnerDraft,
   id?: string,
@@ -440,12 +446,16 @@ export function validateBusinessPartner(
       "BP Code chỉ gồm A–Z, 0–9, dấu chấm (.), gạch ngang (-), gạch dưới (_), không khoảng trắng, tối đa 15 ký tự.",
       "BP Code may only contain A–Z, 0–9, dot (.), hyphen (-), underscore (_), no spaces, max 15 characters.",
     );
-  else if (
-    businessPartnerRepository
+  else {
+    const dup = businessPartnerRepository
       .all()
-      .some((b) => !b.deleted && b.id !== id && b.bpCode.toUpperCase() === code)
-  )
-    e["bpCode"] = tr(`BP Code ${code} đã tồn tại.`, `BP Code ${code} already exists.`);
+      .find((b) => !b.deleted && b.id !== id && b.bpCode.toUpperCase() === code);
+    if (dup)
+      e["bpCode"] = tr(
+        `BP Code ${code} đã được dùng cho ${partnerLabel(dup)}.`,
+        `BP Code ${code} is already used by ${partnerLabel(dup)}.`,
+      );
+  }
 
   // Tax Code (MST, 10 or 10+3 digits): required for a Company. Identity Number (CCCD, 12 digits):
   // required for an Individual. A Representative needs neither. Each value entered must have the
@@ -463,8 +473,8 @@ export function validateBusinessPartner(
     const dup = others.find((b) => taxCodeKey(str(b.taxCode)) === tax);
     if (dup)
       e["taxCode"] = tr(
-        `Tax Code ${d.taxCode.trim()} đã được dùng cho ${dup.bpCode}.`,
-        `Tax Code ${d.taxCode.trim()} is already used by ${dup.bpCode}.`,
+        `Tax Code ${d.taxCode.trim()} đã được dùng cho ${partnerLabel(dup)}.`,
+        `Tax Code ${d.taxCode.trim()} is already used by ${partnerLabel(dup)}.`,
       );
   }
   const cccd = taxCodeKey(d.identityNo);
@@ -477,8 +487,8 @@ export function validateBusinessPartner(
     const dup = others.find((b) => taxCodeKey(str(b.identityNo)) === cccd);
     if (dup)
       e["identityNo"] = tr(
-        `Identity Number ${d.identityNo.trim()} đã được dùng cho ${dup.bpCode}.`,
-        `Identity Number ${d.identityNo.trim()} is already used by ${dup.bpCode}.`,
+        `Identity Number ${d.identityNo.trim()} đã được dùng cho ${partnerLabel(dup)}.`,
+        `Identity Number ${d.identityNo.trim()} is already used by ${partnerLabel(dup)}.`,
       );
   }
 
