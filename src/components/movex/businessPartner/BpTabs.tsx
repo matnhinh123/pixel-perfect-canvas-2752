@@ -329,12 +329,11 @@ function BankTable({ role, d, set, errors }: TabProps & { role: Role }) {
       kind: "select",
       options: BANKS.map((b) => b.name),
     },
-    { key: "swiftCode", label: "SWIFT Code", required: true, width: 150, kind: "text" },
+    { key: "accountNo", label: "Account No.", required: true, width: 170, kind: "text" },
+    { key: "accountHolder", label: "Account Holder", required: true, width: 200, kind: "text" },
     { key: "bankBranch", label: "Bank Branch", width: 160, kind: "text" },
     { key: "bankAddress", label: "Bank Address", width: 200, kind: "text" },
     { key: "bankCountry", label: "Bank Country", width: 160, kind: "select", options: COUNTRIES },
-    { key: "accountNo", label: "Account No.", required: true, width: 170, kind: "text" },
-    { key: "accountHolder", label: "Account Holder", width: 200, kind: "text" },
     { key: "currency", label: "Currency", width: 110, kind: "select", options: CURRENCIES },
     { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];
@@ -348,7 +347,7 @@ function BankTable({ role, d, set, errors }: TabProps & { role: Role }) {
       derive={(_r, key, v) => {
         const b = BANKS.find((x) => (key === "bankCode" ? x.code : x.name) === v);
         return key === "bankCode" || key === "bankName"
-          ? { bankCode: b?.code ?? "", bankName: b?.name ?? "", swiftCode: b?.swift ?? "" }
+          ? { bankCode: b?.code ?? "", bankName: b?.name ?? "" }
           : {};
       }}
       error={errors[`${role}.banks`]}

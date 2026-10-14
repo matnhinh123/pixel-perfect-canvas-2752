@@ -169,7 +169,6 @@ export const blankBank = (): BpBankAccount => ({
   rid: newRowId(),
   bankCode: "",
   bankName: "",
-  swiftCode: "",
   bankBranch: "",
   bankAddress: "",
   bankCountry: "",
@@ -525,8 +524,8 @@ export function validateBusinessPartner(
       checkRows(d[p].banks, blankBank, [
         ["bankCode", "Bank Code"],
         ["bankName", "Bank Name"],
-        ["swiftCode", "SWIFT Code"],
         ["accountNo", "Account No."],
+        ["accountHolder", "Account Holder"],
       ]),
     );
     // Sales Assignment exists for customers only.
@@ -678,12 +677,11 @@ const CONTACT_COLS: Cols = [
 const BANK_COLS: Cols = [
   ["bankCode", "Bank Code"],
   ["bankName", "Bank Name"],
-  ["swiftCode", "SWIFT Code"],
+  ["accountNo", "Account No."],
+  ["accountHolder", "Account Holder"],
   ["bankBranch", "Bank Branch"],
   ["bankAddress", "Bank Address"],
   ["bankCountry", "Bank Country"],
-  ["accountNo", "Account No."],
-  ["accountHolder", "Account Holder"],
   ["currency", "Currency"],
   ["remark", "Remark"],
 ];

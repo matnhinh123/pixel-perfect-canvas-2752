@@ -88,7 +88,6 @@ export interface BpContact extends Row {
 export interface BpBankAccount extends Row {
   bankCode: string;
   bankName: string;
-  swiftCode: string;
   bankBranch: string;
   bankAddress: string;
   bankCountry: string;

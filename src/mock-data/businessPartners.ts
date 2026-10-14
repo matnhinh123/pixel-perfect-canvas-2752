@@ -439,7 +439,6 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             rid: "b1",
             bankCode: "VCB",
             bankName: "Vietcombank",
-            swiftCode: "BFTVVNVX",
             bankBranch: "HCM",
             bankAddress: "5 Công Trường Mê Linh, Q1",
             bankCountry: "Vietnam",
