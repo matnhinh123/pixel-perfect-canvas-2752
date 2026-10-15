@@ -23,6 +23,8 @@ import {
   TENANT_DEFAULT_CURRENCY,
 } from "@/mock-data/businessPartners";
 import { tr } from "@/lib/i18n";
+import { CC } from "@/mock-data/commonCodes";
+import { codeOptions } from "./commonCodeService";
 import { splitList } from "@/lib/utils";
 import { auditService } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -39,8 +41,8 @@ export const bpCrud = makeCrud<BusinessPartnerRecord>({
 // ---------------------------------------------------------------- BP Code convention
 
 /** A–Z, 0–9, dot, hyphen, underscore. Max 50, always uppercase. */
-export const BP_CODE_MAX = 15;
-const BP_CODE_VALID = /^[A-Z0-9._-]{1,15}$/;
+export const BP_CODE_MAX = 12;
+const BP_CODE_VALID = /^[A-Z0-9._-]{1,12}$/;
 /** Input filter: uppercases and drops every disallowed character as the user types / pastes. */
 export const sanitizeBpCode = (v: string) =>
   v
@@ -213,8 +215,9 @@ export const newBusinessPartnerDraft = (): BusinessPartnerDraft => ({
   phone: "",
   tax: "",
   invoiceLanguage: "",
-  currency: TENANT_DEFAULT_CURRENCY,
-  currencies: [TENANT_DEFAULT_CURRENCY],
+  // Currency follows the Country (Vietnam → VND); empty until one is chosen.
+  currency: "",
+  currencies: [],
   businessCategory: [],
   partnerScope: "",
   partnerGroup: "",
@@ -224,7 +227,7 @@ export const newBusinessPartnerDraft = (): BusinessPartnerDraft => ({
   creditLimitCurrency: "",
   note: "",
   roles: [],
-  documents: [blankDocument()],
+  documents: [],
   customer: {
     creditTerms: [blankCredit()],
     contacts: [blankContact()],
@@ -376,7 +379,6 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
 export const draftOf = (r: BusinessPartnerRecord): BusinessPartnerDraft => {
   const d = structuredClone(normalizeBusinessPartner(r)) as BusinessPartnerDraft;
   const fill = <T>(rows: T[], blank: () => T) => (rows.length ? rows : [blank()]);
-  d.documents = fill(d.documents, blankDocument);
   d.customer.creditTerms = fill(d.customer.creditTerms, blankCredit);
   for (const p of [d.customer, d.vendor]) {
     p.contacts = fill(p.contacts, blankContact);
@@ -402,8 +404,10 @@ function checkRows<T extends { rid: string }>(
   blank: () => T,
   required: [keyof T, string][],
   extra?: (row: T, live: T[]) => string | null,
+  /** true: blank rows are checked too instead of skipped (Documents). */
+  everyRow = false,
 ): string | null {
-  const live = rows.filter((r) => !isBlankRow(r, blank));
+  const live = everyRow ? rows : rows.filter((r) => !isBlankRow(r, blank));
   for (const [i, row] of live.entries()) {
     for (const [k, label] of required)
       if (!String(row[k] ?? "").trim())
@@ -443,8 +447,8 @@ export function validateBusinessPartner(
   if (!code) e["bpCode"] = tr("Nhập BP Code.", "BP Code is required.");
   else if (!BP_CODE_VALID.test(code))
     e["bpCode"] = tr(
-      "BP Code chỉ gồm A–Z, 0–9, dấu chấm (.), gạch ngang (-), gạch dưới (_), không khoảng trắng, tối đa 15 ký tự.",
-      "BP Code may only contain A–Z, 0–9, dot (.), hyphen (-), underscore (_), no spaces, max 15 characters.",
+      "BP Code chỉ gồm A–Z, 0–9, dấu chấm (.), gạch ngang (-), gạch dưới (_), không khoảng trắng, tối đa 12 ký tự.",
+      "BP Code may only contain A–Z, 0–9, dot (.), hyphen (-), underscore (_), no spaces, max 12 characters.",
     );
   else {
     const dup = businessPartnerRepository
@@ -512,10 +516,15 @@ export function validateBusinessPartner(
   const set = (k: string, msg: string | null) => msg && (e[k] = msg);
   set(
     "documents",
-    checkRows(d.documents, blankDocument, [["docType", "Document Type"]], (r) =>
-      r.validDate && r.expiryDate && r.expiryDate < r.validDate
-        ? tr("Expiry Date phải sau Valid Date.", "Expiry Date must not be before Valid Date.")
-        : null,
+    checkRows(
+      d.documents,
+      blankDocument,
+      [["docType", "Document Type"]],
+      (r) =>
+        r.validDate && r.expiryDate && r.expiryDate < r.validDate
+          ? tr("Expiry Date phải sau Valid Date.", "Expiry Date must not be before Valid Date.")
+          : null,
+      true,
     ),
   );
   /** Contact Info, Bank and Sales Assignment tables of one role tab. */
@@ -950,7 +959,10 @@ const pickAll = <T extends string>(v: string | undefined, allowed: readonly T[])
   listCell(v).map((x) => pick(x, allowed) || null);
 
 const bpDraftOfRow = (r: Record<string, string>): BusinessPartnerDraft => {
-  const currency = pick(r["currency"], CURRENCIES) || TENANT_DEFAULT_CURRENCY;
+  const country = pick(r["country"], codeOptions(CC.COUNTRY, COUNTRIES)) || "";
+  // Same default as the form: Vietnam → VND; another country needs its currency in the file.
+  const currency =
+    pick(r["currency"], CURRENCIES) || (country === "Vietnam" ? TENANT_DEFAULT_CURRENCY : "");
   const localAddress = r["localAddress"] ?? "";
   const creditLimit = (r["creditLimit"] ?? "").replace(/[\s,]/g, "");
   return {
@@ -965,9 +977,9 @@ const bpDraftOfRow = (r: Record<string, string>): BusinessPartnerDraft => {
     localAddress,
     // Same pre-fill as the form when the English address is left empty.
     englishAddress: r["englishAddress"] || toEnglishAddress(localAddress),
-    country: pick(r["country"], COUNTRIES) || "",
+    country,
     currency,
-    currencies: [currency],
+    currencies: currency ? [currency] : [],
     businessCategory: pickAll(r["businessCategory"], BUSINESS_CATEGORIES).filter(
       (x): x is string => !!x,
     ),
@@ -988,7 +1000,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
   screen: "business-partner",
   keyColumn: "bpCode",
   columns: [
-    { key: "bpCode", header: "BP Code", required: true, example: "ABC-LOGISTICS" },
+    { key: "bpCode", header: "BP Code", required: true, example: "ABC-LOG" },
     { key: "legalType", header: "Legal Type", required: true, example: "Company" },
     {
       key: "roles",
@@ -1060,7 +1072,7 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
       if (pick(r[k], values) === undefined) e.push({ field: k, error: oneOf(label, values) });
     };
     one("legalType", LEGAL_TYPES);
-    one("country", COUNTRIES);
+    one("country", codeOptions(CC.COUNTRY, COUNTRIES));
     one("currency", CURRENCIES);
     one("partnerScope", PARTNER_SCOPES);
     one("status", STATUSES);

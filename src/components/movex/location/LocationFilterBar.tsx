@@ -1,9 +1,5 @@
-import { CC } from "@/mock-data/commonCodes";
-import { useCodeOptions } from "@/services/commonCodeService";
 import { useState } from "react";
-import { Check, ChevronDown, Filter } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Check, ChevronDown } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -13,25 +9,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Field } from "@/components/movex/common";
-import { MultiSelect } from "@/components/movex/businessPartner/MultiSelect";
-import { LOCATION_COUNTRIES, LOCATION_TYPES } from "@/mock-data/locationCatalog";
+import { LOCATION_COUNTRIES } from "@/mock-data/locationCatalog";
 import { CODE_KINDS } from "@/mock-data/standardCodes";
 import type { LocationMasterRecord } from "@/mock-data/locations";
 import {
-  EMPTY_LOCATION_FILTER,
   fieldLabel,
-  filterHasErrors,
   provincesFor,
-  rangeError,
   withCountries,
   type LocationFilter,
 } from "@/services/locationFilter";
@@ -142,64 +125,9 @@ function SearchSelect({
   );
 }
 
-const dateInputClass = "h-9";
-
-function DateRange({
-  label,
-  from,
-  to,
-  onChange,
-  t,
-}: {
-  label: string;
-  from: string;
-  to: string;
-  onChange: (from: string, to: string) => void;
-  t: T;
-}) {
-  const error = rangeError(from, to);
-  return (
-    <Field label={label} error={error ?? undefined}>
-      <div className="flex items-center gap-2">
-        <Input
-          type="date"
-          className={dateInputClass}
-          value={from}
-          max={to || undefined}
-          aria-label={`${label} ${t("từ", "from")}`}
-          aria-invalid={!!error || undefined}
-          onChange={(e) => onChange(e.target.value, to)}
-        />
-        <span className="text-muted-foreground">–</span>
-        <Input
-          type="date"
-          className={dateInputClass}
-          value={to}
-          min={from || undefined}
-          aria-label={`${label} ${t("đến", "to")}`}
-          aria-invalid={!!error || undefined}
-          onChange={(e) => onChange(from, e.target.value)}
-        />
-      </div>
-    </Field>
-  );
-}
-
-/** Advanced-panel fields that count on the Filter button badge. */
-const panelCount = (f: LocationFilter) =>
-  [
-    f.countries.length,
-    f.provinces.length,
-    f.types.length,
-    f.hasCoordinates,
-    f.createdFrom || f.createdTo,
-    f.updatedFrom || f.updatedTo,
-  ].filter(Boolean).length;
-
 /**
- * Location list toolbar filters: quick filters (Status, Code Type, Country, Province/City)
- * and the Filter panel (Country, Province/City, Location Type, Has Coordinates, Created /
- * Updated At).
+ * Location list quick filters: Status, Code Type, Country, Province/City (only the provinces of
+ * the chosen Country). The Advanced Filter is the generic one of every list.
  */
 export function LocationFilterBar({
   rows,
@@ -212,20 +140,7 @@ export function LocationFilterBar({
   onChange: (f: LocationFilter) => void;
   t: T;
 }) {
-  const locationTypes = useCodeOptions(CC.LOCATION_TYPE, LOCATION_TYPES);
   const allText = t("Tất cả", "All");
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<LocationFilter>(value);
-  const openPanel = (o: boolean) => {
-    if (o) setDraft(value);
-    setOpen(o);
-  };
-  const apply = () => {
-    if (filterHasErrors(draft)) return;
-    onChange(draft);
-    setOpen(false);
-  };
-  const count = panelCount(value);
   const country = value.countries;
   const provinces = value.provinces;
 
@@ -265,108 +180,6 @@ export function LocationFilterBar({
         className="w-52"
         t={t}
       />
-
-      <Sheet open={open} onOpenChange={openPanel}>
-        <SheetTrigger asChild>
-          <Button variant={count ? "secondary" : "outline"} className="h-10">
-            <Filter className="h-4 w-4" />
-            {t("Bộ lọc", "Filter")}
-            {count > 0 && (
-              <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-                {count}
-              </span>
-            )}
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-          <SheetHeader className="space-y-1 border-b px-5 py-4 pr-12 text-left">
-            <SheetTitle className="text-base">{t("Bộ lọc nâng cao", "Advanced filter")}</SheetTitle>
-            <SheetDescription className="text-xs">
-              {t(
-                "Tất cả điều kiện được kết hợp bằng AND, cùng với từ khoá tìm kiếm.",
-                "All conditions are combined with AND, together with the search keyword.",
-              )}
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="grid flex-1 content-start gap-y-4 overflow-y-auto p-5">
-            <Field label={fieldLabel("countries", t)}>
-              <MultiSelect
-                value={draft.countries}
-                options={LOCATION_COUNTRIES}
-                placeholder={allText}
-                onChange={(v) => setDraft(withCountries(draft, v, rows))}
-              />
-            </Field>
-            <Field label={fieldLabel("province", t)}>
-              <MultiSelect
-                value={draft.provinces}
-                options={provincesFor(rows, draft.countries)}
-                placeholder={allText}
-                onChange={(v) => setDraft({ ...draft, provinces: v })}
-              />
-            </Field>
-            <Field label={fieldLabel("types", t)}>
-              <MultiSelect
-                value={draft.types}
-                options={locationTypes}
-                placeholder={allText}
-                onChange={(v) => setDraft({ ...draft, types: v })}
-              />
-            </Field>
-            <Field label={fieldLabel("hasCoordinates", t)}>
-              <select
-                value={draft.hasCoordinates}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    hasCoordinates: e.target.value as LocationFilter["hasCoordinates"],
-                  })
-                }
-                className={cn(boxClass, "h-9 w-full")}
-              >
-                <option value="">{allText}</option>
-                <option value="Yes">{t("Có", "Yes")}</option>
-                <option value="No">{t("Không", "No")}</option>
-              </select>
-            </Field>
-            <DateRange
-              label={fieldLabel("created", t)}
-              from={draft.createdFrom}
-              to={draft.createdTo}
-              onChange={(createdFrom, createdTo) => setDraft({ ...draft, createdFrom, createdTo })}
-              t={t}
-            />
-            <DateRange
-              label={fieldLabel("updated", t)}
-              from={draft.updatedFrom}
-              to={draft.updatedTo}
-              onChange={(updatedFrom, updatedTo) => setDraft({ ...draft, updatedFrom, updatedTo })}
-              t={t}
-            />
-          </div>
-
-          <div className="flex items-center justify-between border-t px-5 py-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                setDraft({ ...EMPTY_LOCATION_FILTER, status: draft.status, origin: draft.origin })
-              }
-            >
-              {t("Đặt lại", "Reset")}
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
-                {t("Huỷ", "Cancel")}
-              </Button>
-              <Button size="sm" onClick={apply} disabled={filterHasErrors(draft)}>
-                {t("Áp dụng", "Apply")}
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
     </>
   );
 }

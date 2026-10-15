@@ -127,6 +127,11 @@ export const commonCodeRepository = createCollection<CommonCodeRecord>(
   if (t?.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: false }));
   if (!t && seed) commonCodeRepository.insert(seed);
 }
+// Country list (Business Partner) added to Common Code: inserted once into existing storage.
+{
+  const seed = seedCommonCodes().find((x) => x.id === CC.COUNTRY);
+  if (seed && !commonCodeRepository.get(CC.COUNTRY)) commonCodeRepository.insert(seed);
+}
 // Vehicle Type became Customizable (new types pick a base type as attribute); stored list follows.
 {
   const vt = commonCodeRepository.get(CC.VEHICLE_TYPE);

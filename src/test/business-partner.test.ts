@@ -10,9 +10,12 @@ import { seedBusinessPartners } from "@/mock-data/businessPartners";
 import type { BusinessPartnerRecord } from "@/types";
 
 describe("BP Code convention", () => {
-  it("uppercases, strips disallowed characters and caps at 15", () => {
+  it("uppercases, strips disallowed characters and caps at 12", () => {
     expect(sanitizeBpCode("abc 12/ú.x_y-z")).toBe("ABC12.X_Y-Z");
-    expect(sanitizeBpCode("a".repeat(80))).toHaveLength(15);
+    expect(sanitizeBpCode("a".repeat(80))).toHaveLength(12);
+    expect(
+      validateBusinessPartner({ ...newBusinessPartnerDraft(), bpCode: "ABCDEFGHIJKLM" })["bpCode"],
+    ).toBeTruthy();
   });
 
   it("rejects a duplicate BP Code and requires a role", () => {
@@ -45,11 +48,13 @@ describe("Profile rules", () => {
     expect(validateBusinessPartner(d, "BP-6")["taxCode"]).toBeUndefined();
   });
 
-  it("defaults Currency to the tenant currency and requires it", () => {
+  it("Currency starts empty (it follows the Country) and is required", () => {
     const d = newBusinessPartnerDraft();
-    expect(d.currency).toBe("VND");
-    expect(validateBusinessPartner(d)["currency"]).toBeUndefined();
-    expect(validateBusinessPartner({ ...d, currency: "" })["currency"]).toBeTruthy();
+    expect(d.currency).toBe("");
+    expect(validateBusinessPartner(d)["currency"]).toBeTruthy();
+    expect(
+      validateBusinessPartner({ ...d, currency: "VND", currencies: ["VND"] })["currency"],
+    ).toBeUndefined();
   });
 
   it("normalizes records stored by older versions", () => {
@@ -129,13 +134,16 @@ describe("Profile rules", () => {
 describe("Change History", () => {
   it("logs each table change with the field, old value and new value", async () => {
     const { businessPartnerRepository, auditRepository } = await import("@/repositories");
-    const { businessPartnerService, draftOf } = await import("@/services/businessPartnerService");
+    const { businessPartnerService, draftOf, blankDocument } =
+      await import("@/services/businessPartnerService");
     const bp = businessPartnerRepository.get("BP-6")!;
     const d = draftOf(bp);
     const hung = d.customer.contacts.find((c) => c.fullName === "Nguyễn Văn Hùng")!;
     hung.mobilePhone = "0909 999 999";
     d.customer.contacts = d.customer.contacts.filter((c) => c.fullName !== "Trần Thị Lan");
-    d.documents = [{ ...d.documents[0]!, docType: "Contract", docName: "HD-01" }];
+    d.documents = [
+      { ...(d.documents[0] ?? blankDocument()), docType: "Contract", docName: "HD-01" },
+    ];
     const before = auditRepository.all().length;
     businessPartnerService.save(d, "BP-6");
     const fields = auditRepository
@@ -177,5 +185,25 @@ describe("Petrolimex Tiền Giang demo partners", () => {
       expect(r.roles).toEqual(["Vendor"]);
       expect(validateBusinessPartner(draftOf(r), r.id)).toEqual({});
     }
+  });
+
+  it("requires a Document Type on every Documents row, blank rows included", async () => {
+    const { businessPartnerRepository } = await import("@/repositories");
+    const { businessPartnerService, draftOf, blankDocument } =
+      await import("@/services/businessPartnerService");
+    const d = draftOf(businessPartnerRepository.get("BP-6")!);
+    d.documents = [blankDocument()];
+    expect(() => businessPartnerService.save(d, "BP-6")).toThrow();
+    d.documents = [
+      {
+        ...blankDocument(),
+        docType: "Contract",
+        validDate: "2026-05-01",
+        expiryDate: "2026-04-01",
+      },
+    ];
+    expect(() => businessPartnerService.save(d, "BP-6")).toThrow();
+    d.documents = [{ ...blankDocument(), docType: "Contract" }];
+    expect(() => businessPartnerService.save(d, "BP-6")).not.toThrow();
   });
 });

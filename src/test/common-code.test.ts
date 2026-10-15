@@ -9,6 +9,7 @@ import {
   codeOptions,
   commonCodeService,
   lastSyncedRecords,
+  validateCommonCode,
   nextOptionCode,
   withCurrent,
 } from "@/services/commonCodeService";
@@ -112,5 +113,17 @@ describe("Trailer Size is editable", () => {
     expect(vehicleMasterRepository.all().filter((v) => v.trailerSize === "40'")).toHaveLength(
       before,
     );
+  });
+});
+
+describe("Business Category vs Role", () => {
+  it("rejects Customer / Vendor as a Business Category (they are Roles)", () => {
+    const rec = commonCodeRepository.get(CC.BUSINESS_CATEGORY)!;
+    const withRole = [
+      ...rec.options,
+      { code: `${rec.code}99`, name: "Vendor", attribute: "DEFAULT", remark: "", active: true },
+    ];
+    expect(() => commonCodeService.save(rec.id, { remark: "", options: withRole })).toThrow();
+    expect(validateCommonCode(rec, { remark: "", options: withRole })["options"]).toMatch(/Role/);
   });
 });

@@ -9,6 +9,9 @@ import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, stampUpdate } from "./crudService";
 import { propagateRenames } from "./commonCodeSync";
 
+/** Common Code type of Business Category (CC.BUSINESS_CATEGORY; kept here to avoid an import cycle). */
+const BUSINESS_CATEGORY_CODE = "BP01";
+
 const activeNames = (rec: CommonCodeRecord | undefined) =>
   rec?.options.filter((o) => o.active && o.name.trim()).map((o) => o.name.trim());
 
@@ -84,6 +87,17 @@ export function validateCommonCode(rec: CommonCodeRecord, d: CommonCodeDraft) {
       "Cần ít nhất một lựa chọn đang Active.",
       "At least one option must be active.",
     );
+  // Business Category: "Customer" / "Vendor" are the partner Roles, not categories.
+  if (rec.code === BUSINESS_CATEGORY_CODE) {
+    const role = d.options.find((o) =>
+      ["customer", "vendor"].includes(o.name.trim().toLowerCase()),
+    );
+    if (role)
+      e["options"] ??= tr(
+        `"${role.name.trim()}" đã tồn tại trong trường vai trò (Role) của Business Partner — không tạo làm Business Category.`,
+        `"${role.name.trim()}" already exists as a Business Partner Role — it cannot be a Business Category.`,
+      );
+  }
   // System options of a Customizable list keep their name and attribute and cannot be removed.
   for (const code of rec.lockedOptions ?? []) {
     const was = rec.options.find((o) => o.code === code);

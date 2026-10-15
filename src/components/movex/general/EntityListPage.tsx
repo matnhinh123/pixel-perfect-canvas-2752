@@ -109,9 +109,9 @@ export interface EntityListPageProps<T extends BaseRecord> {
   listState?: ListState;
   onListStateChange?: (s: ListState) => void;
   /**
-   * Screen-specific filters (Location): the page renders its own quick filters + filter panel in
-   * the toolbar, decides which rows match and lists the applied conditions as removable chips.
-   * Replaces `quickFilters` and the generic Advanced Filter.
+   * Screen-specific quick filters (Location): the page renders its own quick filters in the
+   * toolbar, decides which rows match and lists the applied conditions as removable chips.
+   * Replaces `quickFilters`; the generic Advanced Filter stays, as on every other list.
    */
   customFilters?: CustomFilters<T>;
 }
@@ -314,29 +314,32 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
 
   const filtered = useMemo(() => {
     const searched = applySearch(p.rows, q, p.searchValues);
-    const matched = custom
-      ? searched.filter(custom.match)
-      : applyConditions(searched, [...quickConditions, ...advanced], filterFields, get);
+    const matched = applyConditions(
+      custom ? searched.filter(custom.match) : searched,
+      [...quickConditions, ...advanced],
+      filterFields,
+      get,
+    );
     return applySort(matched, sort, get);
   }, [p.rows, q, quickConditions, advanced, sort, custom?.match]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Applied conditions as removable chips (quick filters first, then advanced ones). */
-  const chips: FilterChip[] = custom
-    ? custom.chips
-    : [
-        ...(p.quickFilters ?? [])
+  const chips: FilterChip[] = [
+    ...(custom
+      ? custom.chips
+      : (p.quickFilters ?? [])
           .filter((qf) => quick[qf.key])
           .map((qf) => ({
             key: `q-${qf.key}`,
             label: `${qf.allLabel.split(":")[0]}: ${quick[qf.key]}`,
             onRemove: () => setQuick({ ...quick, [qf.key]: "" }),
-          })),
-        ...advanced.map((c) => ({
-          key: c.id,
-          label: describeCondition(c, filterFields),
-          onRemove: () => setAdvanced(advanced.filter((x) => x.id !== c.id)),
-        })),
-      ];
+          }))),
+    ...advanced.map((c) => ({
+      key: c.id,
+      label: describeCondition(c, filterFields),
+      onRemove: () => setAdvanced(advanced.filter((x) => x.id !== c.id)),
+    })),
+  ];
 
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
@@ -497,6 +500,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
   /** Remove every filter chip; `withSearch` also empties the search box (empty-result action). */
   const clearAll = (withSearch = true) => {
     if (custom) {
+      setAdvancedState([]);
       custom.onClearAll(withSearch);
       return;
     }
@@ -672,16 +676,12 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 </button>
               )}
             </div>
-            {custom ? (
-              custom.toolbar
-            ) : (
-              <AdvancedFilter
-                screen={screen}
-                fields={filterFields}
-                value={advanced}
-                onApply={setAdvanced}
-              />
-            )}
+            <AdvancedFilter
+              screen={screen}
+              fields={filterFields}
+              value={advanced}
+              onApply={setAdvanced}
+            />
             <ColumnSettings
               columns={columns}
               pref={pref}
@@ -691,6 +691,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 toast.success(t("Đã khôi phục cột mặc định", "Columns reset to default"));
               }}
             />
+            {custom?.toolbar}
             {!custom &&
               p.quickFilters?.map((qf) => (
                 <QuickFilterSelect

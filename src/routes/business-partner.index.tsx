@@ -49,6 +49,14 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
     render: (r) => <span className="font-semibold text-primary">{r.bpCode}</span>,
   },
   {
+    key: "legalType",
+    width: 120,
+    label: "Legal Type",
+    type: "enum",
+    options: [...LEGAL_TYPES],
+    value: (r) => r.legalType,
+  },
+  {
     key: "taxCode",
     width: 130,
     label: "Tax Code",
@@ -94,14 +102,6 @@ const columnsFor = (t: T): ListColumn<Row>[] => [
     label: "English Address",
     type: "text",
     value: (r) => r.englishAddress,
-  },
-  {
-    key: "legalType",
-    width: 120,
-    label: "Legal Type",
-    type: "enum",
-    options: [...LEGAL_TYPES],
-    value: (r) => r.legalType,
   },
   {
     key: "businessCategory",

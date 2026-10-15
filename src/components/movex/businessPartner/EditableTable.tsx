@@ -40,6 +40,9 @@ export interface ColDef<T> {
   options?: readonly string[];
   /** Unit shown to the right of the input (e.g. "Day", "VND"). */
   suffix?: string;
+  /** Date cells: earliest / latest date the picker allows for this row (e.g. Expiry ≥ Valid). */
+  min?: (row: T) => string | undefined;
+  max?: (row: T) => string | undefined;
   /** Hover preview of a multiselect cell; defaults to the list of picked values. */
   preview?: (row: T) => ReactNode;
 }
@@ -177,6 +180,8 @@ export function EditableTable<T extends { rid: string }>({
         className={cn("h-8 px-2 text-[13px] md:text-[13px]", c.suffix && "rounded-r-none")}
         type={c.kind === "date" ? "date" : c.kind === "datetime" ? "datetime-local" : "text"}
         inputMode={c.kind === "number" ? "decimal" : undefined}
+        min={c.min?.(r) || undefined}
+        max={c.max?.(r) || undefined}
         value={String(v ?? "")}
         placeholder={ph}
         aria-label={c.label}

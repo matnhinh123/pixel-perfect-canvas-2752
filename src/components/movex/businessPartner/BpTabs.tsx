@@ -12,12 +12,7 @@ import {
   GENDERS,
   WO_ACCESS_POLICIES,
 } from "@/mock-data/businessPartners";
-import {
-  DEPARTMENTS as STAFF_DEPARTMENTS,
-  EMPLOYEES,
-  departmentName,
-  leaderNameOf,
-} from "@/mock-data/staff";
+import { EMPLOYEES, departmentName, leaderNameOf } from "@/mock-data/staff";
 import {
   blankBank,
   blankContact,
@@ -163,8 +158,9 @@ export function DocumentsTab({ d, set, errors }: TabProps) {
       options: docTypes,
     },
     { key: "docName", label: "Document Name", width: 200, kind: "text" },
-    { key: "validDate", label: "Valid Date", width: 140, kind: "date" },
-    { key: "expiryDate", label: "Expiry Date", width: 140, kind: "date" },
+    // The picker never offers an Expiry Date before the Valid Date (and vice versa).
+    { key: "validDate", label: "Valid Date", width: 140, kind: "date", max: (r) => r.expiryDate },
+    { key: "expiryDate", label: "Expiry Date", width: 140, kind: "date", min: (r) => r.validDate },
     { key: "fileName", label: "Attachment", width: 220, kind: "file" },
     { key: "remark", label: "Remark", width: 180, kind: "text" },
   ];
@@ -259,13 +255,7 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
       kind: "select",
       options: EMPLOYEES.map((e) => e.name),
     },
-    {
-      key: "department",
-      label: "Department",
-      width: 170,
-      kind: "select",
-      options: STAFF_DEPARTMENTS.map((x) => x.name),
-    },
+    { key: "department", label: "Department", width: 170, kind: "readonly" },
     { key: "leader", label: "Leader", width: 180, kind: "readonly" },
     {
       key: "serviceCode",
@@ -312,6 +302,7 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
 
 function BankTable({ role, d, set, errors }: TabProps & { role: Role }) {
   const prof = d[role];
+  const countries = useCodeOptions(CC.COUNTRY, COUNTRIES);
   const bankCols: ColDef<BpBankAccount>[] = [
     {
       key: "bankCode",
@@ -333,7 +324,7 @@ function BankTable({ role, d, set, errors }: TabProps & { role: Role }) {
     { key: "accountHolder", label: "Account Holder", required: true, width: 200, kind: "text" },
     { key: "bankBranch", label: "Bank Branch", width: 160, kind: "text" },
     { key: "bankAddress", label: "Bank Address", width: 200, kind: "text" },
-    { key: "bankCountry", label: "Bank Country", width: 160, kind: "select", options: COUNTRIES },
+    { key: "bankCountry", label: "Bank Country", width: 160, kind: "select", options: countries },
     { key: "currency", label: "Currency", width: 110, kind: "select", options: CURRENCIES },
     { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];

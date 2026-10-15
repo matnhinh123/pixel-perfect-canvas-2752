@@ -41,6 +41,7 @@ import {
 import {
   BUSINESS_CATEGORIES,
   COUNTRIES,
+  TENANT_DEFAULT_CURRENCY,
   CURRENCIES,
   INVOICE_LANGUAGES,
   LEGAL_TYPES,
@@ -110,6 +111,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
   const legalTypes = useCodeOptions(CC.LEGAL_TYPE, LEGAL_TYPES);
   const businessCategories = useCodeOptions(CC.BUSINESS_CATEGORY, BUSINESS_CATEGORIES);
   const invoicingLanguages = useCodeOptions(CC.INVOICING_LANGUAGE, INVOICE_LANGUAGES);
+  const countries = useCodeOptions(CC.COUNTRY, COUNTRIES);
   const navigate = useNavigate();
   const confirm = useConfirm();
   const isNew = !source;
@@ -176,6 +178,19 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
    * Currencies the partner trades in (several for international partners). The first one picked is
    * the default currency, used for Credit / Payment Term amounts.
    */
+  /**
+   * Country drives the default currency: Vietnam → VND when none is chosen yet; another country
+   * clears the VND that was only set by default, for the user to pick.
+   */
+  const changeCountry = (country: string) => {
+    patch({ country });
+    clearErr(["country"]);
+    const onlyDefault = d.currencies.length === 1 && d.currencies[0] === TENANT_DEFAULT_CURRENCY;
+    if (country === "Vietnam" && d.currencies.length === 0)
+      setCurrencies([TENANT_DEFAULT_CURRENCY]);
+    else if (country !== "Vietnam" && onlyDefault) setCurrencies([]);
+  };
+
   const setCurrencies = (list: string[]) => {
     const currency = list.includes(d.currency) ? d.currency : (list[0] ?? "");
     patch({
@@ -215,7 +230,10 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
       );
     if (dup) {
       toast.error(
-        t(`MST đã được dùng cho ${dup.bpCode}.`, `Tax Code is already used by ${dup.bpCode}.`),
+        t(
+          `MST đã được dùng cho ${dup.bpCode} – ${dup.localName}.`,
+          `Tax Code is already used by ${dup.bpCode} – ${dup.localName}.`,
+        ),
       );
       return;
     }
@@ -349,8 +367,8 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                   </TooltipTrigger>
                   <TooltipContent>
                     {t(
-                      "Duy nhất, tự viết hoa. A–Z, 0–9, . - _ không khoảng trắng (tối đa 15 ký tự).",
-                      "Unique, auto-uppercase. A–Z, 0–9, . - _ no spaces (max 15 characters).",
+                      "Duy nhất, tự viết hoa. A–Z, 0–9, . - _ không khoảng trắng (tối đa 12 ký tự).",
+                      "Unique, auto-uppercase. A–Z, 0–9, . - _ no spaces (max 12 characters).",
                     )}
                   </TooltipContent>
                 </Tooltip>
@@ -460,7 +478,10 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
             </Field>
 
             <Field label="Country" required error={errors["country"]}>
-              <NativeSelect {...select("country", COUNTRIES, "Select Country")} />
+              <NativeSelect
+                {...select("country", countries, "Select Country")}
+                onChange={(v) => changeCountry(v)}
+              />
             </Field>
             <Field
               label="Currency"
@@ -468,8 +489,8 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               error={errors["currency"]}
               className="sm:col-span-2"
               info={t(
-                "Chọn được nhiều loại tiền. Mặc định theo tiền tệ của tenant; loại đầu tiên là tiền tệ mặc định, dùng cho số tiền ở Credit / Payment Term.",
-                "Several currencies allowed. Defaults to the tenant currency; the default one is used for Credit / Payment Term amounts.",
+                "Chọn được nhiều loại tiền. Country là Vietnam thì mặc định VND; quốc gia khác để trống cho người dùng tự chọn. Loại đầu tiên là tiền tệ mặc định, dùng cho số tiền ở Credit / Payment Term.",
+                "Several currencies allowed. Vietnam defaults to VND; other countries are left empty to choose. The default one is used for Credit / Payment Term amounts.",
               )}
               hint={d.currencies.length > 1 && d.currency ? `Default: ${d.currency}` : undefined}
             >

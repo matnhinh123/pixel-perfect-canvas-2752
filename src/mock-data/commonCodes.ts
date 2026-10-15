@@ -14,6 +14,7 @@ import {
   APPROVERS,
   BUSINESS_CATEGORIES,
   CONTACT_POSITIONS,
+  COUNTRIES,
   CREDIT_TERMS,
   DOC_TYPES,
   GENDERS,
@@ -45,6 +46,7 @@ export const CC = {
   APPROVER: "BP18",
   DOCUMENT_TYPE: "BP20",
   GENDER: "CM01",
+  COUNTRY: "CM02",
   // Vehicle
   VEHICLE_TYPE: "BP06",
   TRAILER_SIZE: "VH09",
@@ -165,6 +167,11 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
   ]),
   type(CC.DOCUMENT_TYPE, "Document Type", "Customizable", DOC_TYPES, [
     [BP, "Documents", "Document Type"],
+  ]),
+  type(CC.COUNTRY, "Country", "Customizable", COUNTRIES, [
+    [BP, "General Information", "Country"],
+    [BP, "Customer / Vendor › Bank Account", "Bank Country"],
+    [BP, "Business Partner List", "Country"],
   ]),
   type(CC.GENDER, "Gender", "Customizable", GENDERS, [
     [BP, "Customer / Vendor › Contact Info", "Gender"],
