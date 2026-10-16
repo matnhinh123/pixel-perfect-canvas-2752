@@ -46,6 +46,7 @@ import {
   showsField,
   SPEC_FIELDS,
   VEHICLE_GROUP_OPTIONS,
+  vehicleGroupForTruckType,
   vehicleCrud,
   vehicleService,
   type VehicleDraft,
@@ -424,11 +425,26 @@ function VehicleForm({
             )}
             {shows("truckType") && (
               <Field label="Truck Type" required error={errors["truckType"]} className={S2}>
-                <NativeSelect {...select("truckType", truckTypes, "Chọn hạng tải xe")} />
+                <NativeSelect
+                  {...select("truckType", truckTypes, "Chọn hạng tải xe")}
+                  // The Vehicle Group follows the Truck Type's load band.
+                  onChange={(v) => {
+                    const group = vehicleGroupForTruckType(v, vehicleGroups);
+                    patch({ truckType: v, ...(group ? { vehicleGroup: group } : {}) });
+                  }}
+                />
               </Field>
             )}
             {shows("vehicleGroup") && (
-              <Field label="Vehicle Group" error={errors["vehicleGroup"]} className={S2}>
+              <Field
+                label="Vehicle Group"
+                error={errors["vehicleGroup"]}
+                className={S2}
+                info={t(
+                  "Tự chọn theo Truck Type: Group 01 dưới 2 tấn, 02 dưới 4 tấn, 03 dưới 10 tấn, 04 dưới 18 tấn, 05 từ 18 tấn.",
+                  "Picked from the Truck Type: Group 01 under 2 t, 02 under 4 t, 03 under 10 t, 04 under 18 t, 05 from 18 t.",
+                )}
+              >
                 <NativeSelect {...select("vehicleGroup", vehicleGroups, "Chọn nhóm xe")} />
               </Field>
             )}

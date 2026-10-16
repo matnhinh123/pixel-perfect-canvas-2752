@@ -22,6 +22,7 @@ import {
   VEHICLE_MASTER_GROUPS,
 } from "@/mock-data/vehicleMaster";
 import { tr } from "@/lib/i18n";
+import { tollClassIndex } from "./routing/RouteProvider";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { dateCell, draftImportConfig, pick } from "./importExportService";
@@ -36,6 +37,23 @@ export const vehicleCrud = makeCrud<VehicleMasterRecord>({
 
 /** Vehicle Group options of the Vehicle master (TRUCK field and head mapping rows). */
 export const VEHICLE_GROUP_OPTIONS: readonly string[] = VEHICLE_MASTER_GROUPS;
+
+/**
+ * Vehicle Group a Truck Type ("5 tấn") belongs to, by the toll class load bands: Group 01 under 2 t,
+ * 02 under 4 t, 03 under 10 t, 04 under 18 t, 05 from 18 t. "" when the type carries no tonnage or
+ * the group is not among `groups`.
+ */
+export function vehicleGroupForTruckType(
+  truckType: string,
+  groups: readonly string[] = VEHICLE_GROUP_OPTIONS,
+): string {
+  const m = /(\d+(?:[.,]\d+)?)\s*(tấn|t\b|ton)/i.exec(truckType);
+  if (!m) return "";
+  const kg = Number(m[1]!.replace(",", ".")) * 1000;
+  const cls = (tollClassIndex("Truck", kg) ?? 0) + 1;
+  const group = `Group 0${cls}`;
+  return groups.includes(group) ? group : "";
+}
 
 export type VehicleDraft = Omit<
   VehicleMasterRecord,
@@ -606,7 +624,10 @@ const vehicleDraftOfRow = (r: Record<string, string>): VehicleDraft => ({
   ...newVehicleDraft(),
   plateNumber: r["plateNumber"] ?? "",
   vehicleType: pick(r["vehicleType"], vehicleTypeNames()) || "",
-  vehicleGroup: pick(r["vehicleGroup"], opts.groups()) || "",
+  // A row without a Vehicle Group gets the one its Truck Type belongs to.
+  vehicleGroup:
+    pick(r["vehicleGroup"], opts.groups()) ||
+    vehicleGroupForTruckType(pick(r["truckType"], opts.truckTypes()) || "", opts.groups()),
   truckType: pick(r["truckType"], opts.truckTypes()) || "",
   trailerType: pick(r["trailerType"], opts.trailerTypes()) || "",
   trailerSize: pick(r["trailerSize"], opts.trailerSizes()) || "",

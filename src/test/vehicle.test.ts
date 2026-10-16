@@ -10,6 +10,7 @@ import {
   vehicleExpiryAlerts,
   cargoVolumeM3,
   baseTypeOf,
+  vehicleGroupForTruckType,
   vehicleService,
   type VehicleDraft,
 } from "@/services/vehicleMasterService";
@@ -257,5 +258,16 @@ describe("HEADER is the head base type", () => {
     expect(baseTypeOf("HEAD")).toBe("HEAD");
     expect(showsField("HEADER", "authorizedTowedMass")).toBe(true);
     expect(validateVehicle(valid({ vehicleType: "HEADER", trailerType: "" }))).toEqual({});
+  });
+});
+
+describe("Vehicle Group follows the Truck Type", () => {
+  it("maps tonnage to the toll class load bands", () => {
+    expect(
+      ["1 tấn", "2 tấn", "5 tấn", "8 tấn", "10 tấn", "15 tấn", "20 tấn"].map((x) =>
+        vehicleGroupForTruckType(x),
+      ),
+    ).toEqual(["Group 01", "Group 02", "Group 03", "Group 03", "Group 04", "Group 04", "Group 05"]);
+    expect(vehicleGroupForTruckType("Xe bồn")).toBe("");
   });
 });
