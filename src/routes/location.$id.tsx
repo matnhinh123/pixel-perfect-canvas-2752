@@ -202,6 +202,19 @@ function LocationForm({
       });
   };
 
+  /**
+   * Choosing another Country or Province/City clears the Map Position (it no longer matches) and
+   * drops a pending map lookup so it cannot overwrite the choice.
+   */
+  const changeArea = (
+    p: Pick<LocationDraft, "province"> & Partial<Pick<LocationDraft, "country">>,
+  ) => {
+    if (Object.entries(p).every(([k, v]) => d[k as keyof LocationDraft] === v)) return;
+    geoSeq.current++;
+    setGeoBusy(false);
+    patch({ ...p, lat: NaN, lng: NaN });
+  };
+
   const back = () =>
     source
       ? void navigate({ to: "/location/$id", params: { id: source.id }, search: { mode: "view" } })
@@ -386,8 +399,8 @@ function LocationForm({
               error={errors["coords"]}
               className={S3}
               info={t(
-                'Toạ độ của địa điểm, ghi dạng "Latitude, Longitude" (Vĩ độ, Kinh độ). VD: 10.7704, 106.7858 — Latitude (vĩ độ) -90…90, Longitude (kinh độ) -180…180. Chọn điểm trên bản đồ: Country, Province/City và Address được điền tự động (OpenStreetMap), có thể sửa lại.',
-                'The location\'s coordinates, written "Latitude, Longitude". e.g. 10.7704, 106.7858 — Latitude -90…90, Longitude -180…180. Pick a spot on the map: Country, Province/City and Address are filled in (OpenStreetMap) and stay editable.',
+                'Toạ độ của địa điểm, ghi dạng "Latitude, Longitude" (Vĩ độ, Kinh độ). VD: 10.7704, 106.7858 — Latitude (vĩ độ) -90…90, Longitude (kinh độ) -180…180. Chọn điểm trên bản đồ: Country, Province/City và Address được điền tự động (OpenStreetMap), có thể sửa lại. Đổi Country hoặc Province/City sẽ xoá toạ độ để chọn lại.',
+                'The location\'s coordinates, written "Latitude, Longitude". e.g. 10.7704, 106.7858 — Latitude -90…90, Longitude -180…180. Pick a spot on the map: Country, Province/City and Address are filled in (OpenStreetMap) and stay editable. Changing Country or Province/City clears the position to pick again.',
               )}
             >
               <div className="flex gap-2">
@@ -442,7 +455,7 @@ function LocationForm({
                 {...select("country", LOCATION_COUNTRIES, "Select Country")}
                 searchPlaceholder={t("Gõ để tìm quốc gia…", "Type to search…")}
                 emptyText={t("Không có quốc gia phù hợp", "No matching country")}
-                onChange={(v) => patch({ country: v, province: "" })}
+                onChange={(v) => changeArea({ country: v, province: "" })}
               />
             </Field>
             <Field label="Province/City" error={errors["province"]} className={S3}>
@@ -451,9 +464,14 @@ function LocationForm({
                   {...select("province", provinces, "Select Province/City")}
                   searchPlaceholder={t("Gõ để tìm tỉnh / thành phố…", "Type to search…")}
                   emptyText={t("Không có tỉnh / thành phố phù hợp", "No matching province / city")}
+                  onChange={(v) => changeArea({ province: v })}
                 />
               ) : (
-                <Input placeholder="Enter Province/City" {...text("province")} />
+                <Input
+                  placeholder="Enter Province/City"
+                  {...text("province")}
+                  onChange={(e) => changeArea({ province: e.target.value })}
+                />
               )}
             </Field>
             <Field
