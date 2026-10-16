@@ -14,6 +14,7 @@ import type {
 import { BP_ROLES } from "@/types";
 import { EMPLOYEES, departmentName, leaderNameOf } from "@/mock-data/staff";
 import {
+  BP_IDS_WITH_TRANSACTIONS,
   BUSINESS_CATEGORIES,
   COUNTRIES,
   CURRENCIES,
@@ -64,6 +65,9 @@ export const taxCodeKey = (v: string) => v.replace(/\s+/g, "").toUpperCase();
 
 /** Both fields are always shown; the Legal Type only decides which one is required. */
 export const taxCodeRequired = (legalType: string) => legalType === "Company";
+/** A partner with operational transactions keeps its Role. */
+export const hasOperationalTransactions = (id?: string) =>
+  !!id && BP_IDS_WITH_TRANSACTIONS.includes(id);
 export const identityNoRequired = (legalType: string) => legalType === "Individual";
 const MST = /^\d{10}(-?\d{3})?$/;
 const CCCD = /^\d{12}$/;
@@ -363,7 +367,11 @@ export function normalizeBusinessPartner(raw: BusinessPartnerRecord): BusinessPa
       remark: str(x["remark"]),
     })),
     customer: {
-      creditTerms: arr(cust["creditTerms"]) as unknown as BpCreditTerm[],
+      // Credit Term Status is Active / Inactive ("Scheduled" of earlier versions → Active).
+      creditTerms: arr(cust["creditTerms"]).map((x) => ({
+        ...(x as unknown as BpCreditTerm),
+        status: x["status"] === "Inactive" ? "Inactive" : "Active",
+      })),
       banks: arr(cust["banks"]) as unknown as BpBankAccount[],
       ...perRole(cust, "Customer"),
     },
@@ -444,11 +452,11 @@ export function validateBusinessPartner(
   req("businessCategory", "Business Category", "Business Category");
 
   const code = d.bpCode.trim().toUpperCase();
-  if (!code) e["bpCode"] = tr("Nhập BP Code.", "BP Code is required.");
+  if (!code) e["bpCode"] = tr("Nhập Business Partner Code.", "Business Partner Code is required.");
   else if (!BP_CODE_VALID.test(code))
     e["bpCode"] = tr(
-      "BP Code chỉ gồm A–Z, 0–9, dấu chấm (.), gạch ngang (-), gạch dưới (_), không khoảng trắng, tối đa 12 ký tự.",
-      "BP Code may only contain A–Z, 0–9, dot (.), hyphen (-), underscore (_), no spaces, max 12 characters.",
+      "Business Partner Code chỉ gồm A–Z, 0–9, dấu chấm (.), gạch ngang (-), gạch dưới (_), không khoảng trắng, tối đa 12 ký tự.",
+      "Business Partner Code may only contain A–Z, 0–9, dot (.), hyphen (-), underscore (_), no spaces, max 12 characters.",
     );
   else {
     const dup = businessPartnerRepository
@@ -456,14 +464,14 @@ export function validateBusinessPartner(
       .find((b) => !b.deleted && b.id !== id && b.bpCode.toUpperCase() === code);
     if (dup)
       e["bpCode"] = tr(
-        `BP Code ${code} đã được dùng cho ${partnerLabel(dup)}.`,
-        `BP Code ${code} is already used by ${partnerLabel(dup)}.`,
+        `Business Partner Code ${code} đã được dùng cho ${partnerLabel(dup)}.`,
+        `Business Partner Code ${code} is already used by ${partnerLabel(dup)}.`,
       );
   }
 
-  // Tax Code (MST, 10 or 10+3 digits): required for a Company. Identity Number (CCCD, 12 digits):
-  // required for an Individual. A Representative needs neither. Each value entered must have the
-  // right format and be unique per tenant among non-deleted partners.
+  // Tax Code (MST, 10 or 10+3 digits): required for a Company. Identity Number: required for an
+  // Individual. A Representative needs neither. Each value entered must be unique per tenant among
+  // non-deleted partners.
   const others = businessPartnerRepository.all().filter((b) => !b.deleted && b.id !== id);
   const tax = taxCodeKey(d.taxCode);
   if (!tax) {
@@ -485,9 +493,7 @@ export function validateBusinessPartner(
   if (!cccd) {
     if (identityNoRequired(d.legalType))
       e["identityNo"] = tr("Nhập Identity Number.", "Identity Number is required.");
-  } else if (!CCCD.test(cccd))
-    e["identityNo"] = tr("Số CCCD gồm 12 số.", "Identity Number (CCCD) should be 12 digits.");
-  else {
+  } else {
     const dup = others.find((b) => taxCodeKey(str(b.identityNo)) === cccd);
     if (dup)
       e["identityNo"] = tr(
@@ -498,6 +504,14 @@ export function validateBusinessPartner(
 
   if (d.roles.length === 0)
     e["roles"] = tr("Chọn ít nhất một vai trò.", "Select at least one role.");
+  else if (hasOperationalTransactions(id)) {
+    const stored = businessPartnerRepository.get(id!);
+    if (stored && [...stored.roles].sort().join() !== [...d.roles].sort().join())
+      e["roles"] = tr(
+        "Không được đổi Role vì đối tác đã phát sinh nghiệp vụ vận hành.",
+        "Role cannot be changed: this partner already has operational transactions.",
+      );
+  }
 
   // Currencies follow the default currency (always included on save), so nothing to check here.
 
@@ -574,7 +588,7 @@ export function validateBusinessPartner(
         d.customer.creditTerms,
         blankCredit,
         [
-          ["serviceCode", "Service Code"],
+          ["serviceName", "Service"],
           ["creditTerm", "Credit Term"],
         ],
         (r) => {
@@ -598,7 +612,7 @@ export function validateBusinessPartner(
         d.vendor.paymentTerms,
         blankPayment,
         [
-          ["serviceCode", "Service Code"],
+          ["serviceName", "Service"],
           ["paymentTerm", "Payment Term"],
         ],
         (r) =>
@@ -632,7 +646,7 @@ export function validateBusinessPartner(
 // ---------------------------------------------------------------- Save
 
 const SCALARS: [keyof BusinessPartnerRecord, string][] = [
-  ["bpCode", "BP Code"],
+  ["bpCode", "Business Partner Code"],
   ["legalType", "Legal Type"],
   ["status", "Status"],
   ["taxCode", "Tax Code"],
@@ -675,17 +689,14 @@ interface TableSpec {
   /** Column that names a row in the history, e.g. the contact's Full Name. */
   nameKey: string;
 }
-const SERVICE: Cols = [
-  ["serviceCode", "Service Code"],
-  ["serviceName", "Service Name"],
-];
+const SERVICE: Cols = [["serviceName", "Service"]];
 const CONTACT_COLS: Cols = [
   ...SERVICE,
   ["gender", "Gender"],
   ["fullName", "Full Name"],
   ["identityNo", "Identity No."],
   ["telephone", "Telephone"],
-  ["mobilePhone", "Mobile Phone"],
+  ["mobilePhone", "Mobile"],
   ["contactRole", "Contact Role"],
   ["email", "Email"],
   ["address", "Address"],
@@ -698,9 +709,9 @@ const BANK_COLS: Cols = [
   ["bankName", "Bank Name"],
   ["accountNo", "Account No."],
   ["accountHolder", "Account Holder"],
-  ["bankBranch", "Bank Branch"],
-  ["bankAddress", "Bank Address"],
-  ["bankCountry", "Bank Country"],
+  ["bankBranch", "Branch"],
+  ["bankAddress", "Address"],
+  ["bankCountry", "Country"],
   ["currency", "Currency"],
   ["remark", "Remark"],
 ];
@@ -728,7 +739,7 @@ const TABLES: TableSpec[] = [
   {
     title: "Customer › Credit Term",
     rows: (r) => r.customer.creditTerms,
-    nameKey: "serviceCode",
+    nameKey: "serviceName",
     cols: [
       ...SERVICE,
       ["creditTerm", "Credit Term"],
@@ -764,7 +775,7 @@ const TABLES: TableSpec[] = [
   {
     title: "Vendor › Payment Term",
     rows: (r) => r.vendor.paymentTerms,
-    nameKey: "serviceCode",
+    nameKey: "serviceName",
     cols: [
       ...SERVICE,
       ["paymentTerm", "Payment Term"],

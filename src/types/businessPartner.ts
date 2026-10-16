@@ -22,7 +22,7 @@ export interface BpDocument extends Row {
 }
 
 export type WoAccessPolicy = "" | "Temporary Allow" | "Approval Required";
-export type CreditStatus = "Active" | "Scheduled" | "Inactive";
+export type CreditStatus = "Active" | "Inactive";
 
 /** Customer tab: credit policy per service (AR account 131). */
 export interface BpCreditTerm extends Row {

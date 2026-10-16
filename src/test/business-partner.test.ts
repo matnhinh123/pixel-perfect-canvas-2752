@@ -5,9 +5,10 @@ import {
   newBusinessPartnerDraft,
   woAccessState,
   normalizeBusinessPartner,
+  draftOf,
 } from "@/services/businessPartnerService";
 import { seedBusinessPartners } from "@/mock-data/businessPartners";
-import type { BusinessPartnerRecord } from "@/types";
+import type { BpRole, BusinessPartnerRecord } from "@/types";
 
 describe("BP Code convention", () => {
   it("uppercases, strips disallowed characters and caps at 12", () => {
@@ -114,8 +115,21 @@ describe("Profile rules", () => {
     const v = (p: Partial<typeof d>) =>
       validateBusinessPartner({ ...d, legalType: "Individual", ...p });
     expect(v({ identityNo: "079085001234" })["identityNo"]).toBeUndefined();
-    expect(v({ identityNo: "0312" })["identityNo"]).toBeTruthy();
+    // Identity Number only has to be unique (no fixed length).
+    expect(v({ identityNo: "0312" })["identityNo"]).toBeUndefined();
     expect(v({ identityNo: "079085001234", taxCode: "12345" })["taxCode"]).toBeTruthy();
+  });
+
+  it("locks the Role once the partner has operational transactions", () => {
+    // BP-1 (MSGFREIGHT, Customer) has transactions in the demo; BP-6 (QTL) has none.
+    const [msg] = seedBusinessPartners();
+    const d = { ...draftOf(msg!), roles: ["Customer", "Vendor"] as BpRole[] };
+    expect(validateBusinessPartner(d, "BP-1")["roles"]).toBeTruthy();
+    expect(validateBusinessPartner({ ...d, roles: ["Customer"] }, "BP-1")["roles"]).toBeUndefined();
+    const qtl = seedBusinessPartners().find((b) => b.id === "BP-6")!;
+    expect(
+      validateBusinessPartner({ ...draftOf(qtl), roles: ["Customer"] }, "BP-6")["roles"],
+    ).toBeUndefined();
   });
 
   it("moves an old Individual's CCCD from Tax Code to Identity Number", () => {
@@ -151,7 +165,7 @@ describe("Change History", () => {
       .slice(before)
       .map((e) => [e.field, e.oldValue, e.newValue]);
     expect(fields).toContainEqual([
-      "Customer › Contact Info › Nguyễn Văn Hùng › Mobile Phone",
+      "Customer › Contact Info › Nguyễn Văn Hùng › Mobile",
       "0909 123 456",
       "0909 999 999",
     ]);

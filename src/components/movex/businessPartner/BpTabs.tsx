@@ -184,13 +184,12 @@ function ContactTable({ role, d, set, errors }: TabProps & { role: Role }) {
   const svc = useServiceOptions();
   const prof = d[role];
   const cols: ColDef<BpContact>[] = [
-    { key: "serviceCode", label: "Service Code", width: 160, kind: "select", options: svc.codes },
-    { key: "serviceName", label: "Service Name", width: 180, kind: "select", options: svc.names },
+    { key: "serviceName", label: "Service", width: 180, kind: "select", options: svc.names },
     { key: "gender", label: "Gender", width: 100, kind: "select", options: genders },
     { key: "fullName", label: "Full Name", width: 200, kind: "text" },
     { key: "identityNo", label: "Identity No.", width: 150, kind: "text" },
     { key: "telephone", label: "Telephone", width: 150, kind: "text" },
-    { key: "mobilePhone", label: "Mobile Phone", width: 150, kind: "text" },
+    { key: "mobilePhone", label: "Mobile", width: 150, kind: "text" },
     {
       key: "contactRole",
       label: "Contact Role",
@@ -235,7 +234,7 @@ function ContactTable({ role, d, set, errors }: TabProps & { role: Role }) {
 function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
   const svc = useServiceOptions();
   const prof = d[role];
-  /** Both service cells preview the same "code — name" pairs. */
+  /** The Service cell previews the picked "code — name" pairs. */
   const servicePreview = (r: BpSalesman) => (
     <ul className="space-y-1 text-[13px]">
       {splitList(r.serviceCode).map((c, i) => (
@@ -258,16 +257,8 @@ function SalesTable({ role, d, set, errors }: TabProps & { role: Role }) {
     { key: "department", label: "Department", width: 170, kind: "readonly" },
     { key: "leader", label: "Leader", width: 180, kind: "readonly" },
     {
-      key: "serviceCode",
-      label: "Service Code",
-      width: 170,
-      kind: "multiselect",
-      options: svc.codes,
-      preview: servicePreview,
-    },
-    {
       key: "serviceName",
-      label: "Service Name",
+      label: "Service",
       width: 220,
       kind: "multiselect",
       options: svc.names,
@@ -322,9 +313,9 @@ function BankTable({ role, d, set, errors }: TabProps & { role: Role }) {
     },
     { key: "accountNo", label: "Account No.", required: true, width: 170, kind: "text" },
     { key: "accountHolder", label: "Account Holder", required: true, width: 200, kind: "text" },
-    { key: "bankBranch", label: "Bank Branch", width: 160, kind: "text" },
-    { key: "bankAddress", label: "Bank Address", width: 200, kind: "text" },
-    { key: "bankCountry", label: "Bank Country", width: 160, kind: "select", options: countries },
+    { key: "bankBranch", label: "Branch", width: 160, kind: "text" },
+    { key: "bankAddress", label: "Address", width: 200, kind: "text" },
+    { key: "bankCountry", label: "Country", width: 160, kind: "select", options: countries },
     { key: "currency", label: "Currency", width: 110, kind: "select", options: CURRENCIES },
     { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];
@@ -377,14 +368,13 @@ export function CustomerTab({ d, set, errors }: TabProps) {
   const svc = useServiceOptions();
   const cols: ColDef<BpCreditTerm>[] = [
     {
-      key: "serviceCode",
-      label: "Service Code",
+      key: "serviceName",
+      label: "Service",
       required: true,
-      width: 170,
+      width: 190,
       kind: "select",
-      options: svc.codes,
+      options: svc.names,
     },
-    { key: "serviceName", label: "Service Name", width: 190, kind: "select", options: svc.names },
     {
       key: "creditTerm",
       label: "Credit Term",
@@ -418,7 +408,7 @@ export function CustomerTab({ d, set, errors }: TabProps) {
       label: "Status",
       width: 130,
       kind: "select",
-      options: ["Active", "Scheduled", "Inactive"],
+      options: ["Active", "Inactive"],
     },
     { key: "remark", label: "Remark", width: 220, kind: "text" },
   ];
@@ -461,14 +451,13 @@ export function VendorTab({ d, set, errors }: TabProps) {
   const svc = useServiceOptions();
   const cols: ColDef<BpPaymentTerm>[] = [
     {
-      key: "serviceCode",
-      label: "Service Code",
+      key: "serviceName",
+      label: "Service",
       required: true,
-      width: 170,
+      width: 190,
       kind: "select",
-      options: svc.codes,
+      options: svc.names,
     },
-    { key: "serviceName", label: "Service Name", width: 190, kind: "select", options: svc.names },
     {
       key: "paymentTerm",
       label: "Payment Term",

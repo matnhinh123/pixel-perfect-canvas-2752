@@ -71,6 +71,12 @@ export const PARTNER_GROUPS = ["Key Account", "SME", "Agent", "Carrier", "Suppli
 export const TAX_OPTIONS = ["VAT 10%", "VAT 8%", "VAT 5%", "VAT 0%", "Not subject to VAT"];
 /** No tenant settings in the demo yet: the tenant's default currency. */
 export const TENANT_DEFAULT_CURRENCY = "VND";
+
+/**
+ * Demo: partners that already have operational transactions (Work Orders…), so their Role is locked.
+ * Stands in for the Operations module until it exists.
+ */
+export const BP_IDS_WITH_TRANSACTIONS: readonly string[] = ["BP-1", "BP-3"];
 export const SERVICE_PROVIDER_TYPES = ["Carrier", "Forwarder", "Trucking", "Warehouse", "Agent"];
 export const FORMS = ["01GTKT", "02GTTT", "01/TVE"];
 
@@ -431,7 +437,7 @@ export const seedBusinessPartners = (): BusinessPartnerRecord[] => [
             woAccessTo: "2026-08-15T18:00",
             woAccessPolicy: "Temporary Allow",
             approvedBy: "Finance Director",
-            status: "Scheduled",
+            status: "Active",
           }),
         ],
         banks: [

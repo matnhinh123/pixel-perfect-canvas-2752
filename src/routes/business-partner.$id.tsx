@@ -18,7 +18,6 @@ import {
 import { ReadOnlyScope } from "@/components/movex/general/FormParts";
 
 /** A third of the 12-column row (3 fields per row on wide screens, 2 on medium). */
-import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { CustomerTab, DocumentsTab, VendorTab } from "@/components/movex/businessPartner/BpTabs";
 import { MultiSelect } from "@/components/movex/businessPartner/MultiSelect";
 import { useCollection } from "@/hooks/use-store";
@@ -32,7 +31,7 @@ import {
   normalizeBusinessPartner,
   sanitizeBpCode,
   lookupTaxPayer,
-  taxCodeKey,
+  hasOperationalTransactions,
   identityNoRequired,
   taxCodeRequired,
   toEnglishAddress,
@@ -50,7 +49,7 @@ import { CC } from "@/mock-data/commonCodes";
 import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { BP_ROLES, type BpRole, type BusinessPartnerRecord } from "@/types";
+import type { BpRole, BusinessPartnerRecord } from "@/types";
 
 type Mode = "view" | "edit";
 type Tab = "documents" | "customer" | "vendor";
@@ -113,7 +112,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
   const invoicingLanguages = useCodeOptions(CC.INVOICING_LANGUAGE, INVOICE_LANGUAGES);
   const countries = useCodeOptions(CC.COUNTRY, COUNTRIES);
   const navigate = useNavigate();
-  const confirm = useConfirm();
   const isNew = !source;
   const initial = useMemo<BusinessPartnerDraft>(
     () => (source ? draftOf(source) : newBusinessPartnerDraft()),
@@ -201,7 +199,8 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
     clearErr(["currency", "currencies"]);
   };
 
-  const rolesChanged = !!source && source.roles.join() !== BP_ROLES.filter(hasRole).join();
+  /** Role is locked once the partner has operational transactions. */
+  const roleLocked = hasOperationalTransactions(source?.id);
 
   /** English Address follows the Local Address (transliterated) until the user edits it. */
   const setLocalAddress = (v: string) => {
@@ -215,30 +214,15 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
     }));
     clearErr(["localAddress", "englishAddress"]);
   };
-  /** Company "Get Info": tax-authority lookup by MST (mock registry in the demo) fills name and address. */
+  /** Company "Get Info": tax-authority lookup by MST (mock registry in the demo) fills Local Name and Local Address. */
   const getTaxInfo = () => {
     const res = lookupTaxPayer(d.taxCode);
     if ("error" in res) {
       toast.error(res.error);
       return;
     }
-    const key = taxCodeKey(d.taxCode);
-    const dup = businessPartnerRepository
-      .all()
-      .find(
-        (b) => !b.deleted && b.id !== source?.id && taxCodeKey(String(b.taxCode ?? "")) === key,
-      );
-    if (dup) {
-      toast.error(
-        t(
-          `MST đã được dùng cho ${dup.bpCode} – ${dup.localName}.`,
-          `Tax Code is already used by ${dup.bpCode} – ${dup.localName}.`,
-        ),
-      );
-      return;
-    }
-    const { localName, englishName, localAddress } = res.info;
-    patch({ localName, englishName, localAddress, englishAddress: toEnglishAddress(localAddress) });
+    const { localName, localAddress } = res.info;
+    patch({ localName, localAddress });
     toast.success(t("Đã lấy thông tin doanh nghiệp.", "Company information retrieved."));
   };
 
@@ -246,17 +230,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
 
   const save = async () => {
     setFormError(null);
-    if (rolesChanged) {
-      const r = await confirm({
-        title: t("Thay đổi vai trò?", "Change roles?"),
-        description: t(
-          "Vai trò quyết định hoá đơn đầu ra/đầu vào và công nợ 131/331. Thay đổi chỉ áp dụng cho nghiệp vụ phát sinh sau này; các record/hoá đơn đã xử lý không bị ảnh hưởng.",
-          "Roles drive outgoing/incoming invoices and the 131/331 ledgers. The change only applies to future transactions; records/invoices already processed are not affected.",
-        ),
-        confirmLabel: t("Lưu thay đổi", "Save changes"),
-      });
-      if (r !== "confirm") return;
-    }
     try {
       const saved = businessPartnerService.save(d, source?.id);
       guard.allowNext();
@@ -347,7 +320,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
           {/* BP Code, Tax Code, Identity Number first; then Local / English name + address pairs. */}
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-6">
             <Field
-              label="BP Code"
+              label="Business Partner Code"
               required
               error={errors["bpCode"]}
               hint={readOnly ? undefined : `${d.bpCode.length}/${BP_CODE_MAX}`}
@@ -356,7 +329,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                 <Input
                   value={d.bpCode}
                   maxLength={BP_CODE_MAX}
-                  placeholder="Enter BP Code"
+                  placeholder="Enter Business Partner Code"
                   onChange={(e) => patch({ bpCode: sanitizeBpCode(e.target.value) })}
                   aria-invalid={!!errors["bpCode"] || undefined}
                   className="pr-9"
@@ -517,17 +490,18 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                   <label key={r} className="flex cursor-pointer items-center gap-2 text-sm">
                     <Checkbox
                       checked={hasRole(r)}
+                      disabled={roleLocked}
                       onCheckedChange={(on) => toggleRole(r, on === true)}
                     />
                     {r}
                   </label>
                 ))}
               </div>
-              {rolesChanged && (
-                <p className="mt-1 text-xs text-warning">
+              {roleLocked && (
+                <p className="mt-1 text-xs text-muted-foreground">
                   {t(
-                    "Đổi vai trò chỉ áp dụng cho nghiệp vụ mới, không ảnh hưởng record/hoá đơn cũ.",
-                    "A role change only applies to new transactions; existing records/invoices are untouched.",
+                    "Không được đổi Role vì đối tác đã phát sinh nghiệp vụ vận hành.",
+                    "Role cannot be changed: this partner already has operational transactions.",
                   )}
                 </p>
               )}
