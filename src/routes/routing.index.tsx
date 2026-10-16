@@ -8,7 +8,7 @@ import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn, QuickFilter } from "@/components/movex/general/types";
 import { useCollection } from "@/hooks/use-store";
 import { routeRepository } from "@/repositories";
-import { routeCrud, routeImportConfig } from "@/services/routeService";
+import { routeCrud } from "@/services/routeService";
 import { routeTotals } from "@/services/cost/costMath";
 import { allLocations } from "@/services/routing/locationStore";
 import { formatDateTime, formatDuration } from "@/lib/format";
@@ -284,7 +284,7 @@ function RoutingList() {
       onEdit={(r) =>
         void navigate({ to: "/routing/$id", params: { id: r.id }, search: { mode: "edit" } })
       }
-      importConfig={routeImportConfig}
+      importExport={false}
       extraRowActions={[
         {
           label: t("Chi phí của route", "Route costs"),

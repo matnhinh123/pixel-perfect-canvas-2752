@@ -98,6 +98,8 @@ export interface EntityListPageProps<T extends BaseRecord> {
   tree?: { parentOf: (row: T) => string | null; column: string };
   /** Hide the Delete row action (master data that is deactivated rather than deleted). */
   allowDelete?: boolean;
+  /** false: no Import / Export buttons at all (incl. "Export selected"). */
+  importExport?: boolean;
   /** Show the refresh button (right of the toolbar). Off for the master-data lists. */
   showRefresh?: boolean;
   /** UI language of the list chrome (toolbar, menus, pager). Vietnamese by default. */
@@ -512,7 +514,8 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     p.readOnlyReason ?? t("Không khả dụng cho danh sách này", "Not available for this list");
 
   // Import history stays reachable as a tab inside the import dialog.
-  const importBtn = p.importConfig ? (
+  const importExport = p.importExport !== false;
+  const importBtn = !importExport ? null : p.importConfig ? (
     <Button variant="outline" onClick={() => setImportOpen(true)}>
       <Upload className="h-4 w-4" />
       Import
@@ -528,7 +531,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
 
   // One click → Excel (.xlsx) of the current view (search + filter + sort, visible columns).
   // Selected rows are exported from the selection bar.
-  const exportBtn = (
+  const exportBtn = importExport && (
     <Button
       variant="outline"
       onClick={() => void doExport(filtered, viewScope)}
@@ -786,14 +789,16 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
               <span className="font-semibold text-accent-foreground">
                 {t("Đã chọn", "Selected")} {selected.size}
               </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void doExport(sortedSelection(), "selected rows")}
-              >
-                <Download className="h-4 w-4" />
-                {t("Export đã chọn", "Export selected")}
-              </Button>
+              {importExport && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void doExport(sortedSelection(), "selected rows")}
+                >
+                  <Download className="h-4 w-4" />
+                  {t("Export đã chọn", "Export selected")}
+                </Button>
+              )}
               {crud && (
                 <>
                   <Button
