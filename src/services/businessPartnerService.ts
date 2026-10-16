@@ -1011,7 +1011,13 @@ export const businessPartnerImportConfig = draftImportConfig<BusinessPartnerDraf
   screen: "business-partner",
   keyColumn: "bpCode",
   columns: [
-    { key: "bpCode", header: "BP Code", required: true, example: "ABC-LOG" },
+    {
+      key: "bpCode",
+      header: "Business Partner Code",
+      required: true,
+      example: "ABC-LOG",
+      aliases: ["BP Code"],
+    },
     { key: "legalType", header: "Legal Type", required: true, example: "Company" },
     {
       key: "roles",

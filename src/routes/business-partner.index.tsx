@@ -35,14 +35,14 @@ type Row = BusinessPartnerRecord;
 type T = (vi: string, en: string) => string;
 
 /**
- * The list mirrors the General Information form field for field, in the same order (BP Code is
+ * The list mirrors the General Information form field for field, in the same order (Business Partner Code is
  * pinned on the left; Status, shown in the detail header, comes last). Labels match the form.
  */
 const columnsFor = (t: T): ListColumn<Row>[] => [
   {
     key: "bpCode",
-    width: 150,
-    label: "BP Code",
+    width: 200,
+    label: "Business Partner Code",
     type: "text",
     pinned: true,
     value: (r) => r.bpCode,
@@ -190,7 +190,10 @@ function BusinessPartnerList() {
       title="Business Partner"
       rows={rows}
       columns={columns}
-      searchPlaceholder={t("Tìm BP Code, tên, mã số thuế...", "Search BP Code, name, tax code...")}
+      searchPlaceholder={t(
+        "Tìm Business Partner Code, tên, mã số thuế...",
+        "Search Business Partner Code, name, tax code...",
+      )}
       searchValues={(r) => [r.bpCode, r.localName, r.englishName, r.taxCode, r.identityNo]}
       quickFilters={[
         {
