@@ -40,12 +40,12 @@ export function ServiceFormConfig({
 
   if (!form)
     return (
-      <Panel title={t("Cấu hình form", "Form Settings")}>
+      <Panel title={t("Cấu hình Default Template", "Default Template Settings")}>
         <EmptyState
-          title={t("Dịch vụ chưa có Form", "This service has no Form yet")}
+          title={t("Dịch vụ chưa có Default Template", "This service has no Default Template yet")}
           description={t(
-            "Chọn Form cho dịch vụ gốc trước.",
-            "Select a Form for the root service first.",
+            "Chọn Default Template cho dịch vụ gốc trước.",
+            "Select a Default Template for the root service first.",
           )}
         />
       </Panel>
@@ -72,7 +72,7 @@ export function ServiceFormConfig({
 
   return (
     <Panel
-      title={t("Cấu hình form", "Form Settings")}
+      title={t("Cấu hình Default Template", "Default Template Settings")}
       bodyClassName="p-0"
       actions={
         !inherited && dirty ? (
@@ -90,7 +90,7 @@ export function ServiceFormConfig({
       }
     >
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 text-sm">
-        <span className="text-muted-foreground">Form:</span>
+        <span className="text-muted-foreground">Default Template:</span>
         <Tag tone="tpl">{formName(form)}</Tag>
         {inherited ? (
           <>

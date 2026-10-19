@@ -24,16 +24,16 @@ export const Route = createFileRoute("/service/")({
       {
         name: "description",
         content: tr(
-          "Danh mục dịch vụ, cấu hình form và phân công người xử lý.",
-          "Service catalog, form settings and handler assignment.",
+          "Danh mục dịch vụ, cấu hình Default Template và phân công người xử lý.",
+          "Service catalog, Default Template settings and handler assignment.",
         ),
       },
       { property: "og:title", content: "Service — MoveX" },
       {
         property: "og:description",
         content: tr(
-          "Danh mục dịch vụ, cấu hình form và phân công người xử lý.",
-          "Service catalog, form settings and handler assignment.",
+          "Danh mục dịch vụ, cấu hình Default Template và phân công người xử lý.",
+          "Service catalog, Default Template settings and handler assignment.",
         ),
       },
     ],
@@ -50,7 +50,7 @@ function ServiceList() {
     () => [
       {
         key: "form",
-        allLabel: t("Tất cả form", "All forms"),
+        allLabel: t("Tất cả Default Template", "All Default Templates"),
         options: FORM_NAMES.map((f) => ({
           label: f,
           conditions: [{ field: "form", operator: "eq", value: f }],
@@ -122,7 +122,7 @@ function ServiceList() {
       },
       {
         key: "form",
-        label: "Form",
+        label: "Default Template",
         type: "enum",
         options: FORM_NAMES,
         value: (s) => formName(templateOf(s, rows)),
@@ -155,8 +155,8 @@ function ServiceList() {
       entityLabel="Service"
       title="Service"
       subtitle={t(
-        "Danh mục dịch vụ, cấu hình form và phân công người xử lý",
-        "Service catalog, form settings and handler assignment",
+        "Danh mục dịch vụ, cấu hình Default Template và phân công người xử lý",
+        "Service catalog, Default Template settings and handler assignment",
       )}
       rows={rows}
       columns={columns}

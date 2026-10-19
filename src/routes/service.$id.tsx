@@ -67,16 +67,16 @@ export const Route = createFileRoute("/service/$id")({
       {
         name: "description",
         content: tr(
-          "Thông tin dịch vụ, cấu hình form và phân công.",
-          "Service information, form settings and assignment.",
+          "Thông tin dịch vụ, cấu hình Default Template và phân công.",
+          "Service information, Default Template settings and assignment.",
         ),
       },
       { property: "og:title", content: "Service Detail — MoveX" },
       {
         property: "og:description",
         content: tr(
-          "Thông tin dịch vụ, cấu hình form và phân công.",
-          "Service information, form settings and assignment.",
+          "Thông tin dịch vụ, cấu hình Default Template và phân công.",
+          "Service information, Default Template settings and assignment.",
         ),
       },
     ],
@@ -203,7 +203,9 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
       >
         <TabsList className="mb-4">
           <TabsTrigger value="info">{t("Thông tin", "Information")}</TabsTrigger>
-          <TabsTrigger value="form">{t("Cấu hình form", "Form Settings")}</TabsTrigger>
+          <TabsTrigger value="form">
+            {t("Cấu hình Default Template", "Default Template Settings")}
+          </TabsTrigger>
           <TabsTrigger value="assign">
             {t("Phân công", "Assignment")}
             {assignments.length > 0 && (
@@ -237,7 +239,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
                 )}
               </InfoRow>
               <InfoRow label={t("Nhóm dịch vụ", "Service Group")}>{root.name}</InfoRow>
-              <InfoRow label="Form">
+              <InfoRow label="Default Template">
                 <span className="inline-flex items-center gap-2">
                   <Tag tone="tpl">{formName(form)}</Tag>
                   {source.parentId && (
@@ -294,7 +296,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
                     {[
                       t("Mã dịch vụ", "Service Code"),
                       t("Tên dịch vụ", "Service Name"),
-                      "Form",
+                      "Default Template",
                       t("Trạng thái", "Status"),
                     ].map((h) => (
                       <TableHead key={h} className={thClass}>
@@ -430,12 +432,12 @@ function ServiceEditor({
     const oldForm = source ? templateOf(source, services) : null;
     if (source && oldForm && oldForm !== form && descendants.length) {
       const r = await confirm({
-        title: t("Đổi Form?", "Change Form?"),
+        title: t("Đổi Default Template?", "Change Default Template?"),
         description: t(
-          `${descendants.length} dịch vụ con sẽ chuyển từ ${formName(oldForm)} sang ${formName(form)}. Phân công dùng form cũ cũng được cập nhật theo.`,
-          `${descendants.length} child service(s) will move from ${formName(oldForm)} to ${formName(form)}. Assignments using the old form are updated too.`,
+          `${descendants.length} dịch vụ con sẽ chuyển từ ${formName(oldForm)} sang ${formName(form)}. Phân công dùng Default Template cũ cũng được cập nhật theo.`,
+          `${descendants.length} child service(s) will move from ${formName(oldForm)} to ${formName(form)}. Assignments using the old Default Template are updated too.`,
         ),
-        confirmLabel: t("Đổi Form", "Change Form"),
+        confirmLabel: t("Đổi Default Template", "Change Default Template"),
         tone: "danger",
       });
       if (r !== "confirm") return;
@@ -526,21 +528,24 @@ function ServiceEditor({
             </ReadOnlyBox>
           </Field>
           {root ? (
-            <Field label="Form" hint={t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}>
+            <Field
+              label="Default Template"
+              hint={t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}
+            >
               <ReadOnlyBox>
                 <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 <Tag tone="tpl">{formName(form)}</Tag>
               </ReadOnlyBox>
             </Field>
           ) : (
-            <Field label="Form" required error={errors["template"]}>
+            <Field label="Default Template" required error={errors["template"]}>
               <NativeSelect
                 value={s.template ?? ""}
                 invalid={!!errors["template"]}
                 onChange={(v) => set("template", (v || null) as TemplateType | null)}
                 options={["", ...TEMPLATES]}
                 labels={{
-                  "": t("Chọn form…", "Select form…"),
+                  "": t("Chọn Default Template…", "Select Default Template…"),
                   ...Object.fromEntries(TEMPLATES.map((x) => [x, formName(x)])),
                 }}
               />
@@ -566,8 +571,8 @@ function ServiceEditor({
         {parent && (
           <p className="mt-4 text-xs text-muted-foreground">
             {t(
-              `Dịch vụ con dùng chung Nhóm dịch vụ và Form với dịch vụ gốc ${root?.name ?? ""}.`,
-              `Child services share the Service Group and Form of the root service ${root?.name ?? ""}.`,
+              `Dịch vụ con dùng chung Nhóm dịch vụ và Default Template với dịch vụ gốc ${root?.name ?? ""}.`,
+              `Child services share the Service Group and Default Template of the root service ${root?.name ?? ""}.`,
             )}
           </p>
         )}

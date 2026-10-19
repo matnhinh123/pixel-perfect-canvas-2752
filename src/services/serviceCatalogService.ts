@@ -111,7 +111,10 @@ export function validateService(s: ServiceRecord): Record<string, string> {
     );
   if (!s.name.trim()) e["name"] = tr("Nhập tên dịch vụ.", "Enter the service name.");
   if (!s.parentId && !s.template)
-    e["template"] = tr("Chọn Form cho dịch vụ gốc.", "Select a Form for the root service.");
+    e["template"] = tr(
+      "Chọn Default Template cho dịch vụ gốc.",
+      "Select a Default Template for the root service.",
+    );
   if (s.parentId && s.id && (s.parentId === s.id || descendantsOf(s.id).includes(s.parentId)))
     e["parentId"] = tr(
       "Không thể chọn chính nó hoặc dịch vụ con của nó làm dịch vụ cha.",
@@ -195,7 +198,12 @@ export const serviceCatalogService = {
       codeOf(existing.parentId),
       codeOf(next.parentId),
     );
-    upd("CHANGE_TEMPLATE", "Form", formName(templateOf(existing)), formName(templateOf(next)));
+    upd(
+      "CHANGE_TEMPLATE",
+      "Default Template",
+      formName(templateOf(existing)),
+      formName(templateOf(next)),
+    );
     upd(
       next.status === "Inactive" ? "DEACTIVATE" : next.status === "Active" ? "ACTIVATE" : "UPDATE",
       tr("Trạng thái", "Status"),
@@ -286,7 +294,7 @@ export const serviceImportConfig: ImportEntityConfig = {
     { key: "code", header: "Mã dịch vụ", required: true, example: "TRK-IN-RF" },
     { key: "name", header: "Tên dịch vụ", required: true, example: "Reefer Trucking" },
     { key: "parent", header: "Mã dịch vụ cha", example: "TRK-IN" },
-    { key: "template", header: "Form", example: "" },
+    { key: "template", header: "Default Template", example: "", aliases: ["Form"] },
     { key: "description", header: "Ghi chú", example: "Xe lạnh" },
   ],
   existingKeys: () => new Set(all().map((s) => s.code.toLowerCase())),
@@ -306,8 +314,8 @@ export const serviceImportConfig: ImportEntityConfig = {
         {
           field: "template",
           error: tr(
-            "Dịch vụ gốc cần Form: Trucking / Customs / Freight Form",
-            "A root service needs a Form: Trucking / Customs / Freight Form",
+            "Dịch vụ gốc cần Default Template: Trucking / Customs / Freight Form",
+            "A root service needs a Default Template: Trucking / Customs / Freight Form",
           ),
         },
       ];
@@ -316,8 +324,8 @@ export const serviceImportConfig: ImportEntityConfig = {
         {
           field: "template",
           error: tr(
-            "Dịch vụ con kế thừa Form — để trống cột này",
-            "Child services inherit the Form — leave this column empty",
+            "Dịch vụ con kế thừa Default Template — để trống cột này",
+            "Child services inherit the Default Template — leave this column empty",
           ),
         },
       ];

@@ -101,7 +101,7 @@ export function ServiceAssignments({
               {[
                 t("Phòng ban", "Department"),
                 t("Nhân viên", "Employee"),
-                "Form",
+                "Default Template",
                 t("Ghi chú", "Notes"),
                 t("Trạng thái", "Status"),
                 t("Thao tác", "Actions"),
@@ -275,7 +275,7 @@ function AssignmentDialog({
               }}
             />
           </Field>
-          <Field label="Form" error={errors["form"]}>
+          <Field label="Default Template" error={errors["form"]}>
             <NativeSelect
               value={d.form ?? ""}
               onChange={(v) => set("form", (v || null) as AssignmentDraft["form"])}
