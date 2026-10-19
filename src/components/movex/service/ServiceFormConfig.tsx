@@ -1,7 +1,5 @@
-import { Link } from "@tanstack/react-router";
 import { Lock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -64,22 +62,10 @@ export function ServiceFormConfig({
         <span className="text-muted-foreground">Default Template:</span>
         <Tag tone="tpl">{formName(form)}</Tag>
         {inherited ? (
-          <>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Lock className="h-3 w-3" />
-              {t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}
-            </span>
-            {readOnly && root.id && (
-              <Link
-                to="/service/$id"
-                params={{ id: root.id }}
-                search={{ mode: "view", tab: "form" }}
-                className="ml-auto text-xs font-semibold text-primary hover:underline"
-              >
-                {t(`Xem ở ${root.name} →`, `Open ${root.name} →`)}
-              </Link>
-            )}
-          </>
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <Lock className="h-3 w-3" />
+            {t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}
+          </span>
         ) : (
           <span className="text-xs text-muted-foreground">
             {t(
@@ -93,6 +79,15 @@ export function ServiceFormConfig({
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className={thClass}>{t("Trường", "Field")}</TableHead>
+            <TableHead
+              className={`${thClass} w-32 text-center`}
+              title={t(
+                "Trường cố định: luôn hiển thị và bắt buộc",
+                "Locked field: always visible and required",
+              )}
+            >
+              {t("Cố định", "Locked")}
+            </TableHead>
             <TableHead className={`${thClass} w-32 text-center`}>
               {t("Hiển thị", "Visible")}
             </TableHead>
@@ -109,25 +104,13 @@ export function ServiceFormConfig({
             const label = t(def.label, def.labelEn);
             return (
               <TableRow key={def.key}>
-                <TableCell className="py-2.5 font-medium">
-                  <span className="inline-flex items-center gap-1.5">
-                    {label}
-                    {locked && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span tabIndex={0} aria-label={t("Trường cố định", "Locked field")}>
-                            <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t(
-                            "Trường cố định, luôn hiển thị và bắt buộc",
-                            "Locked field, always visible and required",
-                          )}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </span>
+                <TableCell className="py-2.5 font-medium">{label}</TableCell>
+                <TableCell className="py-2.5 text-center">
+                  <Switch
+                    checked={locked}
+                    disabled
+                    aria-label={t(`Cố định ${label}`, `${label} locked`)}
+                  />
                 </TableCell>
                 <TableCell className="py-2.5 text-center">
                   <Switch
