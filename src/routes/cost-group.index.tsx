@@ -6,7 +6,7 @@ import type { ListColumn } from "@/components/movex/general/types";
 import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts";
 import { useCollection } from "@/hooks/use-store";
 import { costGroupRepository } from "@/repositories";
-import { costGroupCrud, costGroupImportConfig, groupName } from "@/services/costMasterService";
+import { costGroupCrud, costGroupImportConfig } from "@/services/costMasterService";
 import type { CostGroupRecord } from "@/types";
 
 export const Route = createFileRoute("/cost-group/")({
@@ -28,14 +28,6 @@ function CostGroupPage() {
   const open = (g: CostGroupRecord, mode: "view" | "edit") =>
     void navigate({ to: "/cost-group/$id", params: { id: g.id }, search: { mode } });
 
-  const parentNames = useMemo(
-    () =>
-      Array.from(
-        new Set(groups.filter((g) => g.parentId).map((g) => groupName(g.parentId, groups))),
-      ).filter(Boolean),
-    [groups],
-  );
-
   const columns = useMemo<ListColumn<CostGroupRecord>[]>(
     () => [
       {
@@ -48,15 +40,6 @@ function CostGroupPage() {
       },
       { key: "name", label: "Cost Group Name", type: "text", value: (g) => g.name },
       {
-        key: "parent",
-        label: "Parent Group",
-        type: "enum",
-        options: parentNames,
-        value: (g) => groupName(g.parentId, groups),
-        render: (g) =>
-          groupName(g.parentId, groups) || <span className="text-muted-foreground">—</span>,
-      },
-      {
         key: "status",
         label: "Status",
         type: "enum",
@@ -67,7 +50,7 @@ function CostGroupPage() {
       updatedAtColumn<CostGroupRecord>(),
       { key: "remark", label: "Remark", type: "text", value: (g) => g.remark, defaultHidden: true },
     ],
-    [groups, parentNames],
+    [],
   );
 
   return (
@@ -82,18 +65,7 @@ function CostGroupPage() {
       columns={columns}
       searchPlaceholder="Search code, name..."
       searchValues={(g) => [g.code, g.name]}
-      tree={{ parentOf: (g) => g.parentId, column: "name" }}
-      quickFilters={[
-        statusFilter,
-        {
-          key: "parent",
-          allLabel: "All parent groups",
-          options: parentNames.map((n) => ({
-            label: n,
-            conditions: [{ field: "parent", operator: "eq", value: n }],
-          })),
-        },
-      ]}
+      quickFilters={[statusFilter]}
       crud={costGroupCrud}
       allowDelete={false}
       addLabel="Add Cost Group"
