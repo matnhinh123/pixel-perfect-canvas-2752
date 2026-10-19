@@ -97,7 +97,7 @@ export function ServiceAssignments({
                 t("Phòng ban", "Department"),
                 t("Nhân viên", "Employee"),
                 "Default Template",
-                t("Ghi chú", "Notes"),
+                t("Ghi chú", "Remark"),
                 t("Trạng thái", "Status"),
                 ...(readOnly ? [] : [t("Thao tác", "Actions")]),
               ].map((h) => (
@@ -278,7 +278,7 @@ function AssignmentDialog({
               options={["Active", "Inactive"]}
             />
           </Field>
-          <Field label={t("Ghi chú", "Notes")} className="col-span-2">
+          <Field label={t("Ghi chú", "Remark")} className="col-span-2">
             <Input
               value={d.note}
               placeholder={t("VD: Xử lý chính", "E.g. Main handler")}

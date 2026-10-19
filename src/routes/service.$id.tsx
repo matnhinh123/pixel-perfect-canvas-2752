@@ -363,7 +363,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
                 <StatusBadge status={source.status} />
               </InfoRow>
               <div className="sm:col-span-2">
-                <InfoRow label={t("Ghi chú", "Notes")}>
+                <InfoRow label={t("Ghi chú", "Remark")}>
                   {source.description || <span className="text-muted-foreground">—</span>}
                 </InfoRow>
               </div>
@@ -702,7 +702,7 @@ function ServiceEditor({
                   }
                 />
               </Field>
-              <Field label={t("Ghi chú", "Notes")} className="sm:col-span-2">
+              <Field label={t("Ghi chú", "Remark")} className="sm:col-span-2">
                 <Textarea
                   rows={3}
                   value={s.description}

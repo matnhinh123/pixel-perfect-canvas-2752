@@ -191,7 +191,7 @@ export const serviceCatalogService = {
       a !== b && out.push({ ...base, action, field, oldValue: a, newValue: b });
     upd("UPDATE", tr("Mã dịch vụ", "Service Code"), existing.code, next.code);
     upd("UPDATE", tr("Tên dịch vụ", "Service Name"), existing.name, next.name);
-    upd("UPDATE", tr("Ghi chú", "Notes"), existing.description, next.description);
+    upd("UPDATE", tr("Ghi chú", "Remark"), existing.description, next.description);
     upd(
       "UPDATE",
       tr("Dịch vụ cha", "Parent Service"),
