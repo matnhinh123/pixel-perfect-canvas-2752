@@ -1,11 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ComingSoon } from "@/components/movex/OutOfScope";
+import { RouteCostSheet } from "@/components/movex/cost/RouteCostSheet";
 
 export const Route = createFileRoute("/cogs")({
   head: () => ({ meta: [{ title: "COGS — MoveX" }] }),
-  component: CogsPage,
+  component: () => <RouteCostSheet mode="cogs" />,
 });
-
-function CogsPage() {
-  return <ComingSoon title="COGS" description="Cost of goods sold." />;
-}
