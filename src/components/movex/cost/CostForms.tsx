@@ -515,6 +515,15 @@ export function CostDetailForm({
                 )}
               />
             </Field>
+            <Field label="Remark" className={S12}>
+              <Textarea
+                rows={2}
+                maxLength={500}
+                placeholder="Enter Remark"
+                value={d.remark}
+                onChange={(e) => patch({ remark: e.target.value })}
+              />
+            </Field>
           </div>
         </CollapsiblePanel>
 
@@ -525,18 +534,6 @@ export function CostDetailForm({
               value={d.serviceIds}
               onChange={(ids) => patch({ serviceIds: ids })}
               disabled={readOnly}
-            />
-          </Field>
-        </CollapsiblePanel>
-
-        <CollapsiblePanel title="Remark">
-          <Field label="Remark">
-            <Textarea
-              rows={3}
-              maxLength={500}
-              placeholder="Enter Remark"
-              value={d.remark}
-              onChange={(e) => patch({ remark: e.target.value })}
             />
           </Field>
         </CollapsiblePanel>
