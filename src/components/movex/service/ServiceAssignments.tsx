@@ -247,15 +247,7 @@ function AssignmentDialog({
               }}
             />
           </Field>
-          <Field label="Default Template" error={errors["form"]}>
-            <NativeSelect
-              value={d.form ?? ""}
-              onChange={(v) => set("form", (v || null) as AssignmentDraft["form"])}
-              options={form ? ["", form] : [""]}
-              labels={{ "": "—", ...(form ? { [form]: formName(form) } : {}) }}
-            />
-          </Field>
-          <Field label={t("Trạng thái", "Status")}>
+          <Field label={t("Trạng thái", "Status")} className="col-span-2">
             <NativeSelect
               value={d.status}
               onChange={(v) => set("status", v as Status)}
