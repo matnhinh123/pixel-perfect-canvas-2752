@@ -197,7 +197,7 @@ function CostForm({ source, readOnly }: { source: CostItemRecord | null; readOnl
       <FormErrorBanner message={formError} errors={errors} />
 
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
-        <CollapsiblePanel title="Cost">
+        <CollapsiblePanel title="Cost Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
               label="Cost Code"

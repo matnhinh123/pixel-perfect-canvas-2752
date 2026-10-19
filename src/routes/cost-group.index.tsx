@@ -82,6 +82,7 @@ function CostGroupPage() {
       columns={columns}
       searchPlaceholder="Search code, name..."
       searchValues={(g) => [g.code, g.name]}
+      tree={{ parentOf: (g) => g.parentId, column: "name" }}
       quickFilters={[
         statusFilter,
         {
