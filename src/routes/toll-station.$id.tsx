@@ -1,7 +1,7 @@
 import { CC } from "@/mock-data/commonCodes";
 import { useCodeOptions } from "@/services/commonCodeService";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -44,6 +44,9 @@ import { useEntityActions } from "@/components/movex/general/useEntityActions";
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { LocationAutocomplete } from "@/components/movex/routing/LocationAutocomplete";
 import { MapPickerDialog } from "@/components/movex/location/MapPickerDialog";
+import { SearchableSelect } from "@/components/movex/general/SearchableSelect";
+import { reverseGeocode } from "@/services/reverseGeocode";
+import { VN_PROVINCES } from "@/mock-data/locationCatalog";
 import { cn } from "@/lib/utils";
 import { useCollection } from "@/hooks/use-store";
 import { locationRepository, tollStationRepository } from "@/repositories";
@@ -289,6 +292,10 @@ function TollStationView({ station }: { station: TollGateRecord }) {
             <InfoRow label="Map Position">
               {hasCoords ? `${station.lat}, ${station.lng}` : null}
             </InfoRow>
+            <InfoRow label="Province/City">{station.province}</InfoRow>
+            <div className="sm:col-span-2">
+              <InfoRow label="Address">{station.address}</InfoRow>
+            </div>
             <div className="sm:col-span-3">
               <InfoRow label="Remark">{station.remark}</InfoRow>
             </div>
@@ -332,6 +339,52 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
   const picked = d.locationId ? locations.find((l) => l.id === d.locationId) : undefined;
   const hasCoords = Number.isFinite(d.lat) && Number.isFinite(d.lng);
   const [mapOpen, setMapOpen] = useState(false);
+  // Keep a stored province selectable even when it is not in the catalog.
+  const provinces =
+    d.province && !VN_PROVINCES.includes(d.province) ? [d.province, ...VN_PROVINCES] : VN_PROVINCES;
+
+  // Map spot → Province/City / Address (reverse geocoding), as on Location. Only the latest pick counts.
+  const geoSeq = useRef(0);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const clearErrors = (...keys: string[]) =>
+    setErrors((e) => {
+      const n = { ...e };
+      for (const k of keys) delete n[k];
+      return n;
+    });
+  const pickSpot = (p: { lat: number; lng: number }) => {
+    setD((x) => ({ ...x, lat: p.lat, lng: p.lng }));
+    clearErrors("lat", "lng");
+    if (!Number.isFinite(p.lat)) return;
+    const seq = ++geoSeq.current;
+    setGeoBusy(true);
+    reverseGeocode(p.lat, p.lng)
+      .then((r) => {
+        if (seq !== geoSeq.current) return;
+        if (!r) throw new Error("empty");
+        setD((x) => ({
+          ...x,
+          province: r.province || x.province,
+          address: r.address || x.address,
+        }));
+        clearErrors("province", "address");
+      })
+      .catch(() => {
+        if (seq === geoSeq.current)
+          toast.error("Could not look up the address of this spot — please type it.");
+      })
+      .finally(() => {
+        if (seq === geoSeq.current) setGeoBusy(false);
+      });
+  };
+  /** Another Province/City no longer matches the map position: clear it, drop a pending lookup. */
+  const changeProvince = (province: string) => {
+    if (province === d.province) return;
+    geoSeq.current++;
+    setGeoBusy(false);
+    setD((x) => ({ ...x, province, lat: NaN, lng: NaN }));
+    clearErrors("province", "lat", "lng");
+  };
 
   const dirty =
     JSON.stringify(d) !== JSON.stringify(initial) || status !== (source?.status ?? "Active");
@@ -456,7 +509,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
             <Field
               label="Map Position"
               error={errors["lat"] ?? errors["lng"]}
-              info="Gate position as “Latitude, Longitude”. Click to pick it on the map; choosing a Location fills its position."
+              info="Gate position as “Latitude, Longitude”. Click to pick it on the map: Province/City and Address are filled in and stay editable. Choosing a Location fills its position; changing Province/City clears the position to pick again."
             >
               <div className="flex gap-2">
                 <button
@@ -490,6 +543,29 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 )}
               </div>
             </Field>
+            <Field label="Province/City" error={errors["province"]}>
+              <SearchableSelect
+                value={d.province ?? ""}
+                onChange={changeProvince}
+                options={["", ...provinces]}
+                labels={{ "": "Select Province/City" }}
+                invalid={!!errors["province"]}
+                searchPlaceholder="Type to search…"
+                emptyText="No matching province / city"
+              />
+            </Field>
+            <Field
+              label="Address"
+              error={errors["address"]}
+              className="sm:col-span-2"
+              hint={geoBusy ? "Looking up the address…" : undefined}
+            >
+              <Input
+                value={d.address ?? ""}
+                placeholder="Enter Address"
+                onChange={(e) => set("address", e.target.value)}
+              />
+            </Field>
             <Field label="Source From">
               <div className="flex h-9 items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 text-sm">
                 <Lock className="h-3.5 w-3.5 text-muted-foreground" />
@@ -520,15 +596,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
             onOpenChange={setMapOpen}
             lat={d.lat}
             lng={d.lng}
-            onConfirm={(p) => {
-              setD((x) => ({ ...x, lat: p.lat, lng: p.lng }));
-              setErrors((e) => {
-                const n = { ...e };
-                delete n["lat"];
-                delete n["lng"];
-                return n;
-              });
-            }}
+            onConfirm={pickSpot}
           />
         </Panel>
 
