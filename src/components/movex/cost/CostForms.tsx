@@ -35,7 +35,10 @@ import {
   parentOptions,
   type CostGroupDraft,
   type CostItemDraft,
+  usedSubGroups,
 } from "@/services/costMasterService";
+import { SuggestInput } from "@/components/movex/general/SuggestInput";
+import { cn } from "@/lib/utils";
 import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { CC } from "@/mock-data/commonCodes";
 import { COST_CURRENCIES, COST_TAX_EVIDENCES, COST_TAX_TARIFFS } from "@/mock-data/costMaster";
@@ -44,6 +47,8 @@ import type { CostGroupRecord, CostItemRecord } from "@/types";
 export type CostKind = "group" | "detail";
 
 const BASE = "/cost";
+/** Five of the 12 columns: English Name and Local Name side by side, same width. */
+const S5 = "sm:col-span-3 lg:col-span-5";
 
 /** Header crumbs + title shared by both forms. */
 function useHeader(kind: CostKind, code: string | undefined, isNew: boolean, readOnly: boolean) {
@@ -54,7 +59,11 @@ function useHeader(kind: CostKind, code: string | undefined, isNew: boolean, rea
       ...(code ? [{ label: code }] : []),
       { label: isNew ? "Add New" : readOnly ? "Detail" : "Edit" },
     ],
-    title: isNew ? "Create Cost" : readOnly ? `${label} Detail #${code}` : `Edit ${label} #${code}`,
+    title: isNew
+      ? `Create ${label}`
+      : readOnly
+        ? `${label} Detail #${code}`
+        : `Edit ${label} #${code}`,
   };
 }
 
@@ -71,17 +80,52 @@ function FormFooter({ onCancel, onSave }: { onCancel: () => void; onSave: () => 
   );
 }
 
+/** Status select in the header while editing (a new record starts Active). */
+function StatusSelect({
+  value,
+  onChange,
+}: {
+  value: "Active" | "Inactive";
+  onChange: (v: "Active" | "Inactive") => void;
+}) {
+  return (
+    <div className="relative">
+      <span
+        className={cn(
+          "absolute left-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full",
+          value === "Active" ? "bg-success" : "bg-muted-foreground",
+        )}
+      />
+      <select
+        aria-label="Status"
+        value={value}
+        onChange={(e) => onChange(e.target.value as "Active" | "Inactive")}
+        className="h-11 appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm font-medium outline-none focus:ring-2 focus:ring-ring"
+      >
+        <option value="Active">Active</option>
+        <option value="Inactive">Inactive</option>
+      </select>
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+        ▾
+      </span>
+    </div>
+  );
+}
+
 function HeaderExtra({
   id,
   readOnly,
   onHistory,
+  status,
 }: {
   id: string;
   readOnly: boolean;
   onHistory: () => void;
+  status?: ReactNode;
 }) {
   return (
     <>
+      {!readOnly && status}
       <Button variant="outline" size="lg" onClick={onHistory}>
         <History className="h-4 w-4" />
         History
@@ -111,12 +155,9 @@ const draftOfGroup = (g: CostGroupRecord): CostGroupDraft => ({
 export function CostGroupForm({
   source,
   readOnly,
-  typeSwitch,
 }: {
   source: CostGroupRecord | null;
   readOnly: boolean;
-  /** Create only: the Cost Group / Cost Detail choice. */
-  typeSwitch?: ReactNode;
 }) {
   const navigate = useNavigate();
   const isNew = !source;
@@ -188,6 +229,12 @@ export function CostGroupForm({
               id={source.id}
               readOnly={readOnly}
               onHistory={() => setHistoryOpen(true)}
+              status={
+                <StatusSelect
+                  value={d.status === "Active" ? "Active" : "Inactive"}
+                  onChange={(status) => patch({ status })}
+                />
+              }
             />
           )
         }
@@ -197,11 +244,6 @@ export function CostGroupForm({
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
         <CollapsiblePanel title="Cost Group">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
-            {typeSwitch && (
-              <Field label="Type" required className={S2}>
-                {typeSwitch}
-              </Field>
-            )}
             <Field label="Group Code" required error={errors["code"]} className={S2}>
               <Input
                 placeholder="e.g. ROAD"
@@ -231,15 +273,6 @@ export function CostGroupForm({
                   ...Object.fromEntries(parents.map((g) => [g.id, `${g.code} - ${g.name}`])),
                 }}
               />
-            </Field>
-            <Field label="Status" required className={S2}>
-              <label className="flex h-10 cursor-pointer items-center gap-3">
-                <Switch
-                  checked={d.status === "Active"}
-                  onCheckedChange={(c) => patch({ status: c ? "Active" : "Inactive" })}
-                />
-                <span className="text-sm">{d.status}</span>
-              </label>
             </Field>
           </div>
         </CollapsiblePanel>
@@ -304,12 +337,10 @@ function TagList({ items }: { items: string[] }) {
 export function CostDetailForm({
   source,
   readOnly,
-  typeSwitch,
   initialGroupId,
 }: {
   source: CostItemRecord | null;
   readOnly: boolean;
-  typeSwitch?: ReactNode;
   /** Create only: group picked in advance (e.g. "Add Cost Detail" from a group). */
   initialGroupId?: string;
 }) {
@@ -333,6 +364,8 @@ export function CostDetailForm({
   const header = useHeader("detail", source?.code, isNew, readOnly);
   const taxEvidences = useCodeOptions(CC.TAX_EVIDENCE, COST_TAX_EVIDENCES);
   const taxTariffs = useCodeOptions(CC.TAX_TARIFF, COST_TAX_TARIFFS);
+  const itemsAll = useCollection(costItemRepository);
+  const subGroups = useMemo(() => usedSubGroups(itemsAll.filter((c) => !c.deleted)), [itemsAll]);
 
   const patch = (p: Partial<CostItemDraft>) => {
     setD((x) => ({ ...x, ...p }));
@@ -400,6 +433,12 @@ export function CostDetailForm({
               id={source.id}
               readOnly={readOnly}
               onHistory={() => setHistoryOpen(true)}
+              status={
+                <StatusSelect
+                  value={d.status === "Active" ? "Active" : "Inactive"}
+                  onChange={(status) => patch({ status })}
+                />
+              }
             />
           )
         }
@@ -409,11 +448,6 @@ export function CostDetailForm({
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
         <CollapsiblePanel title="Cost Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
-            {typeSwitch && (
-              <Field label="Type" required className={S2}>
-                {typeSwitch}
-              </Field>
-            )}
             <Field
               label="Cost Code"
               required
@@ -423,25 +457,16 @@ export function CostDetailForm({
             >
               <Input placeholder="Enter Cost Code" maxLength={30} {...text("code")} />
             </Field>
-            <Field label="Cost Name" required error={errors["name"]} className={S4}>
-              <Input placeholder="Enter Cost Name" {...text("name")} />
+            <Field label="English Name" required error={errors["name"]} className={S5}>
+              <Input placeholder="Enter English Name" {...text("name")} />
             </Field>
-            <Field label="Local Name" required error={errors["localName"]} className={S4}>
+            <Field label="Local Name" required error={errors["localName"]} className={S5}>
               <Input placeholder="Enter Local Name" {...text("localName")} />
-            </Field>
-            <Field label="Status" required className={S2}>
-              <label className="flex h-10 cursor-pointer items-center gap-3 group-disabled:cursor-default">
-                <Switch
-                  checked={d.status === "Active"}
-                  onCheckedChange={(c) => patch({ status: c ? "Active" : "Inactive" })}
-                />
-                <span className="text-sm">{d.status}</span>
-              </label>
             </Field>
             <Field
               label="Cost Group"
               error={errors["groupId"]}
-              className={S4}
+              className={S3}
               info="The group this Cost Detail belongs to."
             >
               <NativeSelect
@@ -456,23 +481,20 @@ export function CostDetailForm({
                 )}
               />
             </Field>
-          </div>
-        </CollapsiblePanel>
-
-        <CollapsiblePanel title="Service">
-          <Field label="Services" className={S12}>
-            <ServiceMultiTree
-              services={services}
-              value={d.serviceIds}
-              onChange={(ids) => patch({ serviceIds: ids })}
-              disabled={readOnly}
-            />
-          </Field>
-        </CollapsiblePanel>
-
-        <CollapsiblePanel title="Other Information">
-          <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
-            <Field label="Tax Evidence" className={S3}>
+            <Field
+              label="Sub Group"
+              error={errors["subGroup"]}
+              className={S3}
+              info="Pick a sub group already used, or type a new one: it is saved with this Cost Detail."
+            >
+              <SuggestInput
+                value={d.subGroup}
+                onChange={(v) => patch({ subGroup: v })}
+                suggestions={subGroups}
+                placeholder="Enter Sub Group"
+              />
+            </Field>
+            <Field label="Tax Evidence" className={S2}>
               <NativeSelect
                 {...select(
                   "taxEvidence",
@@ -494,6 +516,17 @@ export function CostDetailForm({
               />
             </Field>
           </div>
+        </CollapsiblePanel>
+
+        <CollapsiblePanel title="Service">
+          <Field label="Services" className={S12}>
+            <ServiceMultiTree
+              services={services}
+              value={d.serviceIds}
+              onChange={(ids) => patch({ serviceIds: ids })}
+              disabled={readOnly}
+            />
+          </Field>
         </CollapsiblePanel>
 
         <CollapsiblePanel title="Remark">

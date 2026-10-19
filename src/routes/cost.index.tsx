@@ -77,6 +77,13 @@ function CostListPage() {
           ),
       },
       {
+        key: "subGroup",
+        width: 150,
+        label: "Sub Group",
+        type: "text",
+        value: (n) => (n.kind === "detail" ? (n.subGroup ?? "") : ""),
+      },
+      {
         key: "localName",
         width: 240,
         label: "Local Name",
@@ -168,7 +175,7 @@ function CostListPage() {
       ]}
       crud={costNodeCrud}
       allowDelete={false}
-      addLabel="Add Cost"
+      addLabel="Add Cost Detail"
       onAdd={() => void navigate({ to: "/cost/$id", params: { id: "new" }, search: {} })}
       onView={(n) => open(n, "view")}
       onEdit={(n) => open(n, "edit")}
@@ -181,7 +188,7 @@ function CostListPage() {
             void navigate({
               to: "/cost/$id",
               params: { id: "new" },
-              search: { type: "detail", group: n.id },
+              search: { group: n.id },
             }),
         },
       ]}

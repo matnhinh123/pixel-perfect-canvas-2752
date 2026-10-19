@@ -14,6 +14,8 @@ export interface CostItemRecord extends BaseRecord {
   name: string;
   localName: string;
   groupId: string;
+  /** Free text: one of the sub groups already used, or a new one. */
+  subGroup: string;
   /** Service master ids this cost applies to (any level of the service tree). */
   serviceIds: string[];
   taxEvidence: string;

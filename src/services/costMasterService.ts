@@ -180,6 +180,7 @@ export type CostItemDraft = Pick<
   | "name"
   | "localName"
   | "groupId"
+  | "subGroup"
   | "serviceIds"
   | "taxEvidence"
   | "currency"
@@ -193,6 +194,7 @@ export const newCostItemDraft = (): CostItemDraft => ({
   name: "",
   localName: "",
   groupId: "",
+  subGroup: "",
   serviceIds: [],
   taxEvidence: "",
   currency: "",
@@ -206,6 +208,7 @@ export const draftOfCostItem = (c: CostItemRecord): CostItemDraft => ({
   name: c.name,
   localName: c.localName,
   groupId: c.groupId,
+  subGroup: c.subGroup ?? "",
   serviceIds: [...(c.serviceIds ?? [])],
   taxEvidence: c.taxEvidence,
   currency: c.currency,
@@ -222,7 +225,7 @@ export function validateCostItem(d: CostItemDraft, id?: string): Record<string, 
     e["code"] = "Use 2–30 characters: letters, digits, - or _.";
   else if (items().some((c) => c.id !== id && c.code.toUpperCase() === code))
     e["code"] = `Cost Detail Code ${code} already exists.`;
-  if (!d.name.trim()) e["name"] = "Cost Detail Name is required.";
+  if (!d.name.trim()) e["name"] = "English Name is required.";
   if (!d.localName.trim()) e["localName"] = "Local Name is required.";
   return e;
 }
@@ -239,6 +242,7 @@ export const costItemService = {
       code: d.code.trim().toUpperCase(),
       name: d.name.trim(),
       localName: d.localName.trim(),
+      subGroup: d.subGroup.trim(),
       remark: d.remark.trim(),
     };
     const existing = id ? costItemRepository.get(id) : undefined;
@@ -260,9 +264,10 @@ export const costItemService = {
     const upd = (action: AuditInput["action"], field: string, a: string, b: string) =>
       a !== b && out.push({ ...base, action, field, oldValue: a || "—", newValue: b || "—" });
     upd("UPDATE", "Cost Detail Code", existing.code, next.code);
-    upd("UPDATE", "Cost Detail Name", existing.name, next.name);
+    upd("UPDATE", "English Name", existing.name, next.name);
     upd("UPDATE", "Local Name", existing.localName, next.localName);
     upd("UPDATE", "Cost Group", groupName(existing.groupId), groupName(next.groupId));
+    upd("UPDATE", "Sub Group", existing.subGroup ?? "", next.subGroup);
     upd("UPDATE", "Services", joinNames(existing.serviceIds ?? []), joinNames(next.serviceIds));
     upd("UPDATE", "Tax Evidence", existing.taxEvidence, next.taxEvidence);
     upd("UPDATE", "Def Currency", existing.currency, next.currency);
@@ -278,6 +283,12 @@ export const costItemService = {
     return next;
   },
 };
+
+/** Sub groups already used by Cost Details (suggestions for the Sub Group field). */
+export const usedSubGroups = (list: CostItemRecord[] = items()) =>
+  [...new Set(list.map((c) => (c.subGroup ?? "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
 
 export const costItemsInGroup = (groupId: string) => items().filter((c) => c.groupId === groupId);
 
