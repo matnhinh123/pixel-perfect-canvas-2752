@@ -1,13 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { StatusBadge } from "@/components/movex/common";
+import { Plus } from "lucide-react";
+import { StatusBadge, Tag } from "@/components/movex/common";
 import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
 import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts";
 import { useCollection } from "@/hooks/use-store";
 import { costGroupRepository, costItemRepository } from "@/repositories";
-import { costItemCrud, groupName, serviceNames } from "@/services/costMasterService";
-import type { CostItemRecord } from "@/types";
+import { costNodeCrud, serviceNames, type CostNode } from "@/services/costMasterService";
 
 export const Route = createFileRoute("/cost/")({
   // `route` is still accepted from old links (Routing list); the Cost master ignores it.
@@ -16,49 +16,81 @@ export const Route = createFileRoute("/cost/")({
   head: () => ({
     meta: [
       { title: "Cost — MoveX" },
-      { name: "description", content: "Cost master data." },
+      { name: "description", content: "Cost Groups and Cost Details." },
       { property: "og:title", content: "Cost — MoveX" },
-      { property: "og:description", content: "Cost master data." },
+      { property: "og:description", content: "Cost Groups and Cost Details." },
     ],
   }),
   component: CostListPage,
 });
 
+const TYPE_LABEL = { group: "Cost Group", detail: "Cost Detail" } as const;
+
+/** Parent of a row in the tree: a group's parent group, a detail's group. */
+const parentOf = (n: CostNode) => (n.kind === "group" ? n.parentId : n.groupId || null);
+
 function CostListPage() {
   const groupsAll = useCollection(costGroupRepository);
   const itemsAll = useCollection(costItemRepository);
-  const groups = useMemo(() => groupsAll.filter((g) => !g.deleted), [groupsAll]);
-  const items = useMemo(() => itemsAll.filter((c) => !c.deleted), [itemsAll]);
+  const rows = useMemo<CostNode[]>(
+    () => [
+      ...groupsAll.filter((g) => !g.deleted).map((g) => ({ ...g, kind: "group" as const })),
+      ...itemsAll.filter((c) => !c.deleted).map((c) => ({ ...c, kind: "detail" as const })),
+    ],
+    [groupsAll, itemsAll],
+  );
   const navigate = useNavigate();
-  const open = (c: CostItemRecord, mode: "view" | "edit") =>
-    void navigate({ to: "/cost/$id", params: { id: c.id }, search: { mode } });
+  const open = (n: CostNode, mode: "view" | "edit") =>
+    void navigate({ to: "/cost/$id", params: { id: n.id }, search: { mode } });
 
-  const columns = useMemo<ListColumn<CostItemRecord>[]>(
+  const columns = useMemo<ListColumn<CostNode>[]>(
     () => [
       {
         key: "code",
-        label: "Cost Code",
+        width: 110,
+        label: "Code",
         type: "text",
         pinned: true,
-        value: (c) => c.code,
-        render: (c) => <span className="font-semibold text-primary">{c.code}</span>,
+        value: (n) => n.code,
+        render: (n) => <span className="font-semibold text-primary">{n.code}</span>,
       },
-      { key: "name", label: "Cost Name", type: "text", value: (c) => c.name },
-      { key: "localName", label: "Local Name", type: "text", value: (c) => c.localName },
       {
-        key: "group",
-        label: "Cost Group",
+        key: "name",
+        width: 260,
+        label: "Name",
+        type: "text",
+        value: (n) => n.name,
+        render: (n) => <span className={n.kind === "group" ? "font-semibold" : ""}>{n.name}</span>,
+      },
+      {
+        key: "type",
+        width: 120,
+        label: "Type",
         type: "enum",
-        options: groups.map((g) => g.name),
-        value: (c) => groupName(c.groupId, groups),
+        options: [TYPE_LABEL.group, TYPE_LABEL.detail],
+        value: (n) => TYPE_LABEL[n.kind],
+        render: (n) =>
+          n.kind === "group" ? (
+            <Tag tone="tpl">{TYPE_LABEL.group}</Tag>
+          ) : (
+            <Tag>{TYPE_LABEL.detail}</Tag>
+          ),
+      },
+      {
+        key: "localName",
+        width: 240,
+        label: "Local Name",
+        type: "text",
+        value: (n) => (n.kind === "detail" ? n.localName : ""),
       },
       {
         key: "service",
+        width: 200,
         label: "Services",
         type: "text",
-        value: (c) => serviceNames(c.serviceIds ?? []).join(", "),
-        render: (c) => {
-          const names = serviceNames(c.serviceIds ?? []);
+        value: (n) => (n.kind === "detail" ? serviceNames(n.serviceIds ?? []).join(", ") : ""),
+        render: (n) => {
+          const names = n.kind === "detail" ? serviceNames(n.serviceIds ?? []) : [];
           if (!names.length) return <span className="text-muted-foreground">—</span>;
           return (
             <span title={names.join(", ")}>
@@ -72,65 +104,87 @@ function CostListPage() {
           );
         },
       },
-      { key: "currency", label: "Currency", type: "text", value: (c) => c.currency },
-      { key: "uom", label: "UoM", type: "text", value: (c) => c.uom },
       {
-        key: "status",
-        label: "Status",
-        type: "enum",
-        options: ["Active", "Inactive"],
-        value: (c) => c.status,
-        render: (c) => <StatusBadge status={c.status} />,
-      },
-      updatedAtColumn<CostItemRecord>(),
-      {
-        key: "taxEvidence",
-        label: "Tax Evidence",
+        key: "currency",
+        width: 110,
+        label: "Def Currency",
         type: "text",
-        value: (c) => c.taxEvidence,
-        defaultHidden: true,
+        value: (n) => (n.kind === "detail" ? n.currency : ""),
       },
       {
         key: "taxTariff",
-        label: "Tax Tariff",
+        width: 140,
+        label: "Default Tax Tariff",
         type: "text",
-        value: (c) => c.taxTariff,
+        value: (n) => (n.kind === "detail" ? n.taxTariff : ""),
+      },
+      {
+        key: "taxEvidence",
+        width: 140,
+        label: "Tax Evidence",
+        type: "text",
+        value: (n) => (n.kind === "detail" ? n.taxEvidence : ""),
         defaultHidden: true,
       },
-      { key: "remark", label: "Remark", type: "text", value: (c) => c.remark, defaultHidden: true },
+      {
+        key: "status",
+        width: 110,
+        label: "Status",
+        type: "enum",
+        options: ["Active", "Inactive"],
+        value: (n) => n.status,
+        render: (n) => <StatusBadge status={n.status} />,
+      },
+      updatedAtColumn<CostNode>(),
+      { key: "remark", label: "Remark", type: "text", value: (n) => n.remark, defaultHidden: true },
     ],
-    [groups],
+    [],
   );
 
   return (
-    <EntityListPage<CostItemRecord>
+    <EntityListPage<CostNode>
       lang="en"
-      screen="cost-item"
+      screen="cost"
       entityType="Cost"
+      entityTypeOf={(n) => (n.kind === "group" ? "Cost Group" : "Cost")}
       entityLabel="Cost"
       title="Cost"
-      subtitle="Cost master data"
-      rows={items}
+      subtitle="Cost Groups and the Cost Details inside them"
+      rows={rows}
       columns={columns}
       searchPlaceholder="Search code, name..."
-      searchValues={(c) => [c.code, c.name, c.localName]}
+      searchValues={(n) => [n.code, n.name, n.kind === "detail" ? n.localName : ""]}
+      tree={{ parentOf, column: "name" }}
       quickFilters={[
         statusFilter,
         {
-          key: "group",
-          allLabel: "All cost groups",
-          options: groups.map((g) => ({
-            label: g.name,
-            conditions: [{ field: "group", operator: "eq", value: g.name }],
+          key: "type",
+          allLabel: "All types",
+          options: (["group", "detail"] as const).map((k) => ({
+            label: TYPE_LABEL[k],
+            conditions: [{ field: "type", operator: "eq", value: TYPE_LABEL[k] }],
           })),
         },
       ]}
-      crud={costItemCrud}
+      crud={costNodeCrud}
       allowDelete={false}
       addLabel="Add Cost"
       onAdd={() => void navigate({ to: "/cost/$id", params: { id: "new" }, search: {} })}
-      onView={(c) => open(c, "view")}
-      onEdit={(c) => open(c, "edit")}
+      onView={(n) => open(n, "view")}
+      onEdit={(n) => open(n, "edit")}
+      extraRowActions={[
+        {
+          label: "Add Cost Detail",
+          icon: <Plus className="h-4 w-4" />,
+          hidden: (n) => n.kind !== "group",
+          onClick: (n) =>
+            void navigate({
+              to: "/cost/$id",
+              params: { id: "new" },
+              search: { type: "detail", group: n.id },
+            }),
+        },
+      ]}
     />
   );
 }

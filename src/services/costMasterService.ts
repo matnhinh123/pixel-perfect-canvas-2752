@@ -2,7 +2,13 @@
 import type { CostGroupRecord, CostItemRecord } from "@/types";
 import { costGroupRepository, costItemRepository, serviceRepository, uid } from "@/repositories";
 import { auditService, type AuditInput } from "./auditService";
-import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
+import {
+  BusinessRuleError,
+  makeCrud,
+  stampCreate,
+  stampUpdate,
+  type EntityCrud,
+} from "./crudService";
 import type { ImportEntityConfig } from "./importExportService";
 
 const groups = () => costGroupRepository.all().filter((g) => !g.deleted);
@@ -178,8 +184,6 @@ export type CostItemDraft = Pick<
   | "taxEvidence"
   | "currency"
   | "taxTariff"
-  | "uomCategory"
-  | "uom"
   | "remark"
   | "status"
 >;
@@ -193,8 +197,6 @@ export const newCostItemDraft = (): CostItemDraft => ({
   taxEvidence: "",
   currency: "",
   taxTariff: "",
-  uomCategory: "",
-  uom: "",
   remark: "",
   status: "Active",
 });
@@ -208,8 +210,6 @@ export const draftOfCostItem = (c: CostItemRecord): CostItemDraft => ({
   taxEvidence: c.taxEvidence,
   currency: c.currency,
   taxTariff: c.taxTariff,
-  uomCategory: c.uomCategory ?? "",
-  uom: c.uom,
   remark: c.remark,
   status: c.status,
 });
@@ -224,7 +224,6 @@ export function validateCostItem(d: CostItemDraft, id?: string): Record<string, 
     e["code"] = `Cost Detail Code ${code} already exists.`;
   if (!d.name.trim()) e["name"] = "Cost Detail Name is required.";
   if (!d.localName.trim()) e["localName"] = "Local Name is required.";
-  if (d.uom && !d.uomCategory) e["uomCategory"] = "Pick a Category UoM first.";
   return e;
 }
 
@@ -268,8 +267,6 @@ export const costItemService = {
     upd("UPDATE", "Tax Evidence", existing.taxEvidence, next.taxEvidence);
     upd("UPDATE", "Def Currency", existing.currency, next.currency);
     upd("UPDATE", "Default Tax Tariff", existing.taxTariff, next.taxTariff);
-    upd("UPDATE", "Category UoM", existing.uomCategory ?? "", next.uomCategory);
-    upd("UPDATE", "Def UoM", existing.uom, next.uom);
     upd("UPDATE", "Remark", existing.remark, next.remark);
     upd(
       next.status === "Active" ? "ACTIVATE" : "DEACTIVATE",
@@ -283,3 +280,46 @@ export const costItemService = {
 };
 
 export const costItemsInGroup = (groupId: string) => items().filter((c) => c.groupId === groupId);
+
+// ---------------------------------------------------------------- Cost screen (groups + details)
+
+/** One row of the Cost screen: a Cost Group or a Cost Detail. */
+export type CostNode =
+  (CostGroupRecord & { kind: "group" }) | (CostItemRecord & { kind: "detail" });
+
+const asGroup = (g: CostGroupRecord): CostNode => ({ ...g, kind: "group" });
+const asDetail = (c: CostItemRecord): CostNode => ({ ...c, kind: "detail" });
+
+/** Status / delete actions of the Cost screen, each routed to the group or detail it concerns. */
+export const costNodeCrud: EntityCrud<CostNode> = {
+  entityType: "Cost",
+  labelOf: (n) => n.code,
+  list: () => [...costGroupCrud.list().map(asGroup), ...costItemCrud.list().map(asDetail)],
+  get: (id) => {
+    const g = costGroupCrud.get(id);
+    if (g) return asGroup(g);
+    const c = costItemCrud.get(id);
+    return c ? asDetail(c) : undefined;
+  },
+  checkDelete: (id) =>
+    costGroupCrud.get(id) ? costGroupCrud.checkDelete(id) : costItemCrud.checkDelete(id),
+  setStatus: (ids, status) =>
+    costGroupCrud.setStatus(
+      ids.filter((id) => costGroupCrud.get(id)),
+      status,
+    ) +
+    costItemCrud.setStatus(
+      ids.filter((id) => !costGroupCrud.get(id)),
+      status,
+    ),
+  softDelete: (id) =>
+    costGroupCrud.get(id) ? costGroupCrud.softDelete(id) : costItemCrud.softDelete(id),
+  restoreMany: (ids) => {
+    costGroupCrud.restoreMany(ids.filter((id) => costGroupRepository.get(id)));
+    costItemCrud.restoreMany(ids.filter((id) => !costGroupRepository.get(id)));
+  },
+  removeMany: (ids) => {
+    costGroupCrud.removeMany(ids.filter((id) => costGroupRepository.get(id)));
+    costItemCrud.removeMany(ids.filter((id) => !costGroupRepository.get(id)));
+  },
+};

@@ -98,6 +98,8 @@ export interface EntityListPageProps<T extends BaseRecord> {
   tree?: { parentOf: (row: T) => string | null; column: string };
   /** Hide the Delete row action (master data that is deactivated rather than deleted). */
   allowDelete?: boolean;
+  /** Lists that mix entities: the entity whose Change History a row opens. */
+  entityTypeOf?: (row: T) => EntityType;
   /** false: no Import / Export buttons at all (incl. "Export selected"). */
   importExport?: boolean;
   /** Show the refresh button (right of the toolbar). Off for the master-data lists. */
@@ -917,7 +919,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
           <AuditHistoryDrawer
             open={!!auditRow}
             onOpenChange={(o) => !o && setAuditRow(null)}
-            entityType={p.entityType}
+            entityType={auditRow && p.entityTypeOf ? p.entityTypeOf(auditRow) : p.entityType}
             entityId={auditRow?.id}
             title={auditRow ? crud.labelOf(auditRow) : ""}
             {...(lang === "en" ? { english: true } : {})}

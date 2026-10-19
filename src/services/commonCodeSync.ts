@@ -68,8 +68,6 @@ const CODE_FIELDS: Record<string, { repo: AnyRepo; paths: string[] }[]> = {
   [CC.TRADE_MARK]: [{ repo: vehicleMasterRepository as AnyRepo, paths: ["tradeMark"] }],
   [CC.TAX_EVIDENCE]: [{ repo: costItemRepository as AnyRepo, paths: ["taxEvidence"] }],
   [CC.TAX_TARIFF]: [{ repo: costItemRepository as AnyRepo, paths: ["taxTariff"] }],
-  [CC.UOM_CATEGORY]: [{ repo: costItemRepository as AnyRepo, paths: ["uomCategory"] }],
-  [CC.UOM]: [{ repo: costItemRepository as AnyRepo, paths: ["uom"] }],
   [CC.FIXED_COST_TYPE]: [{ repo: fixedCostRepository as AnyRepo, paths: ["costTypeCode"] }],
   [CC.FIXED_COST_VEHICLE_TYPE]: [
     { repo: fixedCostRepository as AnyRepo, paths: ["vehicleTypes"] },
