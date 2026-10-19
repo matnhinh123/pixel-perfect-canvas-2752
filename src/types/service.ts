@@ -1,8 +1,8 @@
 import type { BaseRecord } from "./common";
 
-/** The three system forms (Trucking Form / Customs Form / Freight Form). Tenants cannot add a fourth. */
-export type TemplateType = "Trucking" | "Customs" | "Freight";
-export const TEMPLATES: TemplateType[] = ["Trucking", "Customs", "Freight"];
+/** The system forms (Trucking / Customs / Freight / Warehouse Form). Tenants cannot add another. */
+export type TemplateType = "Trucking" | "Customs" | "Freight" | "Warehouse";
+export const TEMPLATES: TemplateType[] = ["Trucking", "Customs", "Freight", "Warehouse"];
 
 /** Fixed field definition owned by the system form (structure cannot be changed by tenants). */
 export interface TemplateFieldDef {

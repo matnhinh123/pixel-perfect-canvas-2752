@@ -122,8 +122,8 @@ export function validateService(s: ServiceRecord): Record<string, string> {
     );
   if (s.template && !TEMPLATES.includes(s.template))
     e["template"] = tr(
-      "Chỉ chọn Trucking Form, Customs Form hoặc Freight Form.",
-      "Select Trucking Form, Customs Form or Freight Form only.",
+      "Chỉ chọn Trucking Form, Customs Form, Freight Form hoặc Warehouse Form.",
+      "Select Trucking Form, Customs Form, Freight Form or Warehouse Form only.",
     );
   return e;
 }
@@ -314,8 +314,8 @@ export const serviceImportConfig: ImportEntityConfig = {
         {
           field: "template",
           error: tr(
-            "Dịch vụ gốc cần Default Template: Trucking / Customs / Freight Form",
-            "A root service needs a Default Template: Trucking / Customs / Freight Form",
+            "Dịch vụ gốc cần Default Template: Trucking / Customs / Freight / Warehouse Form",
+            "A root service needs a Default Template: Trucking / Customs / Freight / Warehouse Form",
           ),
         },
       ];

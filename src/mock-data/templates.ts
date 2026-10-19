@@ -40,6 +40,14 @@ export const TEMPLATE_FIELDS: Record<TemplateType, TemplateFieldDef[]> = {
     f("carrier", "Carrier / Airline", "Carrier / Airline", false),
     f("note", "Ghi chú", "Notes", false),
   ],
+  Warehouse: [
+    f("warehouse", "Kho", "Warehouse", true),
+    f("ioType", "Loại Nhập / Xuất kho", "Inbound / Outbound", true),
+    f("cargoType", "Loại hàng", "Cargo Type", false),
+    f("quantity", "Số lượng", "Quantity", false, true, true),
+    f("storageDays", "Số ngày lưu kho", "Storage Days", false),
+    f("note", "Ghi chú", "Notes", false),
+  ],
 };
 
 /** UI name of a form: "Trucking Form". */
