@@ -305,7 +305,7 @@ function ModuleMenu({ collapsed }: { collapsed: boolean }) {
     collapsed && "justify-center px-0",
   );
   return (
-    <nav className="mt-2 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
+    <nav className="no-scrollbar mt-2 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
       <Link to="/" className={cn(row, "bg-brand text-white shadow-md")}>
         <span className="w-6 text-center text-lg leading-none">🏠</span>
         {!collapsed && t("Trang chủ", "Home")}
@@ -478,7 +478,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </DropdownMenu>
             </div>
 
-            <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
+            <nav className="no-scrollbar mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
               {NAV.map((n) => {
                 if (n.children) return <NavGroup key={n.to} item={n} collapsed={collapsed} />;
                 const item = (
