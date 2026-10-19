@@ -1,11 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { FolderTree, Receipt, XCircle } from "lucide-react";
+import { XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState, Panel } from "@/components/movex/common";
+import { EmptyState, NativeSelect, Panel } from "@/components/movex/common";
 import { CostDetailForm, CostGroupForm, type CostKind } from "@/components/movex/cost/CostForms";
 import { useCollection } from "@/hooks/use-store";
 import { costGroupRepository, costItemRepository } from "@/repositories";
-import { cn } from "@/lib/utils";
 
 type Mode = "view" | "edit";
 
@@ -84,45 +83,15 @@ function CostPage() {
   );
 }
 
-/** Create only: what is being created. */
+/** Create only: what is being created (a small select at the start of the form). */
 function TypeSwitch({ value, onChange }: { value: CostKind; onChange: (v: CostKind) => void }) {
-  const options: { v: CostKind; label: string; hint: string; icon: typeof Receipt }[] = [
-    { v: "group", label: "Cost Group", hint: "A group that holds Cost Details", icon: FolderTree },
-    { v: "detail", label: "Cost Detail", hint: "A cost that belongs to a group", icon: Receipt },
-  ];
   return (
-    <div className="mb-4 rounded-xl border bg-card p-4 shadow-sm">
-      <div className="mb-2 text-sm font-semibold">
-        Type<span className="ml-0.5 text-destructive">*</span>
-      </div>
-      <div role="radiogroup" aria-label="Type" className="grid gap-3 sm:grid-cols-2">
-        {options.map((o) => (
-          <button
-            key={o.v}
-            type="button"
-            role="radio"
-            aria-checked={value === o.v}
-            onClick={() => onChange(o.v)}
-            className={cn(
-              "flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors",
-              value === o.v
-                ? "border-primary bg-primary/5 ring-1 ring-primary"
-                : "hover:border-primary/40",
-            )}
-          >
-            <o.icon
-              className={cn(
-                "mt-0.5 h-5 w-5 shrink-0",
-                value === o.v ? "text-primary" : "text-muted-foreground",
-              )}
-            />
-            <span>
-              <span className="block text-sm font-semibold">{o.label}</span>
-              <span className="block text-xs text-muted-foreground">{o.hint}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
+    <NativeSelect
+      value={value}
+      onChange={(v) => onChange(v as CostKind)}
+      options={["group", "detail"]}
+      labels={{ group: "Cost Group", detail: "Cost Detail" }}
+      className="w-full"
+    />
   );
 }

@@ -193,11 +193,15 @@ export function CostGroupForm({
         }
       />
       <FormErrorBanner message={formError} errors={errors} />
-      {typeSwitch}
 
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
         <CollapsiblePanel title="Cost Group">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
+            {typeSwitch && (
+              <Field label="Type" required className={S2}>
+                {typeSwitch}
+              </Field>
+            )}
             <Field label="Group Code" required error={errors["code"]} className={S2}>
               <Input
                 placeholder="e.g. ROAD"
@@ -401,11 +405,15 @@ export function CostDetailForm({
         }
       />
       <FormErrorBanner message={formError} errors={errors} />
-      {typeSwitch}
 
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
         <CollapsiblePanel title="Cost Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
+            {typeSwitch && (
+              <Field label="Type" required className={S2}>
+                {typeSwitch}
+              </Field>
+            )}
             <Field
               label="Cost Code"
               required
