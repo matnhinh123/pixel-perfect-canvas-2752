@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -6,7 +7,8 @@ const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 
 /**
  * Free-text input that drops down values already used elsewhere (e.g. brands of other vehicles):
- * the list opens on focus, narrows while typing, and any other value can still be typed.
+ * the list opens on focus, narrows while typing, and any other value can still be typed. The list is
+ * drawn on top of the page (portal) so a panel with hidden overflow never cuts it off.
  */
 export function SuggestInput({
   value,
@@ -29,17 +31,45 @@ export function SuggestInput({
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<CSSProperties | null>(null);
   const needle = fold(value.trim());
   const hits = suggestions.filter((s) => !needle || fold(s).includes(needle));
   // Nothing to suggest when the box already holds exactly the only match.
   const shown = hits.length === 1 && hits[0] === value ? [] : hits;
+  const listOpen = open && (shown.length > 0 || (!!emptyText && !hits.length));
+
+  // Place the list under the input (above it when there is no room below) and follow scrolling.
+  useLayoutEffect(() => {
+    if (!listOpen) return;
+    const place = () => {
+      const r = boxRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const below = window.innerHeight - r.bottom;
+      const up = below < 248 && r.top > below;
+      setPos({
+        position: "fixed",
+        left: r.left,
+        width: Math.max(r.width, 160),
+        ...(up ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+      });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [listOpen]);
+
   const pick = (v: string) => {
     onChange(v);
     setOpen(false);
   };
 
   return (
-    <div className="relative">
+    <div ref={boxRef} className="relative">
       <Input
         value={value}
         placeholder={placeholder}
@@ -71,36 +101,40 @@ export function SuggestInput({
           } else if (e.key === "Escape") setOpen(false);
         }}
       />
-      {open && (shown.length > 0 || (emptyText && !hits.length)) && (
-        <ul
-          role="listbox"
-          className="absolute left-0 top-full z-50 mt-1 max-h-60 w-full min-w-40 overflow-y-auto rounded-md border bg-popover p-1 text-sm text-popover-foreground shadow-md"
-        >
-          {shown.length === 0 ? (
-            <li className="px-2 py-1.5 text-xs text-muted-foreground">{emptyText}</li>
-          ) : (
-            shown.map((s, i) => (
-              <li
-                key={s}
-                role="option"
-                aria-selected={i === active}
-                className={cn(
-                  "cursor-pointer rounded px-2 py-1.5",
-                  i === active ? "bg-accent" : "hover:bg-accent/60",
-                )}
-                onMouseEnter={() => setActive(i)}
-                // mousedown: pick before the input's blur closes the list.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  pick(s);
-                }}
-              >
-                {s}
-              </li>
-            ))
-          )}
-        </ul>
-      )}
+      {listOpen &&
+        pos &&
+        createPortal(
+          <ul
+            role="listbox"
+            style={pos}
+            className="z-[100] max-h-60 overflow-y-auto rounded-md border bg-popover p-1 text-sm text-popover-foreground shadow-md"
+          >
+            {shown.length === 0 ? (
+              <li className="px-2 py-1.5 text-xs text-muted-foreground">{emptyText}</li>
+            ) : (
+              shown.map((s, i) => (
+                <li
+                  key={s}
+                  role="option"
+                  aria-selected={i === active}
+                  className={cn(
+                    "cursor-pointer rounded px-2 py-1.5",
+                    i === active ? "bg-accent" : "hover:bg-accent/60",
+                  )}
+                  onMouseEnter={() => setActive(i)}
+                  // mousedown: pick before the input's blur closes the list.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pick(s);
+                  }}
+                >
+                  {s}
+                </li>
+              ))
+            )}
+          </ul>,
+          document.body,
+        )}
     </div>
   );
 }
