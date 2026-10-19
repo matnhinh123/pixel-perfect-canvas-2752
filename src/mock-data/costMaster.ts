@@ -9,23 +9,22 @@ const meta = {
 };
 
 export const seedCostGroups = (): CostGroupRecord[] => {
-  const g = (id: string, code: string, name: string, remark = ""): CostGroupRecord => ({
-    id,
-    code,
-    name,
-    remark,
-    status: "Active",
-    ...meta,
-  });
+  const g = (
+    id: string,
+    code: string,
+    name: string,
+    parentId: string | null,
+    remark = "",
+  ): CostGroupRecord => ({ id, code, name, parentId, remark, status: "Active", ...meta });
   return [
-    g("CG-TRANS", "TRANS", "Transportation Cost", "Costs of moving cargo by road."),
-    g("CG-ROAD", "ROAD", "Road Cost", "Tolls, bridges and road fees."),
-    g("CG-FUEL", "FUEL", "Fuel Cost"),
-    g("CG-DRIVER", "DRIVER", "Driver Cost", "Driver salary and allowances."),
-    g("CG-PORT", "PORT", "Port Cost", "Costs charged at the port."),
-    g("CG-HANDLING", "HANDLING", "Handling Cost"),
-    g("CG-STORAGE", "STORAGE", "Storage Cost"),
-    g("CG-CUSTOMS", "CUSTOMS", "Customs Cost"),
+    g("CG-TRANS", "TRANS", "Transportation Cost", null, "Costs of moving cargo by road."),
+    g("CG-ROAD", "ROAD", "Road Cost", "CG-TRANS", "Tolls, bridges and road fees."),
+    g("CG-FUEL", "FUEL", "Fuel Cost", "CG-TRANS"),
+    g("CG-DRIVER", "DRIVER", "Driver Cost", "CG-TRANS", "Driver salary and allowances."),
+    g("CG-PORT", "PORT", "Port Cost", null, "Costs charged at the port."),
+    g("CG-HANDLING", "HANDLING", "Handling Cost", "CG-PORT"),
+    g("CG-STORAGE", "STORAGE", "Storage Cost", "CG-PORT"),
+    g("CG-CUSTOMS", "CUSTOMS", "Customs Cost", null),
   ];
 };
 

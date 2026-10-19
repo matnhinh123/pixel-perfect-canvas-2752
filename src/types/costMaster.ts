@@ -1,9 +1,10 @@
 import type { BaseRecord } from "./common";
 
-/** Cost Group master: a flat list (no parent / child groups). */
+/** Cost Group master. Parent is another Cost Group (optional); its code is resolved internally. */
 export interface CostGroupRecord extends BaseRecord {
   code: string;
   name: string;
+  parentId: string | null;
   remark: string;
 }
 

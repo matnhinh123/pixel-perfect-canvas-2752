@@ -6,20 +6,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { EmptyState, Field, Panel, StatusBadge, Tag } from "@/components/movex/common";
+import {
+  EmptyState,
+  Field,
+  NativeSelect,
+  Panel,
+  StatusBadge,
+  Tag,
+} from "@/components/movex/common";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
   FormPageHeader,
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
-import { CollapsiblePanel, ReadOnlyScope, S3, S12 } from "@/components/movex/general/FormParts";
+import { CollapsiblePanel, ReadOnlyScope, S3, S4, S12 } from "@/components/movex/general/FormParts";
 import { useCollection } from "@/hooks/use-store";
 import { costGroupRepository, costItemRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
   costGroupService,
   newCostGroupDraft,
+  parentOptions,
   type CostGroupDraft,
 } from "@/services/costMasterService";
 import type { CostGroupRecord } from "@/types";
@@ -40,6 +48,7 @@ export const Route = createFileRoute("/cost-group/$id")({
 const draftOf = (g: CostGroupRecord): CostGroupDraft => ({
   code: g.code,
   name: g.name,
+  parentId: g.parentId,
   status: g.status === "Active" ? "Active" : "Inactive",
   remark: g.remark,
 });
@@ -82,7 +91,13 @@ function CostGroupForm({
 }) {
   const navigate = useNavigate();
   const isNew = !source;
+  const groupsAll = useCollection(costGroupRepository);
   const itemsAll = useCollection(costItemRepository);
+  const groups = useMemo(() => groupsAll.filter((g) => !g.deleted), [groupsAll]);
+  const parents = useMemo(
+    () => parentOptions(source?.id).filter((g) => groups.some((x) => x.id === g.id)),
+    [groups, source?.id],
+  );
 
   const initial = useMemo<CostGroupDraft>(
     () => (source ? draftOf(source) : newCostGroupDraft()),
@@ -105,6 +120,7 @@ function CostGroupForm({
     });
   };
 
+  const childGroups = source ? groups.filter((g) => g.parentId === source.id) : [];
   const costs = source ? itemsAll.filter((c) => !c.deleted && c.groupId === source.id) : [];
 
   const back = () =>
@@ -195,6 +211,19 @@ function CostGroupForm({
                 onChange={(e) => patch({ name: e.target.value })}
               />
             </Field>
+            <Field label="Parent Group" error={errors["parentId"]} className={S3}>
+              <NativeSelect
+                className="w-full"
+                value={d.parentId ?? ""}
+                invalid={!!errors["parentId"]}
+                onChange={(v) => patch({ parentId: v || null })}
+                options={["", ...parents.map((g) => g.id)]}
+                labels={{
+                  "": readOnly ? "—" : "— None (top-level group)",
+                  ...Object.fromEntries(parents.map((g) => [g.id, `${g.code} - ${g.name}`])),
+                }}
+              />
+            </Field>
             <Field label="Status" required className={S3}>
               <label className="flex h-10 cursor-pointer items-center gap-3">
                 <Switch
@@ -210,7 +239,10 @@ function CostGroupForm({
         {source && (
           <CollapsiblePanel title="Related">
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
-              <Field label={`Costs in this group (${costs.length})`} className={S12}>
+              <Field label={`Child groups (${childGroups.length})`} className={S4}>
+                <TagList items={childGroups.map((g) => `${g.code} - ${g.name}`)} />
+              </Field>
+              <Field label={`Costs in this group (${costs.length})`} className="lg:col-span-8">
                 <TagList items={costs.map((c) => `${c.code} - ${c.name}`)} />
               </Field>
             </div>
