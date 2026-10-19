@@ -98,7 +98,7 @@ export function archiveTollStations(ids: string[], archived: boolean): number {
   return changed;
 }
 
-/** Vietnamese toll vehicle groups (fixed). Applied Vehicle is a read-only description. */
+/** Vietnamese toll vehicle groups (fixed). The Remark column is a read-only description. */
 export const TOLL_GROUPS = [
   { group: 1, applied: "Passenger car < 12 seats, truck < 2 t" },
   { group: 2, applied: "Passenger car ≤ 30 seats, truck < 4 t" },

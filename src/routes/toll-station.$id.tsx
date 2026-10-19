@@ -131,7 +131,7 @@ function RatesTable({
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead className={`${thClass} w-28`}>Toll Group</TableHead>
-          <TableHead className={thClass}>Applied Vehicle</TableHead>
+          <TableHead className={thClass}>Remark</TableHead>
           <TableHead className={`${thClass} w-44 text-right`}>Toll Fee</TableHead>
           <TableHead className={`${thClass} w-24`}>Currency</TableHead>
         </TableRow>
