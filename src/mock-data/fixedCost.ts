@@ -65,7 +65,7 @@ const fc = (
 export const seedFixedCosts = (): FixedCostRecord[] => [
   fc(
     "FC-DEP-TRK",
-    "CG-TRANS",
+    "CG-VEH-INV",
     "DEPRECIATION",
     "FC_DEPRECIATION",
     "Truck depreciation",
@@ -77,7 +77,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-DEP-CONT",
-    "CG-TRANS",
+    "CG-VEH-INV",
     "DEPRECIATION",
     "FC_DEP_CONT",
     "Tractor & trailer depreciation",
@@ -89,7 +89,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-INS",
-    "CG-TRANS",
+    "CG-VEH-INV",
     "INSURANCE",
     "FC_INSURANCE",
     "Vehicle insurance",
@@ -101,7 +101,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-LOAN",
-    "CG-TRANS",
+    "CG-VEH-INV",
     "INTEREST",
     "FC_LOAN_INTEREST",
     "Loan interest",
@@ -113,7 +113,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-GPS",
-    "CG-TRANS",
+    "CG-VEH-INV",
     "EQUIPMENT",
     "FC_GPS",
     "GPS & camera subscription",
@@ -125,7 +125,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-LICENSE",
-    "CG-CUSTOMS",
+    "CG-VEH-INV",
     "LICENSE",
     "FC_LICENSE",
     "Operating license fee",
@@ -137,7 +137,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-PERMIT",
-    "CG-ROAD",
+    "CG-VEH-OPS",
     "LICENSE",
     "FC_PERMIT",
     "Port entry permit",
@@ -149,7 +149,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-OLD",
-    "CG-TRANS",
+    "CG-VEH-INV",
     "EQUIPMENT",
     "FC_TARP",
     "Tarpaulin set (retired)",
@@ -165,7 +165,7 @@ export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [
   {
     id: "FS-8T",
     vehicleType: "8T",
-    assignCostId: "CI-TOLL",
+    assignCostId: "CI-TOL",
     fixedCostIds: ["FC-DEP-TRK", "FC-INS", "FC-GPS"],
     status: "Active",
     ...meta,
@@ -173,7 +173,7 @@ export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [
   {
     id: "FS-40DC",
     vehicleType: "40DC",
-    assignCostId: "CI-FUEL",
+    assignCostId: "CI-FUE",
     fixedCostIds: ["FC-DEP-CONT", "FC-INS", "FC-LOAN", "FC-PERMIT"],
     status: "Active",
     ...meta,

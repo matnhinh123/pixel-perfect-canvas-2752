@@ -2,13 +2,7 @@
 import type { CostGroupRecord, CostItemRecord } from "@/types";
 import { costGroupRepository, costItemRepository, serviceRepository, uid } from "@/repositories";
 import { auditService, type AuditInput } from "./auditService";
-import {
-  BusinessRuleError,
-  makeCrud,
-  stampCreate,
-  stampUpdate,
-  type EntityCrud,
-} from "./crudService";
+import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import type { ImportEntityConfig } from "./importExportService";
 
 const groups = () => costGroupRepository.all().filter((g) => !g.deleted);
@@ -29,7 +23,7 @@ export const costGroupCrud = makeCrud<CostGroupRecord>({
   labelOf: (g) => g.code,
   references: (g) => {
     const kids = groups().filter((x) => x.parentId === g.id).length;
-    const used = items().filter((c) => c.groupId === g.id).length;
+    const used = items().filter((c) => c.group === g.name).length;
     if (kids) return `has ${kids} child group${kids > 1 ? "s" : ""}`;
     if (used) return `is used by ${used} cost${used > 1 ? "s" : ""}`;
     return null;
@@ -179,7 +173,7 @@ export type CostItemDraft = Pick<
   | "code"
   | "name"
   | "localName"
-  | "groupId"
+  | "group"
   | "subGroup"
   | "serviceIds"
   | "taxEvidence"
@@ -193,7 +187,7 @@ export const newCostItemDraft = (): CostItemDraft => ({
   code: "",
   name: "",
   localName: "",
-  groupId: "",
+  group: "",
   subGroup: "",
   serviceIds: [],
   taxEvidence: "",
@@ -207,7 +201,7 @@ export const draftOfCostItem = (c: CostItemRecord): CostItemDraft => ({
   code: c.code,
   name: c.name,
   localName: c.localName,
-  groupId: c.groupId,
+  group: c.group ?? "",
   subGroup: c.subGroup ?? "",
   serviceIds: [...(c.serviceIds ?? [])],
   taxEvidence: c.taxEvidence,
@@ -225,8 +219,7 @@ export function validateCostItem(d: CostItemDraft, id?: string): Record<string, 
     e["code"] = "Use 2–30 characters: letters, digits, - or _.";
   else if (items().some((c) => c.id !== id && c.code.toUpperCase() === code))
     e["code"] = `Cost Detail Code ${code} already exists.`;
-  if (!d.name.trim()) e["name"] = "English Name is required.";
-  if (!d.localName.trim()) e["localName"] = "Local Name is required.";
+  if (!d.name.trim()) e["name"] = "Cost Name is required.";
   return e;
 }
 
@@ -242,6 +235,7 @@ export const costItemService = {
       code: d.code.trim().toUpperCase(),
       name: d.name.trim(),
       localName: d.localName.trim(),
+      group: d.group.trim(),
       subGroup: d.subGroup.trim(),
       remark: d.remark.trim(),
     };
@@ -264,9 +258,9 @@ export const costItemService = {
     const upd = (action: AuditInput["action"], field: string, a: string, b: string) =>
       a !== b && out.push({ ...base, action, field, oldValue: a || "—", newValue: b || "—" });
     upd("UPDATE", "Cost Detail Code", existing.code, next.code);
-    upd("UPDATE", "English Name", existing.name, next.name);
+    upd("UPDATE", "Cost Name", existing.name, next.name);
     upd("UPDATE", "Local Name", existing.localName, next.localName);
-    upd("UPDATE", "Cost Group", groupName(existing.groupId), groupName(next.groupId));
+    upd("UPDATE", "Cost Group", existing.group ?? "", next.group);
     upd("UPDATE", "Sub Group", existing.subGroup ?? "", next.subGroup);
     upd("UPDATE", "Services", joinNames(existing.serviceIds ?? []), joinNames(next.serviceIds));
     upd("UPDATE", "Tax Evidence", existing.taxEvidence, next.taxEvidence);
@@ -290,47 +284,11 @@ export const usedSubGroups = (list: CostItemRecord[] = items()) =>
     a.localeCompare(b),
   );
 
-export const costItemsInGroup = (groupId: string) => items().filter((c) => c.groupId === groupId);
-
-// ---------------------------------------------------------------- Cost screen (groups + details)
-
-/** One row of the Cost screen: a Cost Group or a Cost Detail. */
-export type CostNode =
-  (CostGroupRecord & { kind: "group" }) | (CostItemRecord & { kind: "detail" });
-
-const asGroup = (g: CostGroupRecord): CostNode => ({ ...g, kind: "group" });
-const asDetail = (c: CostItemRecord): CostNode => ({ ...c, kind: "detail" });
-
-/** Status / delete actions of the Cost screen, each routed to the group or detail it concerns. */
-export const costNodeCrud: EntityCrud<CostNode> = {
-  entityType: "Cost",
-  labelOf: (n) => n.code,
-  list: () => [...costGroupCrud.list().map(asGroup), ...costItemCrud.list().map(asDetail)],
-  get: (id) => {
-    const g = costGroupCrud.get(id);
-    if (g) return asGroup(g);
-    const c = costItemCrud.get(id);
-    return c ? asDetail(c) : undefined;
-  },
-  checkDelete: (id) =>
-    costGroupCrud.get(id) ? costGroupCrud.checkDelete(id) : costItemCrud.checkDelete(id),
-  setStatus: (ids, status) =>
-    costGroupCrud.setStatus(
-      ids.filter((id) => costGroupCrud.get(id)),
-      status,
-    ) +
-    costItemCrud.setStatus(
-      ids.filter((id) => !costGroupCrud.get(id)),
-      status,
-    ),
-  softDelete: (id) =>
-    costGroupCrud.get(id) ? costGroupCrud.softDelete(id) : costItemCrud.softDelete(id),
-  restoreMany: (ids) => {
-    costGroupCrud.restoreMany(ids.filter((id) => costGroupRepository.get(id)));
-    costItemCrud.restoreMany(ids.filter((id) => !costGroupRepository.get(id)));
-  },
-  removeMany: (ids) => {
-    costGroupCrud.removeMany(ids.filter((id) => costGroupRepository.get(id)));
-    costItemCrud.removeMany(ids.filter((id) => !costGroupRepository.get(id)));
-  },
-};
+/** Cost Group suggestions: the sample groups plus every group a Cost Detail already uses. */
+export const usedGroups = (list: CostItemRecord[] = items()) =>
+  [
+    ...new Set([
+      ...groups().map((g) => g.name),
+      ...list.map((c) => (c.group ?? "").trim()).filter(Boolean),
+    ]),
+  ].sort((a, b) => a.localeCompare(b));

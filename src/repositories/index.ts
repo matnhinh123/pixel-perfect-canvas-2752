@@ -48,15 +48,18 @@ export const serviceAssignmentRepository = createCollection<ServiceAssignment>(
 );
 export const costRepository = createCollection<CostRecord>("costs", () => seedCosts(seedRoutes()));
 // Master Data > Cost: cost groups and cost items (master data only).
-export const costGroupRepository = createCollection<CostGroupRecord>("cost-groups", seedCostGroups);
-export const costItemRepository = createCollection<CostItemRecord>("cost-items.v3", seedCostItems);
+export const costGroupRepository = createCollection<CostGroupRecord>(
+  "cost-groups.v2",
+  seedCostGroups,
+);
+export const costItemRepository = createCollection<CostItemRecord>("cost-items.v4", seedCostItems);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
 export const fixedCostRepository = createCollection<FixedCostRecord>(
-  "fixed-costs.v2",
+  "fixed-costs.v3",
   seedFixedCosts,
 );
 export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
-  "fixed-cost-summaries.v2",
+  "fixed-cost-summaries.v3",
   seedFixedCostSummaries,
 );
 /** Location master; Routing stop pickers read active locations from it. */

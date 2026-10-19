@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-/** Old Cost Group links open the same record on the Cost screen. */
+/** Cost Groups are now the Group Name of each Cost Detail: old links open the Cost list. */
 export const Route = createFileRoute("/cost-group/$id")({
-  beforeLoad: ({ params }) => {
-    throw redirect({ to: "/cost/$id", params: { id: params.id } });
+  beforeLoad: () => {
+    throw redirect({ to: "/cost" });
   },
 });
