@@ -221,7 +221,7 @@ function AddTollBody({
         <div className="flex flex-wrap gap-x-6 gap-y-2 pt-1" role="radiogroup">
           {(
             [
-              ["Outbound", t("Chiều đi", "Outbound")],
+              ["Outbound", t("Chiều đi", "Departure")],
               ["Return", t("Chiều về", "Return")],
             ] as [TollLeg, string][]
           ).map(([v, label]) => {
