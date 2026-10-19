@@ -1,7 +1,7 @@
 // "Phân công": which department / employee handles a service. Stored per service.
 import type { ServiceAssignment, ServiceRecord } from "@/types";
 import { serviceAssignmentRepository, uid } from "@/repositories";
-import { departmentName, employeeName, employeesOf } from "@/mock-data/staff";
+import { departmentName, employeesOf } from "@/mock-data/staff";
 import { formName } from "@/mock-data/templates";
 import { auditService } from "./auditService";
 import { BusinessRuleError, stampCreate, stampUpdate } from "./crudService";
@@ -21,8 +21,7 @@ export const newAssignmentDraft = (): AssignmentDraft => ({
   status: "Active",
 });
 
-const describe = (a: AssignmentDraft) =>
-  `${departmentName(a.departmentId)} · ${employeeName(a.employeeId)} · ${formName(a.form)}`;
+const describe = (a: AssignmentDraft) => `${departmentName(a.departmentId)} · ${formName(a.form)}`;
 
 export function validateAssignment(a: AssignmentDraft, service: ServiceRecord) {
   const e: Record<string, string> = {};

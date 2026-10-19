@@ -43,7 +43,7 @@ export const routeRepository = createCollection<RouteRecord>("routes", seedRoute
 // ".v2": the service tree / form fields were reworked — load the new demo seed without touching routes.
 export const serviceRepository = createCollection<ServiceRecord>("services.v3", seedServices);
 export const serviceAssignmentRepository = createCollection<ServiceAssignment>(
-  "service-assignments.v2",
+  "service-assignments.v3",
   seedServiceAssignments,
 );
 export const costRepository = createCollection<CostRecord>("costs", () => seedCosts(seedRoutes()));

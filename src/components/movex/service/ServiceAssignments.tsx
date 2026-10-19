@@ -26,7 +26,7 @@ import {
   Tag,
   thClass,
 } from "@/components/movex/common";
-import { DEPARTMENTS, departmentName, employeeName, employeesOf } from "@/mock-data/staff";
+import { DEPARTMENTS, departmentName } from "@/mock-data/staff";
 import { formName } from "@/mock-data/templates";
 import {
   newAssignmentDraft,
@@ -95,7 +95,6 @@ export function ServiceAssignments({
             <TableRow className="hover:bg-transparent">
               {[
                 t("Phòng ban", "Department"),
-                t("Nhân viên", "Employee"),
                 "Default Template",
                 t("Ghi chú", "Remark"),
                 t("Trạng thái", "Status"),
@@ -112,15 +111,6 @@ export function ServiceAssignments({
               <TableRow key={a.key}>
                 <TableCell className="py-2.5 font-medium">
                   {departmentName(a.departmentId)}
-                </TableCell>
-                <TableCell className="py-2.5">
-                  {a.employeeId ? (
-                    employeeName(a.employeeId)
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {t("Cả phòng", "Whole department")}
-                    </span>
-                  )}
                 </TableCell>
                 <TableCell className="py-2.5">
                   {a.form ? (
@@ -165,6 +155,9 @@ export function ServiceAssignments({
       {editing && onChange && (
         <AssignmentDialog
           key={editing === "new" ? "new" : editing.key}
+          taken={rows
+            .filter((x) => editing === "new" || x.key !== editing.key)
+            .map((x) => x.departmentId)}
           service={service}
           form={form}
           initial={editing === "new" ? null : editing}
@@ -184,12 +177,15 @@ export function ServiceAssignments({
 }
 
 function AssignmentDialog({
+  taken,
   service,
   form,
   initial,
   onClose,
   onSave,
 }: {
+  /** Departments already assigned to this service (a department is assigned once). */
+  taken: string[];
   service: ServiceRecord;
   form: TemplateType | null;
   initial: AssignmentRow | null;
@@ -209,15 +205,18 @@ function AssignmentDialog({
       return n;
     });
   };
-  const staff = employeesOf(d.departmentId);
-
   const save = () => {
     const e = validateAssignment(d, service);
+    if (d.departmentId && taken.includes(d.departmentId))
+      e["departmentId"] = t(
+        "Phòng ban này đã được phân công cho dịch vụ.",
+        "This department is already assigned to the service.",
+      );
     if (Object.keys(e).length) {
       setErrors(e);
       return;
     }
-    onSave({ ...d, note: d.note.trim() });
+    onSave({ ...d, employeeId: null, note: d.note.trim() });
   };
 
   return (
@@ -231,35 +230,20 @@ function AssignmentDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4">
-          <Field label={t("Phòng ban", "Department")} required error={errors["departmentId"]}>
+          <Field
+            label={t("Phòng ban", "Department")}
+            required
+            error={errors["departmentId"]}
+            className="col-span-2"
+          >
             <NativeSelect
               value={d.departmentId}
               invalid={!!errors["departmentId"]}
-              onChange={(v) => {
-                set("departmentId", v);
-                if (d.employeeId && !employeesOf(v).some((x) => x.id === d.employeeId))
-                  set("employeeId", null);
-              }}
+              onChange={(v) => set("departmentId", v)}
               options={["", ...DEPARTMENTS.map((x) => x.id)]}
               labels={{
                 "": t("Chọn phòng ban…", "Select department…"),
                 ...Object.fromEntries(DEPARTMENTS.map((x) => [x.id, x.name])),
-              }}
-            />
-          </Field>
-          <Field
-            label={t("Nhân viên", "Employee")}
-            error={errors["employeeId"]}
-            hint={t("Bỏ trống = cả phòng", "Empty = whole department")}
-          >
-            <NativeSelect
-              value={d.employeeId ?? ""}
-              disabled={!d.departmentId}
-              onChange={(v) => set("employeeId", v || null)}
-              options={["", ...staff.map((x) => x.id)]}
-              labels={{
-                "": t("— Cả phòng", "— Whole department"),
-                ...Object.fromEntries(staff.map((x) => [x.id, x.name])),
               }}
             />
           </Field>

@@ -339,15 +339,14 @@ export const seedServiceAssignments = (): ServiceAssignment[] => {
     ...m,
   });
   return [
-    a("PC-001", "S-TRK-CONT", "D-OPS", "E-001", "Trucking", "Xử lý chính"),
-    a("PC-002", "S-TRK-CONT", "D-OPS", null, null, "Theo dõi chung"),
-    a("PC-003", "S-TRK-CONT", "D-DOC", "E-003", "Trucking", "Kiểm tra hồ sơ"),
-    a("PC-004", "S-TRK-DOM", "D-OPS", "E-002", "Trucking", "Xử lý chính"),
-    a("PC-005", "S-CUS-NORM-SEA-IM", "D-CUS", "E-005", "Customs", "Khai báo tờ khai"),
+    a("PC-001", "S-TRK-CONT", "D-OPS", null, "Trucking", "Xử lý chính"),
+    a("PC-003", "S-TRK-CONT", "D-DOC", null, "Trucking", "Kiểm tra hồ sơ"),
+    a("PC-004", "S-TRK-DOM", "D-OPS", null, "Trucking", "Xử lý chính"),
+    a("PC-005", "S-CUS-NORM-SEA-IM", "D-CUS", null, "Customs", "Khai báo tờ khai"),
     a("PC-006", "S-CUS-NORM-SEA-IM", "D-DOC", null, null, "Kiểm tra chứng từ"),
-    a("PC-007", "S-CUS-NORM-SEA-EX", "D-CUS", "E-005", "Customs", "Xử lý chính"),
-    a("PC-008", "S-FRT-SEA-EX", "D-OPS", "E-001", "Freight", "Đặt chỗ hãng tàu"),
-    a("PC-009", "S-FRT-AIR-IM", "D-SAL", "E-006", "Freight", "Báo giá"),
+    a("PC-007", "S-CUS-NORM-SEA-EX", "D-CUS", null, "Customs", "Xử lý chính"),
+    a("PC-008", "S-FRT-SEA-EX", "D-OPS", null, "Freight", "Đặt chỗ hãng tàu"),
+    a("PC-009", "S-FRT-AIR-IM", "D-SAL", null, "Freight", "Báo giá"),
   ];
 };
 
