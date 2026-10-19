@@ -119,6 +119,5 @@ export const inferFeeType = (name: string): TollStation["feeType"] => {
   const n = name.toLowerCase();
   if (n.includes("phà") || n.includes("ferry")) return "Ferry";
   if (n.includes("cầu") || n.includes("bridge")) return "Bridge";
-  if (n.includes("hương lộ") || n.includes("huong lo")) return "Rural Road";
   return "Toll";
 };

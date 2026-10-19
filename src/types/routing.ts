@@ -64,8 +64,8 @@ export interface LocationRecord extends GeoPoint {
 }
 
 /** "Gate" = custom / gate fee (e.g. port or industrial-park gate), entered on a route by the user. */
-export type FeeType = "Toll" | "Bridge" | "Ferry" | "Gate" | "Rural Road";
-export const FEE_TYPES: FeeType[] = ["Toll", "Bridge", "Ferry", "Gate", "Rural Road"];
+export type FeeType = "Toll" | "Bridge" | "Ferry" | "Gate";
+export const FEE_TYPES: FeeType[] = ["Toll", "Bridge", "Ferry", "Gate"];
 export type TollSource = "Vietmap" | "Mock" | "Manual";
 
 /** Normalized toll station (MoveX model), produced by any RouteProvider. */

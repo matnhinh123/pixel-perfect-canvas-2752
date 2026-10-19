@@ -43,7 +43,6 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
   Bridge: "Bridge",
   Ferry: "Ferry",
   Gate: "Custom / Gate Fee",
-  "Rural Road": "Rural Road",
 };
 
 // ---------- Stop list ----------
