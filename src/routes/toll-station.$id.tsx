@@ -283,7 +283,7 @@ function TollStationView({ station }: { station: TollGateRecord }) {
               )}
             </InfoRow>
             <InfoRow label="Fee Type">{feeTypeName(station.feeType)}</InfoRow>
-            <InfoRow label="Source">
+            <InfoRow label="Source From">
               <Tag tone={sourceOf(station)}>{sourceOf(station)}</Tag>
             </InfoRow>
             <InfoRow label="Map Position">
@@ -490,7 +490,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 )}
               </div>
             </Field>
-            <Field label="Source">
+            <Field label="Source From">
               <div className="flex h-9 items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 text-sm">
                 <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 {(d.vietmapId ?? "").trim() ? "Vietmap" : "Manual"}

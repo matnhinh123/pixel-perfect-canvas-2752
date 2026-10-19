@@ -132,7 +132,7 @@ function TollStationList() {
       },
       {
         key: "source",
-        label: "Source",
+        label: "Source From",
         type: "enum",
         options: SOURCES,
         value: (g) => sourceOf(g),
@@ -195,7 +195,7 @@ function TollStationList() {
     },
     {
       key: "source",
-      allLabel: "Source: All",
+      allLabel: "Source From: All",
       options: SOURCES.map((s) => ({
         label: s,
         conditions: [{ field: "source", operator: "eq", value: s }],

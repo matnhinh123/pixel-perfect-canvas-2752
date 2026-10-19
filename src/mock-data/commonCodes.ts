@@ -241,7 +241,7 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
     CC.TOLL_FEE_TYPE,
     "Toll Fee Type",
     "Fixed",
-    ["Road", "Bridge / Ferry"],
+    ["Road", "Bridge / Ferry", "Rural Road"],
     [
       [TS, "Toll Station Detail", "Fee Type"],
       [TS, "Toll Station List", "Fee Type filter"],

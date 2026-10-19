@@ -132,6 +132,24 @@ export const commonCodeRepository = createCollection<CommonCodeRecord>(
   const seed = seedCommonCodes().find((x) => x.id === CC.COUNTRY);
   if (seed && !commonCodeRepository.get(CC.COUNTRY)) commonCodeRepository.insert(seed);
 }
+// Fee Type "Rural Road" (hương lộ) added to the toll fee lists: stored lists get it once.
+for (const code of [CC.TOLL_FEE_TYPE, CC.ROUTE_FEE_TYPE]) {
+  const t = commonCodeRepository.get(code);
+  if (t && !t.options.some((o) => o.name === "Rural Road"))
+    commonCodeRepository.update(t.id, (p) => ({
+      ...p,
+      options: [
+        ...p.options,
+        {
+          code: `${code}${String(p.options.length + 1).padStart(2, "0")}`,
+          name: "Rural Road",
+          attribute: "DEFAULT",
+          remark: "",
+          active: true,
+        },
+      ],
+    }));
+}
 // Vehicle Type became Customizable (new types pick a base type as attribute); stored list follows.
 {
   const vt = commonCodeRepository.get(CC.VEHICLE_TYPE);

@@ -114,14 +114,20 @@ export const tollGroupTokens = (g: Pick<TollGateRecord, "prices">) =>
     .filter(Boolean)
     .join(" ");
 
-/** UI fee types: Road (stored as "Toll") and Bridge / Ferry. */
-export const FEE_TYPE_OPTIONS = ["Road", "Bridge / Ferry"] as const;
+/** UI fee types: Road (stored as "Toll"), Bridge / Ferry and Rural Road (hương lộ). */
+export const FEE_TYPE_OPTIONS = ["Road", "Bridge / Ferry", "Rural Road"] as const;
 export type FeeTypeOption = (typeof FEE_TYPE_OPTIONS)[number];
 export const feeTypeName = (f: FeeType): FeeTypeOption =>
-  f === "Toll" ? "Road" : "Bridge / Ferry";
+  f === "Toll" ? "Road" : f === "Rural Road" ? "Rural Road" : "Bridge / Ferry";
 /** Form label → stored value (keeps Ferry when it was Ferry). */
 export const feeTypeFromLabel = (label: string, current?: FeeType): FeeType =>
-  label === "Road" ? "Toll" : current === "Ferry" ? "Ferry" : "Bridge";
+  label === "Road"
+    ? "Toll"
+    : label === "Rural Road"
+      ? "Rural Road"
+      : current === "Ferry"
+        ? "Ferry"
+        : "Bridge";
 
 export type TollStationDraft = Omit<MockTollGate, "id">;
 
@@ -305,7 +311,7 @@ export const tollStationImportConfig: ImportEntityConfig = {
   rowCheck: (r) => {
     const e: { field: string; error: string }[] = [];
     if (!FEE_TYPE_OPTIONS.includes(r["feeType"] as FeeTypeOption))
-      e.push({ field: "feeType", error: "Road or Bridge / Ferry" });
+      e.push({ field: "feeType", error: "Road, Bridge / Ferry or Rural Road" });
     for (const k of ["g1", "g2", "g3", "g4", "g5"])
       if (!(Number(r[k]) >= 0)) e.push({ field: k, error: "Fee must be a number ≥ 0" });
     if (!importStatus(r["status"] ?? ""))
