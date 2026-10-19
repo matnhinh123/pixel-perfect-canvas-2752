@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,63 +26,59 @@ import {
   Tag,
   thClass,
 } from "@/components/movex/common";
-import { useConfirm } from "@/components/movex/general/ConfirmDialog";
-import { useCollection } from "@/hooks/use-store";
-import { serviceAssignmentRepository } from "@/repositories";
 import { DEPARTMENTS, departmentName, employeeName, employeesOf } from "@/mock-data/staff";
 import { formName } from "@/mock-data/templates";
-import { BusinessRuleError } from "@/services/crudService";
 import {
   newAssignmentDraft,
-  serviceAssignmentService,
   validateAssignment,
   type AssignmentDraft,
 } from "@/services/serviceAssignmentService";
-import { templateOf } from "@/services/serviceCatalogService";
-import type { ServiceAssignment, ServiceRecord, Status } from "@/types";
+import type { ServiceRecord, Status, TemplateType } from "@/types";
 import { useT } from "@/lib/i18n";
 
-/** Tab "Phân công": departments / employees that handle this service. */
+/** One assignment row; `id` is set for rows that are already stored. */
+export type AssignmentRow = AssignmentDraft & { key: string; id?: string };
+
+let seq = 0;
+const newRowKey = () => `a-${++seq}`;
+
+/**
+ * Tab "Phân công": departments / employees that handle this service. Read-only without `onChange`
+ * (view); in the Create / Edit form rows are edited here and stored when the service is saved.
+ */
 export function ServiceAssignments({
+  rows,
+  form,
   service,
-  services,
+  onChange,
 }: {
+  rows: AssignmentRow[];
+  /** Template of the service (the only value an assignment may carry). */
+  form: TemplateType | null;
+  /** The service as edited, used to validate a row. */
   service: ServiceRecord;
-  services: ServiceRecord[];
+  onChange?: (rows: AssignmentRow[]) => void;
 }) {
   const { t } = useT();
-  const confirm = useConfirm();
-  const all = useCollection(serviceAssignmentRepository);
-  const rows = serviceAssignmentService.forService(service.id, all);
-  const form = templateOf(service, services);
-  const [editing, setEditing] = useState<ServiceAssignment | "new" | null>(null);
-
-  const remove = async (a: ServiceAssignment) => {
-    const r = await confirm({
-      title: t("Xoá phân công?", "Delete assignment?"),
-      description: `${departmentName(a.departmentId)} · ${employeeName(a.employeeId)}`,
-      confirmLabel: t("Xoá", "Delete"),
-      tone: "danger",
-    });
-    if (r !== "confirm") return;
-    serviceAssignmentService.remove(service, a.id);
-    toast.success(t("Đã xoá phân công", "Assignment deleted"));
-  };
+  const readOnly = !onChange;
+  const [editing, setEditing] = useState<AssignmentRow | "new" | null>(null);
 
   return (
     <Panel
       title={t("Phân công", "Assignment")}
       bodyClassName="p-0"
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 border-primary/40 text-primary"
-          onClick={() => setEditing("new")}
-        >
-          <Plus className="h-4 w-4" />
-          {t("Thêm phân công", "Add Assignment")}
-        </Button>
+        readOnly ? undefined : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 border-primary/40 text-primary"
+            onClick={() => setEditing("new")}
+          >
+            <Plus className="h-4 w-4" />
+            {t("Thêm phân công", "Add Assignment")}
+          </Button>
+        )
       }
     >
       {rows.length === 0 ? (
@@ -104,7 +99,7 @@ export function ServiceAssignments({
                 "Default Template",
                 t("Ghi chú", "Notes"),
                 t("Trạng thái", "Status"),
-                t("Thao tác", "Actions"),
+                ...(readOnly ? [] : [t("Thao tác", "Actions")]),
               ].map((h) => (
                 <TableHead key={h} className={thClass}>
                   {h}
@@ -114,7 +109,7 @@ export function ServiceAssignments({
           </TableHeader>
           <TableBody>
             {rows.map((a) => (
-              <TableRow key={a.id}>
+              <TableRow key={a.key}>
                 <TableCell className="py-2.5 font-medium">
                   {departmentName(a.departmentId)}
                 </TableCell>
@@ -138,40 +133,50 @@ export function ServiceAssignments({
                 <TableCell className="py-2.5">
                   <StatusBadge status={a.status} />
                 </TableCell>
-                <TableCell className="py-1.5">
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label={t("Sửa phân công", "Edit assignment")}
-                      onClick={() => setEditing(a)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      aria-label={t("Xoá phân công", "Delete assignment")}
-                      onClick={() => void remove(a)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
+                {!readOnly && (
+                  <TableCell className="py-1.5">
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={t("Sửa phân công", "Edit assignment")}
+                        onClick={() => setEditing(a)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        aria-label={t("Xoá phân công", "Delete assignment")}
+                        onClick={() => onChange(rows.filter((x) => x.key !== a.key))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
       )}
-      {editing && (
+      {editing && onChange && (
         <AssignmentDialog
-          key={editing === "new" ? "new" : editing.id}
+          key={editing === "new" ? "new" : editing.key}
           service={service}
           form={form}
           initial={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
+          onSave={(row) => {
+            onChange(
+              rows.some((x) => x.key === row.key)
+                ? rows.map((x) => (x.key === row.key ? row : x))
+                : [...rows, row],
+            );
+            setEditing(null);
+          }}
         />
       )}
     </Panel>
@@ -183,23 +188,17 @@ function AssignmentDialog({
   form,
   initial,
   onClose,
+  onSave,
 }: {
   service: ServiceRecord;
-  form: ServiceRecord["template"];
-  initial: ServiceAssignment | null;
+  form: TemplateType | null;
+  initial: AssignmentRow | null;
   onClose: () => void;
+  onSave: (row: AssignmentRow) => void;
 }) {
   const { t } = useT();
-  const [d, setD] = useState<AssignmentDraft>(() =>
-    initial
-      ? {
-          departmentId: initial.departmentId,
-          employeeId: initial.employeeId,
-          form: initial.form,
-          note: initial.note,
-          status: initial.status,
-        }
-      : { ...newAssignmentDraft(), form },
+  const [d, setD] = useState<AssignmentRow>(
+    () => initial ?? { ...newAssignmentDraft(), form, key: newRowKey() },
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = <K extends keyof AssignmentDraft>(k: K, v: AssignmentDraft[K]) => {
@@ -218,18 +217,7 @@ function AssignmentDialog({
       setErrors(e);
       return;
     }
-    try {
-      serviceAssignmentService.save(service, d, initial?.id);
-      toast.success(
-        initial
-          ? t("Đã cập nhật phân công", "Assignment updated")
-          : t("Đã thêm phân công", "Assignment added"),
-      );
-      onClose();
-    } catch (err) {
-      if (err instanceof BusinessRuleError) setErrors(err.fieldErrors);
-      else toast.error(t("Lưu thất bại", "Save failed"));
-    }
+    onSave({ ...d, note: d.note.trim() });
   };
 
   return (
@@ -302,7 +290,7 @@ function AssignmentDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save}>Save</Button>
+          <Button onClick={save}>OK</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

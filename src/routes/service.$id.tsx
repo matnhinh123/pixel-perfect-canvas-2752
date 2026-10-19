@@ -32,12 +32,19 @@ import {
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { useEntityActions } from "@/components/movex/general/useEntityActions";
 import { ServiceTreePicker } from "@/components/movex/service/ServiceTreePicker";
-import { ServiceFormConfig } from "@/components/movex/service/ServiceFormConfig";
-import { ServiceAssignments } from "@/components/movex/service/ServiceAssignments";
-import { useCollection } from "@/hooks/use-store";
+import {
+  ServiceFormConfig,
+  type FieldSettings,
+} from "@/components/movex/service/ServiceFormConfig";
+import {
+  ServiceAssignments,
+  type AssignmentRow,
+} from "@/components/movex/service/ServiceAssignments";
+import { useCollection, useTemplateConfig } from "@/hooks/use-store";
 import { serviceAssignmentRepository, serviceRepository } from "@/repositories";
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
+import { serviceAssignmentService } from "@/services/serviceAssignmentService";
 import {
   newServiceDraft,
   rootOf,
@@ -49,7 +56,13 @@ import {
 import { formName } from "@/mock-data/templates";
 import { formatDateTime } from "@/lib/format";
 import { tr, useT } from "@/lib/i18n";
-import { TEMPLATES, type ServiceRecord, type Status, type TemplateType } from "@/types";
+import {
+  TEMPLATES,
+  type ServiceAssignment,
+  type ServiceRecord,
+  type Status,
+  type TemplateType,
+} from "@/types";
 
 type Mode = "view" | "edit";
 type Tab = "info" | "form" | "assign";
@@ -110,7 +123,7 @@ function ServiceDetailPage() {
   return <ServiceView key={source.id} source={source} services={alive} />;
 }
 
-// ---------------------------------------------------------------- View (3 tabs)
+// ---------------------------------------------------------------- Shared layout
 
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -121,15 +134,124 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** Information tab grid: the same 2-column layout in view and edit. */
+const INFO_GRID = "grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2";
+
+function ServiceTabsList({ assignments }: { assignments: number }) {
+  const { t } = useT();
+  return (
+    <TabsList className="mb-4">
+      <TabsTrigger value="info">{t("Thông tin", "Information")}</TabsTrigger>
+      <TabsTrigger value="form">
+        {t("Cấu hình Default Template", "Default Template Settings")}
+      </TabsTrigger>
+      <TabsTrigger value="assign">
+        {t("Phân công", "Assignment")}
+        {assignments > 0 && (
+          <span className="ml-1.5 rounded-full bg-accent px-1.5 text-xs text-accent-foreground">
+            {assignments}
+          </span>
+        )}
+      </TabsTrigger>
+    </TabsList>
+  );
+}
+
+function ChildServicesPanel({
+  items,
+  form,
+  onOpen,
+  onAdd,
+}: {
+  items: ServiceRecord[];
+  form: TemplateType | null;
+  onOpen?: (id: string) => void;
+  onAdd?: () => void;
+}) {
+  const { t } = useT();
+  return (
+    <Panel
+      title={t(`Dịch vụ con (${items.length})`, `Child Services (${items.length})`)}
+      bodyClassName="p-0"
+      actions={
+        onAdd && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 border-primary/40 text-primary"
+            onClick={onAdd}
+          >
+            <Plus className="h-4 w-4" />
+            {t("Thêm dịch vụ con", "Add Child Service")}
+          </Button>
+        )
+      }
+    >
+      {items.length === 0 ? (
+        <EmptyState title={t("Chưa có dịch vụ con", "No child services yet")} />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              {[
+                t("Mã dịch vụ", "Service Code"),
+                t("Tên dịch vụ", "Service Name"),
+                "Default Template",
+                t("Trạng thái", "Status"),
+              ].map((h) => (
+                <TableHead key={h} className={thClass}>
+                  {h}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((c) => (
+              <TableRow
+                key={c.id}
+                className={onOpen ? "cursor-pointer" : undefined}
+                onClick={onOpen ? () => onOpen(c.id) : undefined}
+              >
+                <TableCell className="py-2.5 font-semibold text-primary">{c.code}</TableCell>
+                <TableCell className="py-2.5">{c.name}</TableCell>
+                <TableCell className="py-2.5">
+                  <Tag tone="tpl">{formName(form)}</Tag>
+                </TableCell>
+                <TableCell className="py-2.5">
+                  <StatusBadge status={c.status} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Panel>
+  );
+}
+
+/** Stored assignments of a service as editable rows. */
+const rowsOf = (serviceId: string, all: ServiceAssignment[]): AssignmentRow[] =>
+  serviceAssignmentService.forService(serviceId, all).map((a) => ({
+    key: a.id,
+    id: a.id,
+    departmentId: a.departmentId,
+    employeeId: a.employeeId,
+    form: a.form,
+    note: a.note,
+    status: a.status,
+  }));
+
+// ---------------------------------------------------------------- View (3 tabs, read-only)
+
 function ServiceView({ source, services }: { source: ServiceRecord; services: ServiceRecord[] }) {
   const { t } = useT();
   const navigate = useNavigate();
   const search = Route.useSearch();
   const actions = useEntityActions(serviceCrud);
   const [auditOpen, setAuditOpen] = useState(false);
-  const assignments = useCollection(serviceAssignmentRepository).filter(
-    (a) => a.serviceId === source.id && !a.deleted,
-  );
+  const cfg = useTemplateConfig();
+  const allAssignments = useCollection(serviceAssignmentRepository);
+  const rows = useMemo(() => rowsOf(source.id, allAssignments), [source.id, allAssignments]);
   const parent = source.parentId ? services.find((s) => s.id === source.parentId) : undefined;
   const root = rootOf(source, services);
   const form = templateOf(source, services);
@@ -182,7 +304,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
                 Deactivate
               </Button>
             )}
-            <Button size="lg" onClick={() => go(source.id, { mode: "edit" })}>
+            <Button size="lg" onClick={() => go(source.id, { mode: "edit", tab })}>
               <Pencil className="h-4 w-4" />
               Edit
             </Button>
@@ -201,24 +323,11 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
           })
         }
       >
-        <TabsList className="mb-4">
-          <TabsTrigger value="info">{t("Thông tin", "Information")}</TabsTrigger>
-          <TabsTrigger value="form">
-            {t("Cấu hình Default Template", "Default Template Settings")}
-          </TabsTrigger>
-          <TabsTrigger value="assign">
-            {t("Phân công", "Assignment")}
-            {assignments.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-accent px-1.5 text-xs text-accent-foreground">
-                {assignments.length}
-              </span>
-            )}
-          </TabsTrigger>
-        </TabsList>
+        <ServiceTabsList assignments={rows.length} />
 
         <TabsContent value="info" className="flex max-w-4xl flex-col gap-5">
           <Panel title={t("Thông tin", "Information")}>
-            <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+            <dl className={INFO_GRID}>
               <InfoRow label={t("Mã dịch vụ", "Service Code")}>
                 <span className="font-semibold">{source.code}</span>
               </InfoRow>
@@ -266,70 +375,31 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
             </dl>
           </Panel>
 
-          <Panel
-            title={t(`Dịch vụ con (${children.length})`, `Child Services (${children.length})`)}
-            bodyClassName="p-0"
-            actions={
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 border-primary/40 text-primary"
-                onClick={() =>
-                  void navigate({
-                    to: "/service/$id",
-                    params: { id: "new" },
-                    search: { parent: source.id },
-                  })
-                }
-              >
-                <Plus className="h-4 w-4" />
-                {t("Thêm dịch vụ con", "Add Child Service")}
-              </Button>
+          <ChildServicesPanel
+            items={children}
+            form={form}
+            onOpen={(id) => go(id)}
+            onAdd={() =>
+              void navigate({
+                to: "/service/$id",
+                params: { id: "new" },
+                search: { parent: source.id },
+              })
             }
-          >
-            {children.length === 0 ? (
-              <EmptyState title={t("Chưa có dịch vụ con", "No child services yet")} />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    {[
-                      t("Mã dịch vụ", "Service Code"),
-                      t("Tên dịch vụ", "Service Name"),
-                      "Default Template",
-                      t("Trạng thái", "Status"),
-                    ].map((h) => (
-                      <TableHead key={h} className={thClass}>
-                        {h}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {children.map((c) => (
-                    <TableRow key={c.id} className="cursor-pointer" onClick={() => go(c.id)}>
-                      <TableCell className="py-2.5 font-semibold text-primary">{c.code}</TableCell>
-                      <TableCell className="py-2.5">{c.name}</TableCell>
-                      <TableCell className="py-2.5">
-                        <Tag tone="tpl">{formName(form)}</Tag>
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        <StatusBadge status={c.status} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </Panel>
+          />
         </TabsContent>
 
         <TabsContent value="form" className="max-w-4xl">
-          <ServiceFormConfig service={source} services={services} />
+          <ServiceFormConfig
+            form={form}
+            root={root}
+            inherited={!!source.parentId}
+            value={form ? serviceCatalogService.fieldSettings(form, cfg) : {}}
+          />
         </TabsContent>
 
         <TabsContent value="assign" className="max-w-5xl">
-          <ServiceAssignments service={source} services={services} />
+          <ServiceAssignments rows={rows} form={form} service={source} />
         </TabsContent>
       </Tabs>
 
@@ -344,7 +414,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
   );
 }
 
-// ---------------------------------------------------------------- Create / Edit (one form)
+// ---------------------------------------------------------------- Create / Edit (same 3 tabs, editable)
 
 function ReadOnlyBox({ children }: { children: ReactNode }) {
   return (
@@ -366,26 +436,47 @@ function ServiceEditor({
   const search = Route.useSearch();
   const confirm = useConfirm();
   const isNew = !source;
+  const cfg = useTemplateConfig();
   const initial = useMemo<ServiceRecord>(() => {
     if (source) return structuredClone(source);
     const parentId =
       search.parent && services.some((x) => x.id === search.parent) ? search.parent : null;
     return { ...newServiceDraft(), parentId };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const initialRows = useMemo(
+    () => (source ? rowsOf(source.id, serviceAssignmentRepository.all()) : []),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const [s, setS] = useState<ServiceRecord>(initial);
+  const [rows, setRows] = useState<AssignmentRow[]>(initialRows);
+  /** Settings edited per template (the template can change while editing a root service). */
+  const [settingsDraft, setSettingsDraft] = useState<Partial<Record<TemplateType, FieldSettings>>>(
+    {},
+  );
+  const [tab, setTab] = useState<Tab>(search.tab ?? "info");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   const parent = s.parentId ? services.find((x) => x.id === s.parentId) : undefined;
   const root = parent ? rootOf(parent, services) : undefined;
   const form: TemplateType | null = parent ? templateOf(parent, services) : s.template;
+  const children = source ? services.filter((x) => x.parentId === source.id) : [];
   const descendants = source ? serviceCatalogService.descendantsOf(source.id) : [];
   const excludeIds = useMemo(
     () => new Set(source ? [source.id, ...descendants] : []),
     [source?.id, descendants.join("|")], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const dirty = JSON.stringify(s) !== JSON.stringify(initial);
+  const savedSettings = form ? serviceCatalogService.fieldSettings(form, cfg) : {};
+  const settings = (form && settingsDraft[form]) || savedSettings;
+  const settingsDirty =
+    !parent && !!form && JSON.stringify(settings) !== JSON.stringify(savedSettings);
+
+  const dirty =
+    JSON.stringify(s) !== JSON.stringify(initial) ||
+    JSON.stringify(rows) !== JSON.stringify(initialRows) ||
+    settingsDirty;
   const guard = useUnsavedChangesGuard(dirty);
 
   const set = <K extends keyof ServiceRecord>(k: K, v: ServiceRecord[K]) => {
@@ -402,7 +493,7 @@ function ServiceEditor({
     setS((p) => ({
       ...p,
       parentId: id,
-      // Becoming a root again: keep the form it inherited so far.
+      // Becoming a root again: keep the template it inherited so far.
       template: id ? p.template : (p.template ?? form),
     }));
     setErrors((e) => {
@@ -415,7 +506,11 @@ function ServiceEditor({
 
   const back = () =>
     source
-      ? void navigate({ to: "/service/$id", params: { id: source.id }, search: { mode: "view" } })
+      ? void navigate({
+          to: "/service/$id",
+          params: { id: source.id },
+          search: { mode: "view", tab },
+        })
       : void navigate({ to: "/service" });
 
   const save = async () => {
@@ -423,6 +518,7 @@ function ServiceEditor({
     const e = validateService(s);
     if (Object.keys(e).length) {
       setErrors(e);
+      setTab("info");
       setFormError(t("Chưa thể lưu — vui lòng kiểm tra:", "Cannot save yet — please check:"));
       toast.error(
         t("Vui lòng kiểm tra các trường được đánh dấu.", "Please check the highlighted fields."),
@@ -444,17 +540,44 @@ function ServiceEditor({
     }
     try {
       const saved = serviceCatalogService.save(s);
+      // Default Template Settings belong to the template of a root service.
+      if (settingsDirty && form)
+        serviceCatalogService.saveTemplateConfig(form, settings, {
+          id: saved.id,
+          label: saved.code,
+        });
+      // Assignments: store added / changed rows and remove deleted ones; a row that carries a
+      // template follows the service's current one.
+      const newForm = templateOf(saved);
+      const before = new Map(initialRows.map((r) => [r.id, r]));
+      const strip = ({ key: _k, id: _i, ...draft }: AssignmentRow) => draft;
+      for (const r of rows) {
+        const row = { ...strip(r), form: r.form ? newForm : null };
+        const old = r.id ? before.get(r.id) : undefined;
+        if (!old) serviceAssignmentService.save(saved, row);
+        else if (JSON.stringify(strip(old)) !== JSON.stringify(row))
+          serviceAssignmentService.save(saved, row, r.id);
+      }
+      const kept = new Set(rows.map((r) => r.id));
+      for (const r of initialRows)
+        if (r.id && !kept.has(r.id)) serviceAssignmentService.remove(saved, r.id);
+
       guard.allowNext();
       toast.success(
         isNew
           ? t(`Đã tạo dịch vụ ${saved.code}`, `Service ${saved.code} created`)
           : t(`Đã lưu dịch vụ ${saved.code}`, `Service ${saved.code} saved`),
       );
-      void navigate({ to: "/service/$id", params: { id: saved.id }, search: { mode: "view" } });
+      void navigate({
+        to: "/service/$id",
+        params: { id: saved.id },
+        search: { mode: "view", tab },
+      });
     } catch (err) {
       if (err instanceof BusinessRuleError) {
         setErrors(err.fieldErrors);
         setFormError(err.message);
+        setTab("info");
       }
       toast.error(err instanceof Error ? err.message : t("Lưu thất bại", "Save failed"));
     }
@@ -470,113 +593,161 @@ function ServiceEditor({
         ]}
         title={isNew ? "Add Service" : t(`Chỉnh sửa: ${source.name}`, `Edit: ${source.name}`)}
         badge={source ? <StatusBadge status={source.status} /> : undefined}
+        subtitle={
+          source ? (
+            <>
+              {t("Mã dịch vụ", "Service Code")}:{" "}
+              <span className="font-semibold text-foreground">{source.code}</span>
+            </>
+          ) : undefined
+        }
         dirty={dirty}
         onBack={back}
         onCancel={back}
         onSave={() => void save()}
+        extra={
+          source && (
+            <Button variant="outline" size="lg" onClick={() => setAuditOpen(true)}>
+              <History className="h-4 w-4" />
+              {t("Lịch sử thay đổi", "Change History")}
+            </Button>
+          )
+        }
       />
       <FormErrorBanner message={formError} errors={errors} />
 
-      <Panel title={t("Thông tin dịch vụ", "Service Information")} className="max-w-3xl">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label={t("Mã dịch vụ", "Service Code")} required error={errors["code"]}>
-            <Input
-              value={s.code}
-              placeholder={t("VD: TRK-IN-CT", "E.g. TRK-IN-CT")}
-              onChange={(e) => set("code", e.target.value.toUpperCase())}
-              aria-invalid={!!errors["code"] || undefined}
-            />
-          </Field>
-          <Field label={t("Tên dịch vụ", "Service Name")} required error={errors["name"]}>
-            <Input
-              value={s.name}
-              placeholder={t("VD: Container Trucking", "E.g. Container Trucking")}
-              onChange={(e) => set("name", e.target.value)}
-              aria-invalid={!!errors["name"] || undefined}
-            />
-          </Field>
-          <Field
-            label={t("Dịch vụ cha", "Parent Service")}
-            error={errors["parentId"]}
-            className="sm:col-span-2"
-            hint={t(
-              "Bỏ trống nếu đây là dịch vụ gốc (nhóm dịch vụ).",
-              "Leave empty if this is a root service (service group).",
-            )}
-          >
-            <ServiceTreePicker
-              services={services}
-              value={s.parentId}
-              onChange={setParent}
-              excludeIds={excludeIds}
-              invalid={!!errors["parentId"]}
-            />
-          </Field>
-          <Field label={t("Nhóm dịch vụ", "Service Group")}>
-            <ReadOnlyBox>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+        <ServiceTabsList assignments={rows.length} />
+
+        <TabsContent value="info" className="flex max-w-4xl flex-col gap-5">
+          <Panel title={t("Thông tin", "Information")}>
+            <div className={INFO_GRID}>
+              <Field label={t("Mã dịch vụ", "Service Code")} required error={errors["code"]}>
+                <Input
+                  value={s.code}
+                  placeholder={t("VD: TRK-IN-CT", "E.g. TRK-IN-CT")}
+                  onChange={(e) => set("code", e.target.value.toUpperCase())}
+                  aria-invalid={!!errors["code"] || undefined}
+                />
+              </Field>
+              <Field label={t("Tên dịch vụ", "Service Name")} required error={errors["name"]}>
+                <Input
+                  value={s.name}
+                  placeholder={t("VD: Container Trucking", "E.g. Container Trucking")}
+                  onChange={(e) => set("name", e.target.value)}
+                  aria-invalid={!!errors["name"] || undefined}
+                />
+              </Field>
+              <Field
+                label={t("Dịch vụ cha", "Parent Service")}
+                error={errors["parentId"]}
+                hint={t(
+                  "Bỏ trống nếu đây là dịch vụ gốc (nhóm dịch vụ).",
+                  "Leave empty if this is a root service (service group).",
+                )}
+              >
+                <ServiceTreePicker
+                  services={services}
+                  value={s.parentId}
+                  onChange={setParent}
+                  excludeIds={excludeIds}
+                  invalid={!!errors["parentId"]}
+                />
+              </Field>
+              <Field label={t("Nhóm dịch vụ", "Service Group")}>
+                <ReadOnlyBox>
+                  {root ? (
+                    <>
+                      <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                      {root.name}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {s.name.trim() || t("Chính dịch vụ này", "This service")}{" "}
+                      {t("(dịch vụ gốc)", "(root service)")}
+                    </span>
+                  )}
+                </ReadOnlyBox>
+              </Field>
               {root ? (
-                <>
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                  {root.name}
-                </>
+                <Field
+                  label="Default Template"
+                  hint={t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}
+                >
+                  <ReadOnlyBox>
+                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Tag tone="tpl">{formName(form)}</Tag>
+                  </ReadOnlyBox>
+                </Field>
               ) : (
-                <span className="text-muted-foreground">
-                  {s.name.trim() || t("Chính dịch vụ này", "This service")}{" "}
-                  {t("(dịch vụ gốc)", "(root service)")}
-                </span>
+                <Field label="Default Template" required error={errors["template"]}>
+                  <NativeSelect
+                    value={s.template ?? ""}
+                    invalid={!!errors["template"]}
+                    onChange={(v) => set("template", (v || null) as TemplateType | null)}
+                    options={["", ...TEMPLATES]}
+                    labels={{
+                      "": t("Chọn Default Template…", "Select Default Template…"),
+                      ...Object.fromEntries(TEMPLATES.map((x) => [x, formName(x)])),
+                    }}
+                  />
+                </Field>
               )}
-            </ReadOnlyBox>
-          </Field>
-          {root ? (
-            <Field
-              label="Default Template"
-              hint={t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}
-            >
-              <ReadOnlyBox>
-                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                <Tag tone="tpl">{formName(form)}</Tag>
-              </ReadOnlyBox>
-            </Field>
-          ) : (
-            <Field label="Default Template" required error={errors["template"]}>
-              <NativeSelect
-                value={s.template ?? ""}
-                invalid={!!errors["template"]}
-                onChange={(v) => set("template", (v || null) as TemplateType | null)}
-                options={["", ...TEMPLATES]}
-                labels={{
-                  "": t("Chọn Default Template…", "Select Default Template…"),
-                  ...Object.fromEntries(TEMPLATES.map((x) => [x, formName(x)])),
-                }}
-              />
-            </Field>
-          )}
-          <Field label={t("Trạng thái", "Status")}>
-            <NativeSelect
-              value={s.status}
-              onChange={(v) => set("status", v as Status)}
-              options={
-                s.status === "Draft" ? ["Draft", "Active", "Inactive"] : ["Active", "Inactive"]
-              }
-            />
-          </Field>
-          <Field label={t("Ghi chú", "Notes")} className="sm:col-span-2">
-            <Textarea
-              rows={3}
-              value={s.description}
-              onChange={(e) => set("description", e.target.value)}
-            />
-          </Field>
-        </div>
-        {parent && (
-          <p className="mt-4 text-xs text-muted-foreground">
-            {t(
-              `Dịch vụ con dùng chung Nhóm dịch vụ và Default Template với dịch vụ gốc ${root?.name ?? ""}.`,
-              `Child services share the Service Group and Default Template of the root service ${root?.name ?? ""}.`,
-            )}
-          </p>
-        )}
-      </Panel>
+              <Field label={t("Trạng thái", "Status")}>
+                <NativeSelect
+                  value={s.status}
+                  onChange={(v) => set("status", v as Status)}
+                  options={
+                    s.status === "Draft" ? ["Draft", "Active", "Inactive"] : ["Active", "Inactive"]
+                  }
+                />
+              </Field>
+              <Field label={t("Ghi chú", "Notes")} className="sm:col-span-2">
+                <Textarea
+                  rows={3}
+                  value={s.description}
+                  onChange={(e) => set("description", e.target.value)}
+                />
+              </Field>
+              {source && (
+                <InfoRow label={t("Cập nhật lúc", "Updated At")}>
+                  <span className="text-muted-foreground">
+                    {formatDateTime(source.updatedAt)} · {source.updatedBy}
+                  </span>
+                </InfoRow>
+              )}
+            </div>
+          </Panel>
+
+          {source && <ChildServicesPanel items={children} form={form} />}
+        </TabsContent>
+
+        <TabsContent value="form" className="max-w-4xl">
+          <ServiceFormConfig
+            form={form}
+            root={root ?? { name: s.name.trim() || t("Dịch vụ này", "This service") }}
+            inherited={!!parent}
+            value={settings}
+            onChange={(v) => {
+              if (form) setSettingsDraft((d) => ({ ...d, [form]: v }));
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="assign" className="max-w-5xl">
+          <ServiceAssignments rows={rows} form={form} service={s} onChange={setRows} />
+        </TabsContent>
+      </Tabs>
+
+      {source && (
+        <AuditHistoryDrawer
+          open={auditOpen}
+          onOpenChange={setAuditOpen}
+          entityType="Service"
+          entityId={source.id}
+          title={source.code}
+        />
+      )}
     </div>
   );
 }

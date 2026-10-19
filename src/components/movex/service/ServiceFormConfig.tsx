@@ -1,8 +1,5 @@
-import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Lock, Save, X } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Lock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -14,29 +11,33 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState, Panel, Tag, thClass } from "@/components/movex/common";
-import { useTemplateConfig } from "@/hooks/use-store";
 import { formName, TEMPLATE_FIELDS } from "@/mock-data/templates";
-import { rootOf, serviceCatalogService, templateOf } from "@/services/serviceCatalogService";
-import type { ServiceRecord, TenantFieldSetting } from "@/types";
+import type { TemplateType, TenantFieldSetting } from "@/types";
 import { useT } from "@/lib/i18n";
 
-/** Tab "Cấu hình form": Visible / Required per field of the form the service inherits. */
+export type FieldSettings = Record<string, TenantFieldSetting>;
+
+/**
+ * Tab "Default Template Settings": Visible / Required per field of the template the service uses.
+ * Read-only without `onChange` (view); editable in the Create / Edit form, saved with the service.
+ */
 export function ServiceFormConfig({
-  service,
-  services,
+  form,
+  root,
+  inherited,
+  value,
+  onChange,
 }: {
-  service: ServiceRecord;
-  services: ServiceRecord[];
+  form: TemplateType | null;
+  /** Root service the template comes from. */
+  root: { id?: string; name: string };
+  /** Child service: the template and its settings belong to the root. */
+  inherited: boolean;
+  value: FieldSettings;
+  onChange?: (v: FieldSettings) => void;
 }) {
   const { t } = useT();
-  const cfg = useTemplateConfig();
-  const form = templateOf(service, services);
-  const root = rootOf(service, services);
-  const inherited = !!service.parentId;
-  const saved = form ? serviceCatalogService.fieldSettings(form, cfg) : {};
-  const savedSig = JSON.stringify(saved);
-  const [draft, setDraft] = useState<Record<string, TenantFieldSetting>>(saved);
-  useEffect(() => setDraft(JSON.parse(savedSig) as Record<string, TenantFieldSetting>), [savedSig]);
+  const readOnly = !onChange;
 
   if (!form)
     return (
@@ -51,44 +52,14 @@ export function ServiceFormConfig({
       </Panel>
     );
 
-  const dirty = JSON.stringify(draft) !== savedSig;
-  const set = (key: string, patch: Partial<TenantFieldSetting>) =>
-    setDraft((d) => {
-      const next = { ...d[key]!, ...patch };
-      if (!next.visible) next.required = false;
-      return { ...d, [key]: next };
-    });
-  const save = () => {
-    const n = serviceCatalogService.saveTemplateConfig(form, draft, {
-      id: service.id,
-      label: service.code,
-    });
-    toast.success(
-      n
-        ? t(`Đã lưu cấu hình ${formName(form)}`, `${formName(form)} settings saved`)
-        : t("Không có thay đổi", "No changes"),
-    );
+  const set = (key: string, patch: Partial<TenantFieldSetting>) => {
+    const next = { ...value[key]!, ...patch };
+    if (!next.visible) next.required = false;
+    onChange?.({ ...value, [key]: next });
   };
 
   return (
-    <Panel
-      title={t("Cấu hình Default Template", "Default Template Settings")}
-      bodyClassName="p-0"
-      actions={
-        !inherited && dirty ? (
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setDraft(saved)}>
-              <X className="h-4 w-4" />
-              Cancel
-            </Button>
-            <Button size="sm" onClick={save}>
-              <Save className="h-4 w-4" />
-              Save
-            </Button>
-          </div>
-        ) : undefined
-      }
-    >
+    <Panel title={t("Cấu hình Default Template", "Default Template Settings")} bodyClassName="p-0">
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 text-sm">
         <span className="text-muted-foreground">Default Template:</span>
         <Tag tone="tpl">{formName(form)}</Tag>
@@ -98,14 +69,16 @@ export function ServiceFormConfig({
               <Lock className="h-3 w-3" />
               {t(`Kế thừa từ ${root.name}`, `Inherited from ${root.name}`)}
             </span>
-            <Link
-              to="/service/$id"
-              params={{ id: root.id }}
-              search={{ mode: "view", tab: "form" }}
-              className="ml-auto text-xs font-semibold text-primary hover:underline"
-            >
-              {t(`Chỉnh ở ${root.name} →`, `Edit in ${root.name} →`)}
-            </Link>
+            {readOnly && root.id && (
+              <Link
+                to="/service/$id"
+                params={{ id: root.id }}
+                search={{ mode: "view", tab: "form" }}
+                className="ml-auto text-xs font-semibold text-primary hover:underline"
+              >
+                {t(`Xem ở ${root.name} →`, `Open ${root.name} →`)}
+              </Link>
+            )}
           </>
         ) : (
           <span className="text-xs text-muted-foreground">
@@ -130,9 +103,9 @@ export function ServiceFormConfig({
         </TableHeader>
         <TableBody>
           {TEMPLATE_FIELDS[form].map((def) => {
-            const s = draft[def.key] ?? { visible: true, required: false };
+            const s = value[def.key] ?? { visible: true, required: false };
             const locked = def.coreMandatory;
-            const disabled = locked || inherited;
+            const disabled = readOnly || locked || inherited;
             const label = t(def.label, def.labelEn);
             return (
               <TableRow key={def.key}>
