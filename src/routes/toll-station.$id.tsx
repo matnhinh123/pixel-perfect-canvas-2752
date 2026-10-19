@@ -42,7 +42,6 @@ import {
 } from "@/components/movex/general/FormPage";
 import { useEntityActions } from "@/components/movex/general/useEntityActions";
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
-import { LocationAutocomplete } from "@/components/movex/routing/LocationAutocomplete";
 import { MapPickerDialog } from "@/components/movex/location/MapPickerDialog";
 import { SearchableSelect } from "@/components/movex/general/SearchableSelect";
 import { reverseGeocode } from "@/services/reverseGeocode";
@@ -330,13 +329,6 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const locationsAll = useCollection(locationRepository);
-  const locations = useMemo(
-    () =>
-      locationsAll.filter((l) => !l.deleted && (l.status === "Active" || l.id === d.locationId)),
-    [locationsAll, d.locationId],
-  );
-  const picked = d.locationId ? locations.find((l) => l.id === d.locationId) : undefined;
   const hasCoords = Number.isFinite(d.lat) && Number.isFinite(d.lng);
   const [mapOpen, setMapOpen] = useState(false);
   // Keep a stored province selectable even when it is not in the catalog.
@@ -450,11 +442,36 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
         rootLabel="Master Data"
         unsavedLabel="Unsaved"
         title={isNew ? "Add Toll Station" : `Edit: ${source.name}`}
-        badge={source ? <StatusBadge status={tollStationStatus(source)} /> : undefined}
+        badge={source?.archived ? <StatusBadge status="Archived" /> : undefined}
         dirty={dirty}
         onBack={back}
         onCancel={back}
         onSave={save}
+        extra={
+          // Status sits in the header when editing (a new station starts Active).
+          source && (
+            <div className="relative">
+              <span
+                className={cn(
+                  "absolute left-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full",
+                  status === "Active" ? "bg-success" : "bg-muted-foreground",
+                )}
+              />
+              <select
+                aria-label="Status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as Status)}
+                className="h-11 appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm font-medium outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                ▾
+              </span>
+            </div>
+          )
+        }
       />
       <FormErrorBanner message={formError} errors={errors} />
 
@@ -483,33 +500,16 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 options={feeTypes}
               />
             </Field>
-            <Field label="Location" hint="Search by location code or name.">
-              <LocationAutocomplete
-                locations={locations}
-                value={d.locationId ?? null}
-                placeholder="Search location…"
-                onChange={(l) =>
-                  setD((p) => {
-                    if (!l) {
-                      const { locationId: _drop, ...rest } = p;
-                      return rest;
-                    }
-                    const hasCoords = Number.isFinite(l.lat) && Number.isFinite(l.lng);
-                    return {
-                      ...p,
-                      locationId: l.id,
-                      province: l.province,
-                      address: l.address,
-                      ...(hasCoords ? { lat: l.lat, lng: l.lng } : {}),
-                    };
-                  })
-                }
-              />
+            <Field label="Source From">
+              <div className="flex h-9 items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 text-sm">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                {(d.vietmapId ?? "").trim() ? "Vietmap" : "Manual"}
+              </div>
             </Field>
             <Field
               label="Map Position"
               error={errors["lat"] ?? errors["lng"]}
-              info="Gate position as “Latitude, Longitude”. Click to pick it on the map: Province/City and Address are filled in and stay editable. Choosing a Location fills its position; changing Province/City clears the position to pick again."
+              info="Gate position as “Latitude, Longitude”. Click to pick it on the map: Province/City and Address are filled in and stay editable. Changing Province/City clears the position to pick again."
             >
               <div className="flex gap-2">
                 <button
@@ -523,11 +523,7 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
                 >
                   <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="truncate">
-                    {hasCoords
-                      ? `${d.lat}, ${d.lng}`
-                      : picked
-                        ? "Location has no position — click to pick on the map"
-                        : "Click to pick a spot on the map"}
+                    {hasCoords ? `${d.lat}, ${d.lng}` : "Click to pick a spot on the map"}
                   </span>
                 </button>
                 {hasCoords && (
@@ -557,26 +553,13 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
             <Field
               label="Address"
               error={errors["address"]}
-              className="sm:col-span-2"
+              className="sm:col-span-3"
               hint={geoBusy ? "Looking up the address…" : undefined}
             >
               <Input
                 value={d.address ?? ""}
                 placeholder="Enter Address"
                 onChange={(e) => set("address", e.target.value)}
-              />
-            </Field>
-            <Field label="Source From">
-              <div className="flex h-9 items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 text-sm">
-                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                {(d.vietmapId ?? "").trim() ? "Vietmap" : "Manual"}
-              </div>
-            </Field>
-            <Field label="Status" required>
-              <NativeSelect
-                value={status}
-                onChange={(v) => setStatus(v as Status)}
-                options={["Active", "Inactive"]}
               />
             </Field>
             <Field label="Remark" className="sm:col-span-3">
@@ -587,10 +570,6 @@ function TollStationForm({ source }: { source: TollGateRecord | null }) {
               />
             </Field>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            The map position is filled from the location when it has one; pick the exact gate on the
-            map if needed.
-          </p>
           <MapPickerDialog
             open={mapOpen}
             onOpenChange={setMapOpen}
