@@ -252,7 +252,13 @@ export function CostDetailForm({
             >
               <Input placeholder="Enter Fare Code" maxLength={30} {...text("code")} />
             </Field>
-            <Field label="Fare Name" required error={errors["name"]} className={S5}>
+            <Field
+              label="Fare Name"
+              required
+              error={errors["name"]}
+              className={S5}
+              info="Enter the name in English (e.g. FUEL CHARGE). Put the Vietnamese name in Local Name."
+            >
               <Input placeholder="Enter Fare Name" {...text("name")} />
             </Field>
             <Field label="Local Name" error={errors["localName"]} className={S5}>
