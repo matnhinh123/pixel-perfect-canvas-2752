@@ -1,5 +1,3 @@
-import { CC } from "@/mock-data/commonCodes";
-import { useCodeOptions } from "@/services/commonCodeService";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
@@ -11,8 +9,8 @@ import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts
 import { FixedCostTabs, type FixedCostTab } from "@/components/movex/cost/FixedCostTabs";
 import { FixedCostSummaryTab } from "@/components/movex/cost/FixedCostSummaryTab";
 import { useCollection } from "@/hooks/use-store";
-import { costItemRepository, fixedCostRepository } from "@/repositories";
-import { FIXED_COST_VEHICLE_TYPES } from "@/mock-data/fixedCost";
+import { costItemRepository, fixedCostRepository, vehicleMasterRepository } from "@/repositories";
+import { vehicleTypeChoices } from "@/services/fixedCostVehicle";
 import { calcFixedCost, fixedCostCrud, fixedCostImportConfig } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
 import type { FixedCostRecord } from "@/types";
@@ -50,7 +48,8 @@ const money = (n: number | null) => <span className="tabular-nums">{fmtMoney(n)}
 
 function FixedCostList() {
   const navigate = useNavigate();
-  const vehicleTypes = useCodeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES);
+  const vehiclesAll = useCollection(vehicleMasterRepository);
+  const vehicleTypes = useMemo(() => vehicleTypeChoices(vehiclesAll), [vehiclesAll]);
   const details = useCollection(costItemRepository);
   const rowsAll = useCollection(fixedCostRepository);
   const rows = useMemo(() => rowsAll.filter((f) => !f.deleted), [rowsAll]);

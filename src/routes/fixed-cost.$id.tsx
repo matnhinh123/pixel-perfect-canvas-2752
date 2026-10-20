@@ -29,9 +29,9 @@ import {
 } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
-import { FIXED_COST_TYPES, FIXED_COST_VEHICLE_TYPES } from "@/mock-data/fixedCost";
+import { FIXED_COST_TYPES } from "@/mock-data/fixedCost";
+import { FixedCostVehicleRows } from "@/components/movex/cost/FixedCostVehicleRows";
 import { ALLOCATION_UNITS, type FixedCostRecord } from "@/types";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 type Mode = "view" | "edit";
@@ -86,7 +86,6 @@ function FixedCostForm({
 }) {
   const navigate = useNavigate();
   const costTypes = useCodeOptions(CC.FIXED_COST_TYPE, FIXED_COST_TYPES);
-  const vehicleTypes = useCodeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES);
   const units = useCodeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS);
   const isNew = !source;
   const detailsAll = useCollection(costItemRepository);
@@ -148,13 +147,6 @@ function FixedCostForm({
     className: "h-10 w-full",
     invalid: !!errors[k],
   });
-
-  const toggleVehicle = (v: string) =>
-    patch({
-      vehicleTypes: d.vehicleTypes.includes(v)
-        ? d.vehicleTypes.filter((x) => x !== v)
-        : [...d.vehicleTypes, v],
-    });
 
   const back = () =>
     source
@@ -341,26 +333,12 @@ function FixedCostForm({
                 {...select("allocationUnit", withCurrent(units, d.allocationUnit), "Select unit")}
               />
             </Field>
-            <Field
-              label="Vehicle Type"
-              className="sm:col-span-6 lg:col-span-12"
-              hint="Optional. A fixed cost with no vehicle type is listed but appears in no Summary."
-            >
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-5">
-                {withCurrent(vehicleTypes, ...d.vehicleTypes).map((v) => (
-                  <label
-                    key={v}
-                    className="flex cursor-pointer items-center gap-2 text-sm group-disabled:cursor-default"
-                  >
-                    <Checkbox
-                      checked={d.vehicleTypes.includes(v)}
-                      onCheckedChange={() => toggleVehicle(v)}
-                    />
-                    {v}
-                  </label>
-                ))}
-              </div>
-            </Field>
+            <FixedCostVehicleRows
+              value={d.vehicleTypes}
+              onChange={(vehicleTypes) => patch({ vehicleTypes })}
+              readOnly={readOnly}
+              error={errors["vehicleTypes"]}
+            />
           </div>
         </CollapsiblePanel>
 

@@ -10,15 +10,13 @@ import {
   fixedCostRepository,
   fixedCostSummaryRepository,
   uid,
+  vehicleMasterRepository,
 } from "@/repositories";
-import {
-  FIXED_COST_RATES,
-  FIXED_COST_TYPES,
-  FIXED_COST_VEHICLE_TYPES,
-} from "@/mock-data/fixedCost";
+import { FIXED_COST_RATES, FIXED_COST_TYPES } from "@/mock-data/fixedCost";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
 import { CC } from "@/mock-data/commonCodes";
 import { codeOptions } from "./commonCodeService";
+import { fcVehicleErrors, parseFcVehicle, fcVehicleLabel } from "./fixedCostVehicle";
 import { draftImportConfig, listCell, numCell, pick } from "./importExportService";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -102,6 +100,8 @@ export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string
   else if (all().some((f) => f.id !== id && f.code.toUpperCase() === code))
     e["code"] = `Fixed Cost Code ${code} already exists.`;
   if (!d.name.trim()) e["name"] = "Fixed Cost Name is required.";
+  const vErr = fcVehicleErrors(d.vehicleTypes, vehicleMasterRepository.all());
+  if (vErr) e["vehicleTypes"] = vErr;
   if (!(d.costValue > 0)) e["costValue"] = "Cost Value must be greater than 0.";
   if (!(d.allocationBase > 0)) e["allocationBase"] = "Allocation Base must be greater than 0.";
   if (!d.allocationUnit) e["allocationUnit"] = "Allocation Base Unit is required.";
@@ -255,7 +255,6 @@ const YES = ["yes", "y", "on", "true", "1", "x"];
 const NO = ["no", "n", "off", "false", "0"];
 const choices = () => ({
   costType: codeOptions(CC.FIXED_COST_TYPE, FIXED_COST_TYPES),
-  vehicleType: codeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES),
   unit: codeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS) as AllocationUnit[],
   currency: COST_CURRENCIES,
 });
@@ -294,9 +293,10 @@ const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => {
     exchangeRate: rateOf(currency),
     allocationBase: Number.isNaN(base) ? 0 : base,
     allocationUnit: pick(unit, c.unit) || "Year",
-    vehicleTypes: listCell(r["vehicleTypes"])
-      .map((v) => pick(v, c.vehicleType))
-      .filter((v): v is string => !!v),
+    vehicleTypes: listCell(r["vehicleTypes"]).map((v) => {
+      const x = parseFcVehicle(v);
+      return x ? fcVehicleLabel(x) : v;
+    }),
     applyUtilization: flag(r["applyUtilization"]) ?? true,
     utilContainer: numOr(r["utilContainer"], 1),
     utilDay: numOr(r["utilDay"], 1),
@@ -325,7 +325,11 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
     { key: "currency", header: "Currency", example: "VND" },
     { key: "allocationBase", header: "Allocation Base", required: true, example: "8" },
     { key: "allocationUnit", header: "Allocation Base Unit", example: "Year" },
-    { key: "vehicleTypes", header: "Vehicle Type", example: "5T, TRUCK" },
+    {
+      key: "vehicleTypes",
+      header: "Vehicle Type",
+      example: "TRUCK · 5 tấn; HEADER · HINO",
+    },
     { key: "applyUtilization", header: "Apply Utilization", example: "Yes" },
     { key: "utilContainer", header: "Utilization Rate – Container", example: "20" },
     { key: "utilDay", header: "Utilization Rate – Day", example: "30" },
@@ -347,9 +351,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       e.push({ field: "allocationBase", error: "Must be a number (e.g. 8)" });
     if (unit && pick(unit, c.unit) === undefined)
       e.push({ field: "allocationUnit", error: `Use one of: ${c.unit.join(", ")}` });
-    const badVt = listCell(r["vehicleTypes"]).filter((v) => !pick(v, c.vehicleType));
-    if (badVt.length)
-      e.push({ field: "vehicleTypes", error: `Unknown vehicle type: ${badVt.join(", ")}` });
     if (flag(r["applyUtilization"]) === undefined)
       e.push({ field: "applyUtilization", error: "Yes or No (empty = Yes)" });
     for (const k of ["costValue", "utilContainer", "utilDay", "allocationDays"])
@@ -365,11 +366,11 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   sampleRows: () => {
     const plan: [string, string, string, string, string, string][] = [
       // fare, type, value, base, unit, vehicle types
-      ["DEP", "DEPRECIATION", "900000000", "8", "Year", "5T, TRUCK"],
-      ["INU", "INSURANCE", "24000000", "1", "Year", "2T, 5T"],
-      ["FIN", "INTEREST", "12000000", "1", "Month", "40DC"],
-      ["GPS", "EQUIPMENT", "120000", "1", "Month", "TRUCK"],
-      ["IFR", "LICENSE", "150000", "1", "Trip", "HEAD"],
+      ["DEP", "DEPRECIATION", "900000000", "8", "Year", "TRUCK · 5 tấn"],
+      ["INU", "INSURANCE", "24000000", "1", "Year", "TRUCK · 2 tấn; TRUCK · 5 tấn · HINO"],
+      ["FIN", "INTEREST", "12000000", "1", "Month", "HEADER; TRAILER · 40 ft"],
+      ["GPS", "EQUIPMENT", "120000", "1", "Month", "TRUCK · 8 tấn"],
+      ["IFR", "LICENSE", "150000", "1", "Trip", "HEADER · HYUNDAI"],
     ];
     const rows = Array.from({ length: 20 }, (_, i) => {
       const [fare, type, value, base, unit, vts] = plan[i % plan.length]!;

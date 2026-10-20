@@ -69,10 +69,6 @@ const CODE_FIELDS: Record<string, { repo: AnyRepo; paths: string[] }[]> = {
   [CC.TAX_EVIDENCE]: [{ repo: costItemRepository as AnyRepo, paths: ["taxEvidence"] }],
   [CC.TAX_TARIFF]: [{ repo: costItemRepository as AnyRepo, paths: ["taxTariff"] }],
   [CC.FIXED_COST_TYPE]: [{ repo: fixedCostRepository as AnyRepo, paths: ["costTypeCode"] }],
-  [CC.FIXED_COST_VEHICLE_TYPE]: [
-    { repo: fixedCostRepository as AnyRepo, paths: ["vehicleTypes"] },
-    { repo: fixedCostSummaryRepository as AnyRepo, paths: ["vehicleType"] },
-  ],
 };
 
 /** Lists whose option names are stored on records (renaming rewrites them). */

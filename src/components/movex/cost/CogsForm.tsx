@@ -296,7 +296,9 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                 </span>
                 <span>
                   <span className="text-muted-foreground">Fixed Cost for </span>
-                  {vehicle.fixedCodes.join(", ")}
+                  {vehicle.kind === "TRUCK"
+                    ? `TRUCK · ${vehicle.spec}`
+                    : `HEADER, TRAILER · ${vehicle.spec}`}
                 </span>
                 <Link to="/vehicle" className="text-primary hover:underline">
                   Open Vehicle

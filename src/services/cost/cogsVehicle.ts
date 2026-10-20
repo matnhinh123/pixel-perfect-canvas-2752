@@ -15,8 +15,8 @@ export interface CogsVehicleType {
   fuelNorm: number;
   /** Salary Range table (Variable Cost) used for the driver salary. */
   salaryTable: string;
-  /** Fixed Cost vehicle type codes that apply. */
-  fixedCodes: string[];
+  /** Truck Type (TRUCK) or trailer size (HEADER) — Fixed Costs of that vehicle apply. */
+  spec: string;
 }
 
 const groupNo = (g: string) => Number(/(\d+)/.exec(g)?.[1] ?? 0);
@@ -59,7 +59,7 @@ export function cogsVehicleTypes(vehicles: readonly VehicleMasterRecord[]): Cogs
       vehicleCount: list.length,
       fuelNorm: avg(list.map((v) => Number(v.fuelRate))),
       salaryTable: truckTable(tons),
-      fixedCodes: [`${tons}T`, "TRUCK"],
+      spec: tt,
     });
   }
 
@@ -85,7 +85,7 @@ export function cogsVehicleTypes(vehicles: readonly VehicleMasterRecord[]): Cogs
         vehicleCount: heads.length,
         fuelNorm: avg(heads.map((v) => Number(v.fuelRate))),
         salaryTable: VEHICLE_TYPES_BY_CATEGORY.Container[0] ?? "",
-        fixedCodes: [ft <= 20 ? "20DC" : ft >= 45 ? "45FT" : "40DC", "HEAD"],
+        spec: size,
       });
     }
   }

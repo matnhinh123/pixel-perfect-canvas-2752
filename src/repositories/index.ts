@@ -59,11 +59,11 @@ export const costItemRepository = createCollection<CostItemRecord>("cost-items.v
 export const cogsRepository = createCollection<CogsRecord>("cogs.v2", seedCogs);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
 export const fixedCostRepository = createCollection<FixedCostRecord>(
-  "fixed-costs.v4",
+  "fixed-costs.v5",
   seedFixedCosts,
 );
 export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
-  "fixed-cost-summaries.v3",
+  "fixed-cost-summaries.v4",
   seedFixedCostSummaries,
 );
 /** Location master; Routing stop pickers read active locations from it. */
@@ -121,6 +121,11 @@ export const commonCodeRepository = createCollection<CommonCodeRecord>(
 // Location Sub-Type was removed: retire the stored type once.
 {
   const t = commonCodeRepository.get(CC.LOCATION_SUB_TYPE);
+  if (t && !t.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: true }));
+}
+// Fixed Cost Vehicle Type was removed (Fixed Cost now picks from the Vehicle master): retire it once.
+{
+  const t = commonCodeRepository.get(CC.FIXED_COST_VEHICLE_TYPE);
   if (t && !t.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: true }));
 }
 // Vehicle Brand (formerly "Trade Mark") is back: restore the type retired earlier (or add it when

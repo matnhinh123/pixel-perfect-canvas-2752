@@ -17,6 +17,7 @@ import {
   type TollMaster,
 } from "./salaryRange";
 import type { CogsVehicleType } from "./cogsVehicle";
+import { coversCogsVehicle } from "@/services/fixedCostVehicle";
 
 const tripOf = (f: FixedCostRecord) =>
   allocate({
@@ -62,9 +63,7 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
   const fixedLines: CogsLine[] = i.fixedCosts
     .filter(
       (f) =>
-        !f.deleted &&
-        f.status === "Active" &&
-        f.vehicleTypes.some((t) => vt.fixedCodes.includes(t)),
+        !f.deleted && f.status === "Active" && f.vehicleTypes.some((t) => coversCogsVehicle(t, vt)),
     )
     .map((f) => ({
       key: `F:${f.id}`,

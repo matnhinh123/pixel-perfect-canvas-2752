@@ -1,5 +1,4 @@
-import { CC } from "@/mock-data/commonCodes";
-import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
+import { withCurrent } from "@/services/commonCodeService";
 import { useMemo, useState } from "react";
 import { Download, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -10,8 +9,9 @@ import {
   costItemRepository,
   fixedCostRepository,
   fixedCostSummaryRepository,
+  vehicleMasterRepository,
 } from "@/repositories";
-import { FIXED_COST_VEHICLE_TYPES } from "@/mock-data/fixedCost";
+import { coversChoice, vehicleTypeChoices } from "@/services/fixedCostVehicle";
 import { BusinessRuleError } from "@/services/crudService";
 import { calcFixedCost, fixedCostSummaryService, summaryOf } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
@@ -22,7 +22,8 @@ const num = "px-3 py-2 text-right tabular-nums";
 
 /** SFC.03 — fixed costs picked per vehicle type, with the Total Fixed Cost fed to Pricing List. */
 export function FixedCostSummaryTab() {
-  const vehicleTypes = useCodeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES);
+  const vehiclesAll = useCollection(vehicleMasterRepository);
+  const vehicleTypes = useMemo(() => vehicleTypeChoices(vehiclesAll), [vehiclesAll]);
   const fixedAll = useCollection(fixedCostRepository);
   const summaries = useCollection(fixedCostSummaryRepository);
   const costsAll = useCollection(costItemRepository);
@@ -33,7 +34,7 @@ export function FixedCostSummaryTab() {
   const fixed = useMemo(() => fixedAll.filter((f) => !f.deleted), [fixedAll]);
 
   const [vehicleType, setVehicleType] = useState(
-    () => FIXED_COST_VEHICLE_TYPES.find((v) => summaryOf(v)) ?? FIXED_COST_VEHICLE_TYPES[0]!,
+    () => vehicleTypes.find((v) => summaryOf(v)) ?? vehicleTypes[0] ?? "",
   );
   const saved = summaries.find((s) => s.vehicleType === vehicleType && !s.deleted);
   const [editing, setEditing] = useState(false);
@@ -77,7 +78,7 @@ export function FixedCostSummaryTab() {
     fixed.filter(
       (f) =>
         f.status === "Active" &&
-        f.vehicleTypes.includes(vehicleType) &&
+        f.vehicleTypes.some((l) => coversChoice(l, vehicleType)) &&
         !lines.some((l, i) => i !== index && l === f.id),
     );
 
