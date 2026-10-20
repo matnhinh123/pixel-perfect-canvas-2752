@@ -51,7 +51,7 @@ const SETUP_FLOW: { to: string; label: string }[] = [
   { to: "/toll-station", label: "Toll Station" },
   { to: "/routing", label: "Route Management" },
   { to: "/service", label: "Service" },
-  { to: "/cost", label: "Cost" },
+  { to: "/cost", label: "Cost Detail" },
   { to: "/pricing", label: "Pricing" },
 ];
 

@@ -20,9 +20,9 @@ export const Route = createFileRoute("/cost/")({
     typeof s["route"] === "string" ? { route: s["route"] } : {},
   head: () => ({
     meta: [
-      { title: "Cost — MoveX" },
+      { title: "Cost Detail — MoveX" },
       { name: "description", content: "Cost Details with their group and sub group." },
-      { property: "og:title", content: "Cost — MoveX" },
+      { property: "og:title", content: "Cost Detail — MoveX" },
       { property: "og:description", content: "Cost Details with their group and sub group." },
     ],
   }),
@@ -124,7 +124,7 @@ function CostListPage() {
       screen="cost-detail"
       entityType="Cost"
       entityLabel="Cost Detail"
-      title="Cost"
+      title="Cost Detail"
       subtitle="Cost Details with their group and sub group"
       rows={rows}
       columns={columns}

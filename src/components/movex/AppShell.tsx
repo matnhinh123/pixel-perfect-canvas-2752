@@ -56,7 +56,7 @@ export const NAV: NavItem[] = [
     label: "Cost",
     icon: "💰",
     children: [
-      { to: "/cost", label: "Cost" },
+      { to: "/cost", label: "Cost Detail" },
       { to: "/fixed-cost", label: "Fixed Cost" },
       { to: "/variable-cost", label: "Variable Cost" },
       { to: "/cogs", label: "COGS" },
