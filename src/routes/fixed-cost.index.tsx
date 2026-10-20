@@ -141,7 +141,7 @@ function FixedCostList() {
       },
       {
         key: "costDetail",
-        label: "Cost Detail",
+        label: "Fare Detail",
         type: "text",
         value: (f) => detailName(f.costDetailId),
         defaultHidden: true,

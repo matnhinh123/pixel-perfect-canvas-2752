@@ -39,10 +39,10 @@ const S5 = "sm:col-span-3 lg:col-span-5";
 
 /** Header crumbs + title. */
 function useHeader(code: string | undefined, isNew: boolean, readOnly: boolean) {
-  const label = "Cost Detail";
+  const label = "Fare Detail";
   return {
     crumbs: [
-      { label: "Cost Code Management", to: BASE },
+      { label: "Fare Cost Management", to: BASE },
       ...(code ? [{ label: code }] : []),
       { label: isNew ? "Add New" : readOnly ? "Detail" : "Edit" },
     ],
@@ -199,7 +199,7 @@ export function CostDetailForm({
     try {
       const saved = costItemService.save(d, source?.id);
       guard.allowNext();
-      toast.success(isNew ? `Cost Detail ${saved.code} added` : `Cost Detail ${saved.code} saved`);
+      toast.success(isNew ? `Fare Detail ${saved.code} added` : `Fare Detail ${saved.code} saved`);
       void navigate({ to: "/cost/$id", params: { id: saved.id }, search: { mode: "view" } });
     } catch (err) {
       if (err instanceof BusinessRuleError) {
@@ -241,7 +241,7 @@ export function CostDetailForm({
       <FormErrorBanner message={formError} errors={errors} />
 
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
-        <CollapsiblePanel title="Cost Detail">
+        <CollapsiblePanel title="Fare Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
               label="Fare Code"
@@ -263,7 +263,7 @@ export function CostDetailForm({
               required
               error={errors["group"]}
               className={S3}
-              info="Pick a group from the list, or type a new one: it is saved with this Cost Detail."
+              info="Pick a group from the list, or type a new one: it is saved with this Fare Detail."
             >
               <SuggestInput
                 value={d.group}
@@ -276,7 +276,7 @@ export function CostDetailForm({
               label="Sub Group Name"
               error={errors["subGroup"]}
               className={S3}
-              info="Pick a sub group already used, or type a new one: it is saved with this Cost Detail."
+              info="Pick a sub group already used, or type a new one: it is saved with this Fare Detail."
             >
               <SuggestInput
                 value={d.subGroup}
