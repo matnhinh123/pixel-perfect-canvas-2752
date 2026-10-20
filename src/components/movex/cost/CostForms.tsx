@@ -34,7 +34,7 @@ import { COST_CURRENCIES, COST_TAX_EVIDENCES, COST_TAX_TARIFFS } from "@/mock-da
 import type { CostItemRecord } from "@/types";
 
 const BASE = "/cost";
-/** Five of the 12 columns: Cost Name and Local Name side by side, same width. */
+/** Five of the 12 columns: Fare Name and Local Name side by side, same width. */
 const S5 = "sm:col-span-3 lg:col-span-5";
 
 /** Header crumbs + title. */
@@ -244,16 +244,16 @@ export function CostDetailForm({
         <CollapsiblePanel title="Cost Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
-              label="Cost Code"
+              label="Fare Code"
               required
               error={errors["code"]}
               className={S2}
               info="Unique, upper-case. 2–30 characters: letters, digits, - or _."
             >
-              <Input placeholder="Enter Cost Code" maxLength={30} {...text("code")} />
+              <Input placeholder="Enter Fare Code" maxLength={30} {...text("code")} />
             </Field>
-            <Field label="Cost Name" required error={errors["name"]} className={S5}>
-              <Input placeholder="Enter Cost Name" {...text("name")} />
+            <Field label="Fare Name" required error={errors["name"]} className={S5}>
+              <Input placeholder="Enter Fare Name" {...text("name")} />
             </Field>
             <Field label="Local Name" error={errors["localName"]} className={S5}>
               <Input placeholder="Enter Local Name" {...text("localName")} />

@@ -214,12 +214,12 @@ export const draftOfCostItem = (c: CostItemRecord): CostItemDraft => ({
 export function validateCostItem(d: CostItemDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
   const code = d.code.trim().toUpperCase();
-  if (!code) e["code"] = "Cost Detail Code is required.";
+  if (!code) e["code"] = "Fare Code is required.";
   else if (!/^[A-Z0-9_-]{2,30}$/.test(code))
     e["code"] = "Use 2–30 characters: letters, digits, - or _.";
   else if (items().some((c) => c.id !== id && c.code.toUpperCase() === code))
-    e["code"] = `Cost Detail Code ${code} already exists.`;
-  if (!d.name.trim()) e["name"] = "Cost Name is required.";
+    e["code"] = `Fare Code ${code} already exists.`;
+  if (!d.name.trim()) e["name"] = "Fare Name is required.";
   if (!d.group.trim()) e["group"] = "Group Name is required.";
   return e;
 }
@@ -258,11 +258,11 @@ export const costItemService = {
     const out: AuditInput[] = [];
     const upd = (action: AuditInput["action"], field: string, a: string, b: string) =>
       a !== b && out.push({ ...base, action, field, oldValue: a || "—", newValue: b || "—" });
-    upd("UPDATE", "Cost Detail Code", existing.code, next.code);
-    upd("UPDATE", "Cost Name", existing.name, next.name);
+    upd("UPDATE", "Fare Code", existing.code, next.code);
+    upd("UPDATE", "Fare Name", existing.name, next.name);
     upd("UPDATE", "Local Name", existing.localName, next.localName);
-    upd("UPDATE", "Cost Group", existing.group ?? "", next.group);
-    upd("UPDATE", "Sub Group", existing.subGroup ?? "", next.subGroup);
+    upd("UPDATE", "Group Name", existing.group ?? "", next.group);
+    upd("UPDATE", "Sub Group Name", existing.subGroup ?? "", next.subGroup);
     upd("UPDATE", "Services", joinNames(existing.serviceIds ?? []), joinNames(next.serviceIds));
     upd("UPDATE", "Tax Evidence", existing.taxEvidence, next.taxEvidence);
     upd("UPDATE", "Def Currency", existing.currency, next.currency);

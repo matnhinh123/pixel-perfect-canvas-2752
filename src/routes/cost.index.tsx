@@ -45,13 +45,13 @@ function CostListPage() {
       {
         key: "code",
         width: 110,
-        label: "Cost Code",
+        label: "Fare Code",
         type: "text",
         pinned: true,
         value: (c) => c.code,
         render: (c) => <span className="font-semibold text-primary">{c.code}</span>,
       },
-      { key: "name", width: 260, label: "Cost Name", type: "text", value: (c) => c.name },
+      { key: "name", width: 260, label: "Fare Name", type: "text", value: (c) => c.name },
       {
         key: "localName",
         width: 260,
@@ -128,7 +128,7 @@ function CostListPage() {
       subtitle="Cost Details with their group and sub group"
       rows={rows}
       columns={columns}
-      searchPlaceholder="Search code, name..."
+      searchPlaceholder="Search fare code, fare name..."
       searchValues={(c) => [c.code, c.name, c.localName]}
       quickFilters={[
         statusFilter,
