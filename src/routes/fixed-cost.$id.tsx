@@ -250,24 +250,24 @@ function FixedCostForm({
         <CollapsiblePanel title="General Information">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
-              label="Fare Detail"
+              label="Fare Code"
               required
               error={errors["costDetailId"]}
               className={S4}
-              info="The Fare Detail (Fare Cost Management) this fixed cost is booked to."
+              info="The Fare Code (Fare Code Management) this fixed cost is booked to."
             >
               <SearchableSelect
                 value={d.costDetailId}
                 onChange={(v) => patch({ costDetailId: v })}
                 options={["", ...details.map((c) => c.id)]}
                 labels={{
-                  "": readOnly ? "—" : "Select Fare Detail",
+                  "": readOnly ? "—" : "Select Fare Code",
                   ...Object.fromEntries(details.map((c) => [c.id, `${c.code} · ${c.name}`])),
                 }}
                 invalid={!!errors["costDetailId"]}
                 disabled={readOnly}
                 searchPlaceholder="Search cost code or name…"
-                emptyText="No matching Fare Detail"
+                emptyText="No matching Fare Code"
               />
             </Field>
             <Field label="Cost Type Code" required error={errors["costTypeCode"]} className={S4}>

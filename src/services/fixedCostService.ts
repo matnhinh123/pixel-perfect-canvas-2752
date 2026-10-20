@@ -81,7 +81,7 @@ export const draftOfFixedCost = (f: FixedCostRecord): FixedCostDraft => {
 export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
   const code = d.code.trim().toUpperCase();
-  if (!d.costDetailId) e["costDetailId"] = "Fare Detail is required.";
+  if (!d.costDetailId) e["costDetailId"] = "Fare Code is required.";
   if (!d.costTypeCode) e["costTypeCode"] = "Cost Type Code is required.";
   if (!code) e["code"] = "Fixed Cost Code is required.";
   else if (!/^[A-Z0-9_-]{2,30}$/.test(code))
@@ -133,7 +133,7 @@ export const fixedCostService = {
       a !== b &&
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
     upd("Fixed Cost Name", existing.name, next.name);
-    upd("Fare Detail", existing.costDetailId, next.costDetailId);
+    upd("Fare Code", existing.costDetailId, next.costDetailId);
     upd("Cost Type", existing.costTypeCode, next.costTypeCode);
     upd(
       "Cost Value",

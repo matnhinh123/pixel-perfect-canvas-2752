@@ -20,10 +20,10 @@ export const Route = createFileRoute("/cost/")({
     typeof s["route"] === "string" ? { route: s["route"] } : {},
   head: () => ({
     meta: [
-      { title: "Fare Cost Management — MoveX" },
-      { name: "description", content: "Fare details with their group and sub group." },
-      { property: "og:title", content: "Fare Cost Management — MoveX" },
-      { property: "og:description", content: "Fare details with their group and sub group." },
+      { title: "Fare Code Management — MoveX" },
+      { name: "description", content: "Fare codes with their group and sub group." },
+      { property: "og:title", content: "Fare Code Management — MoveX" },
+      { property: "og:description", content: "Fare codes with their group and sub group." },
     ],
   }),
   component: CostListPage,
@@ -123,9 +123,9 @@ function CostListPage() {
       lang="en"
       screen="cost-detail"
       entityType="Cost"
-      entityLabel="Fare Detail"
-      title="Fare Cost Management"
-      subtitle="Fare details with their group and sub group"
+      entityLabel="Fare Code"
+      title="Fare Code Management"
+      subtitle="Fare codes with their group and sub group"
       rows={rows}
       columns={columns}
       searchPlaceholder="Search fare code, fare name..."
@@ -151,7 +151,7 @@ function CostListPage() {
       ]}
       crud={costItemCrud}
       allowDelete={false}
-      addLabel="Add Fare Detail"
+      addLabel="Add Fare Code"
       onAdd={() => void navigate({ to: "/cost/$id", params: { id: "new" }, search: {} })}
       onView={(c) => open(c, "view")}
       onEdit={(c) => open(c, "edit")}

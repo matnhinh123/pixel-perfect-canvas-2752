@@ -291,20 +291,20 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
   ]),
   // ---------------------------------------------------------------- Cost
   type(CC.TAX_EVIDENCE, "Tax Evidence", "Customizable", COST_TAX_EVIDENCES, [
-    [CO, "Fare Detail", "Tax Evidence"],
+    [CO, "Fare Code", "Tax Evidence"],
   ]),
   type(CC.TAX_TARIFF, "Tax Tariff", "Customizable", COST_TAX_TARIFFS, [
-    [CO, "Fare Detail", "Default Tax Tariff"],
+    [CO, "Fare Code", "Default Tax Tariff"],
   ]),
   type(CC.UOM_CATEGORY, "UoM Category", "Customizable", Object.keys(COST_UOM_CATALOG), [
-    [CO, "Fare Detail", "Category UoM"],
+    [CO, "Fare Code", "Category UoM"],
   ]),
   type(
     CC.UOM,
     "Unit of Measure",
     "Customizable",
     byParent(COST_UOM_CATALOG),
-    [[CO, "Fare Detail", "Default UoM"]],
+    [[CO, "Fare Code", "Default UoM"]],
     "Attribute = the UoM Category the unit belongs to.",
     Object.keys(COST_UOM_CATALOG),
   ),

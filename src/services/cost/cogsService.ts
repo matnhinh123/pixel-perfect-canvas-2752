@@ -77,7 +77,7 @@ export function validateCogs(d: CogsDraft, id?: string): Record<string, string> 
   if (badEdit) e["overrides"] = "An edited amount must be 0 or more.";
   const badOther = d.others.findIndex((o) => !o.costId || !(o.amount > 0));
   if (badOther >= 0)
-    e["others"] = `Other Cost row ${badOther + 1}: pick a Fare Detail and enter an amount above 0.`;
+    e["others"] = `Other Cost row ${badOther + 1}: pick a Fare Code and enter an amount above 0.`;
   return e;
 }
 

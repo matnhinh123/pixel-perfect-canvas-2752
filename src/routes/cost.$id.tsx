@@ -12,7 +12,7 @@ export const Route = createFileRoute("/cost/$id")({
   validateSearch: (s: Record<string, unknown>): { mode?: Mode } =>
     s["mode"] === "view" || s["mode"] === "edit" ? { mode: s["mode"] } : {},
   head: ({ params }) => ({
-    meta: [{ title: params.id === "new" ? "Create Fare Detail — MoveX" : "Fare Detail — MoveX" }],
+    meta: [{ title: params.id === "new" ? "Create Fare Code — MoveX" : "Fare Code — MoveX" }],
   }),
   component: CostPage,
 });
@@ -32,7 +32,7 @@ function CostPage() {
     <Panel>
       <EmptyState
         icon={<XCircle className="h-8 w-8" />}
-        title="Fare Detail not found"
+        title="Fare Code not found"
         action={
           <Button asChild size="sm">
             <Link to="/cost">Back to list</Link>

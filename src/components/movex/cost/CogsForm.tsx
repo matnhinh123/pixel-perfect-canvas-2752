@@ -413,7 +413,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                             onChange={(costId) => setOther(o.rid, { costId })}
                             options={["", ...costs.map((x) => x.id)]}
                             labels={{
-                              "": "Select Fare Detail",
+                              "": "Select Fare Code",
                               ...Object.fromEntries(
                                 costs.map((x) => [x.id, `${x.code} - ${x.name}`]),
                               ),
