@@ -42,7 +42,7 @@ function useHeader(code: string | undefined, isNew: boolean, readOnly: boolean) 
   const label = "Cost Detail";
   return {
     crumbs: [
-      { label: "Cost Detail", to: BASE },
+      { label: "Cost Code Management", to: BASE },
       ...(code ? [{ label: code }] : []),
       { label: isNew ? "Add New" : readOnly ? "Detail" : "Edit" },
     ],
