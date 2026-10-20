@@ -1,5 +1,6 @@
 // Demo seed for Master Data > Cost > Fixed Cost.
-import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
+import type { FixedCostRecord, FixedCostSummaryRecord, LoanTerms } from "@/types";
+import { loanSchedule } from "@/services/loanMath";
 
 /** Rate to VND. */
 export const FIXED_COST_RATES: Record<string, number> = { VND: 1, USD: 25400 };
@@ -21,6 +22,14 @@ const LOCAL_NAMES: Record<string, string> = {
   "FC-LICENSE": "Phí giấy phép kinh doanh vận tải",
   "FC-PERMIT": "Phí vào cảng",
   "FC-OLD": "Bộ bạt phủ (ngưng dùng)",
+};
+
+/** Header + trailer bought on credit: 70% of 2.4 billion over 5 years. */
+const HEADER_LOAN: LoanTerms = {
+  amount: 1_680_000_000,
+  ratePct: 10.5,
+  termMonths: 60,
+  method: "Annuity",
 };
 
 const fc = (
@@ -49,6 +58,7 @@ const fc = (
   utilDay: 1,
   applyUtilization: true,
   allocationDays: 30,
+  loan: null,
   status: "Active",
   ...meta,
   ...extra,
@@ -93,11 +103,11 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     "CI-FIN",
     "FC_LOAN_INTEREST",
     "Loan interest",
-    18_000_000,
-    1,
+    Math.round(loanSchedule(HEADER_LOAN).totalInterest),
+    HEADER_LOAN.termMonths,
     "Month",
     ["HEADER · HYUNDAI"],
-    { utilContainer: 24, utilDay: 30 },
+    { utilContainer: 24, utilDay: 30, loan: HEADER_LOAN },
   ),
   fc(
     "FC-GPS",

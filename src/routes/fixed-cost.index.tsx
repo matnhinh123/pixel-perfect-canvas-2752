@@ -11,7 +11,12 @@ import { FixedCostSummaryTab } from "@/components/movex/cost/FixedCostSummaryTab
 import { useCollection } from "@/hooks/use-store";
 import { costItemRepository, fixedCostRepository, vehicleMasterRepository } from "@/repositories";
 import { vehicleTypeChoices } from "@/services/fixedCostVehicle";
-import { calcFixedCost, fixedCostCrud, fixedCostImportConfig } from "@/services/fixedCostService";
+import {
+  calcFixedCost,
+  fixedCostCrud,
+  fixedCostImportConfig,
+  loanLabel,
+} from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
 import type { FixedCostRecord } from "@/types";
 
@@ -127,6 +132,13 @@ function FixedCostList() {
         label: "Currency",
         type: "text",
         value: (f) => f.currency,
+        defaultHidden: true,
+      },
+      {
+        key: "loan",
+        label: "Loan",
+        type: "text",
+        value: (f) => loanLabel(f.loan),
         defaultHidden: true,
       },
       {

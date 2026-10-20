@@ -21,6 +21,7 @@ import { draftImportConfig, listCell, numCell, pick } from "./importExportServic
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { allocate, type AllocationResult } from "./fixedCostMath";
+import { loanSchedule, REPAYMENT_METHODS, type LoanTerms } from "./loanMath";
 
 const all = () => fixedCostRepository.all().filter((f) => !f.deleted);
 
@@ -80,14 +81,31 @@ export const newFixedCostDraft = (): FixedCostDraft => ({
   utilDay: 1,
   applyUtilization: true,
   allocationDays: 30,
+  loan: null,
   status: "Active",
 });
 
 export const draftOfFixedCost = (f: FixedCostRecord): FixedCostDraft => {
   const { id, deleted, createdAt, createdBy, updatedAt, updatedBy, ...d } = f;
   void [id, deleted, createdAt, createdBy, updatedAt, updatedBy];
-  return { ...d, localName: d.localName ?? "" };
+  return { ...d, localName: d.localName ?? "", loan: d.loan ? { ...d.loan } : null };
 };
+
+/** A loan's cost is its total interest, spread over its term in months. */
+export const applyLoan = <T extends FixedCostDraft>(d: T): T =>
+  d.loan
+    ? {
+        ...d,
+        costValue: Math.round(loanSchedule(d.loan).totalInterest),
+        allocationBase: d.loan.termMonths,
+        allocationUnit: "Month",
+      }
+    : d;
+
+export const loanLabel = (l: LoanTerms | null | undefined) =>
+  l
+    ? `${l.amount.toLocaleString("vi-VN")} · ${l.ratePct}%/year · ${l.termMonths} months · ${l.method}`
+    : "";
 
 export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
@@ -101,7 +119,17 @@ export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string
   if (!d.name.trim()) e["name"] = "Fixed Cost Name is required.";
   const vErr = fcVehicleErrors(d.vehicleTypes, vehicleMasterRepository.all());
   if (vErr) e["vehicleTypes"] = vErr;
-  if (!(d.costValue > 0)) e["costValue"] = "Cost Value must be greater than 0.";
+  if (d.loan) {
+    if (!(d.loan.amount > 0)) e["loanAmount"] = "Loan Amount must be greater than 0.";
+    if (!(d.loan.ratePct > 0 && d.loan.ratePct <= 100))
+      e["loanRate"] = "Interest Rate must be above 0 and at most 100 %/year.";
+    if (!(
+      Number.isInteger(d.loan.termMonths) &&
+      d.loan.termMonths >= 1 &&
+      d.loan.termMonths <= 360
+    ))
+      e["loanTerm"] = "Loan Term must be 1 – 360 months.";
+  } else if (!(d.costValue > 0)) e["costValue"] = "Cost Value must be greater than 0.";
   if (!(d.allocationBase > 0)) e["allocationBase"] = "Allocation Base must be greater than 0.";
   if (!d.allocationUnit) e["allocationUnit"] = "Allocation Base Unit is required.";
   if (d.allocationUnit !== "Trip") {
@@ -120,7 +148,7 @@ export const fixedCostService = {
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please check the highlighted fields.", errors);
     const clean: FixedCostDraft = {
-      ...d,
+      ...applyLoan(d),
       code: d.code.trim().toUpperCase(),
       name: d.name.trim(),
       localName: d.localName.trim(),
@@ -147,6 +175,7 @@ export const fixedCostService = {
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
     upd("Fixed Cost Name (EN)", existing.name, next.name);
     upd("Fixed Cost Name (Local)", existing.localName ?? "", next.localName);
+    upd("Loan", loanLabel(existing.loan), loanLabel(next.loan));
     upd("Fare Code", existing.costDetailId, next.costDetailId);
     upd(
       "Cost Value",
@@ -278,7 +307,18 @@ const numOr = (v: string | undefined, dflt: number) => {
   return Number.isNaN(n) ? dflt : n;
 };
 
-const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => {
+const loanOfRow = (r: Record<string, string>): LoanTerms | null =>
+  (r["loanAmount"] ?? "").trim()
+    ? {
+        amount: numOr(r["loanAmount"], 0),
+        ratePct: numOr(r["loanRate"], 0),
+        termMonths: numOr(r["loanTerm"], 0),
+        method: pick(r["repaymentMethod"], REPAYMENT_METHODS) || "Annuity",
+      }
+    : null;
+
+const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => applyLoan(rowDraft(r));
+const rowDraft = (r: Record<string, string>): FixedCostDraft => {
   const c = choices();
   const { base, unit } = baseOf(r);
   const currency = pick(r["currency"], c.currency) || "VND";
@@ -300,6 +340,7 @@ const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => {
     utilContainer: numOr(r["utilContainer"], 1),
     utilDay: numOr(r["utilDay"], 1),
     allocationDays: numOr(r["allocationDays"], 30),
+    loan: loanOfRow(r),
     status: pick(r["status"], STATUSES) || "Active",
   };
 };
@@ -333,6 +374,10 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
     { key: "utilContainer", header: "Utilization Rate – Container", example: "20" },
     { key: "utilDay", header: "Utilization Rate – Day", example: "30" },
     { key: "allocationDays", header: "Allocation Days", example: "30" },
+    { key: "loanAmount", header: "Loan Amount", example: "" },
+    { key: "loanRate", header: "Interest Rate (%/year)", example: "" },
+    { key: "loanTerm", header: "Loan Term (months)", example: "" },
+    { key: "repaymentMethod", header: "Repayment Method", example: "" },
     { key: "status", header: "Status", example: "Active" },
   ],
   existingKeys: () => new Set(all().map((f) => f.code.toLowerCase())),
@@ -350,7 +395,17 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       e.push({ field: "allocationUnit", error: `Use one of: ${c.unit.join(", ")}` });
     if (flag(r["applyUtilization"]) === undefined)
       e.push({ field: "applyUtilization", error: "Yes or No (empty = Yes)" });
-    for (const k of ["costValue", "utilContainer", "utilDay", "allocationDays"])
+    if (pick(r["repaymentMethod"], REPAYMENT_METHODS) === undefined)
+      e.push({ field: "repaymentMethod", error: `Use one of: ${REPAYMENT_METHODS.join(", ")}` });
+    for (const k of [
+      "costValue",
+      "utilContainer",
+      "utilDay",
+      "allocationDays",
+      "loanAmount",
+      "loanRate",
+      "loanTerm",
+    ])
       if (r[k] && Number.isNaN(numCell(r[k]))) e.push({ field: k, error: "Must be a number" });
     if (pick(r["status"], STATUSES) === undefined)
       e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
@@ -386,6 +441,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         "20",
         "30",
         "30",
+        ...(fare === "FIN" ? ["1680000000", "10.5", "60", "Annuity"] : ["", "", "", ""]),
         "Active",
       ];
     });

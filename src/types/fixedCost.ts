@@ -4,6 +4,21 @@ import type { BaseRecord } from "./common";
 export type AllocationUnit = "Year" | "Month" | "Day" | "Trip";
 export const ALLOCATION_UNITS: AllocationUnit[] = ["Year", "Month", "Day", "Trip"];
 
+/** Annuity: the same payment every month. Equal Principal: same principal, interest on the balance. */
+export type RepaymentMethod = "Annuity" | "Equal Principal";
+export const REPAYMENT_METHODS: readonly RepaymentMethod[] = ["Annuity", "Equal Principal"];
+
+/** Loan behind a fixed cost (e.g. a vehicle bought on credit). */
+export interface LoanTerms {
+  /** Amount borrowed. */
+  amount: number;
+  /** Interest rate, % per year. */
+  ratePct: number;
+  /** Loan term in months. */
+  termMonths: number;
+  method: RepaymentMethod;
+}
+
 /** One fixed-cost line (depreciation, insurance, interest, GPS…) with its allocation settings. */
 export interface FixedCostRecord extends BaseRecord {
   /** Cost Detail (Master Data > Cost) this fixed cost is booked to. */
@@ -27,6 +42,11 @@ export interface FixedCostRecord extends BaseRecord {
   applyUtilization: boolean;
   /** Days per month for Month → Day. */
   allocationDays: number;
+  /**
+   * Loan interest: when set, Cost Value = total interest of the loan, spread over its term
+   * (Allocation Base = term, unit Month).
+   */
+  loan: LoanTerms | null;
 }
 
 /** Fixed Cost Summary of one vehicle type (id = vehicle type). */
