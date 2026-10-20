@@ -365,11 +365,17 @@ function FixedCostForm({
                 emptyText="No matching Fare Name"
               />
             </Field>
+            <FixedCostVehicleRows
+              value={d.vehicleTypes}
+              onChange={(vehicleTypes) => patch({ vehicleTypes })}
+              readOnly={readOnly}
+              error={errors["vehicleTypes"]}
+            />
             <Field
               label="Cost Value"
               required
               error={errors["costValue"]}
-              className={S3}
+              className={cn(S3, "lg:col-start-1")}
               hint={
                 loanOn
                   ? "= total interest of the loan"
@@ -480,13 +486,7 @@ function FixedCostForm({
                 <LoanSummary schedule={loan} currency={d.currency} />
               </>
             )}
-            <FixedCostVehicleRows
-              value={d.vehicleTypes}
-              onChange={(vehicleTypes) => patch({ vehicleTypes })}
-              readOnly={readOnly}
-              error={errors["vehicleTypes"]}
-            />
-            <Field label="Apply Utilization" className={S2}>
+            <Field label="Apply Utilization" className={cn(S2, "lg:col-start-1")}>
               <label className="flex h-10 cursor-pointer items-center gap-3 group-disabled:cursor-default">
                 <Switch
                   checked={d.applyUtilization && !isTrip}
