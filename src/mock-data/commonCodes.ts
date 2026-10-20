@@ -314,6 +314,6 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
     "Fixed",
     ALLOCATION_UNITS,
     [[FC, "Fixed Cost Detail", "Allocation Base Unit"]],
-    "Drives the Year → Month → Day → Trip allocation chain.",
+    "Drives the Year → Month → Day allocation chain.",
   ),
 ];

@@ -86,7 +86,7 @@ export function FixedCostSummaryTab() {
     const f = fixed.find((x) => x.id === id);
     return { id, f, c: f ? calcFixedCost(f) : null };
   });
-  const total = rows.reduce((s, r) => s + (r.c?.trip ?? 0), 0);
+  const total = rows.reduce((s, r) => s + (r.c?.day ?? 0), 0);
   const costLabel = (id: string) => {
     const c = costs.find((x) => x.id === id) ?? costsAll.find((x) => x.id === id);
     return c ? { code: c.code, name: c.name } : { code: "", name: "" };
@@ -105,7 +105,6 @@ export function FixedCostSummaryTab() {
           "Year",
           "Month",
           "Day",
-          "Trip",
         ],
         [
           ...rows.map((r) => [
@@ -113,11 +112,11 @@ export function FixedCostSummaryTab() {
             costLabel(shownAssign).code,
             r.f?.code ?? "",
             r.f?.name ?? "",
-            ...[r.c?.allocation, r.c?.year, r.c?.month, r.c?.day, r.c?.trip].map((n) =>
+            ...[r.c?.allocation, r.c?.year, r.c?.month, r.c?.day].map((n) =>
               n == null ? "" : Math.round(n),
             ),
           ]),
-          ["", "", "", "Total Fixed Cost", "", "", "", "", Math.round(total)],
+          ["", "", "", "Total Fixed Cost", "", "", "", Math.round(total)],
         ],
       ),
     );
@@ -208,7 +207,7 @@ export function FixedCostSummaryTab() {
                     {h}
                   </th>
                 ))}
-                {["Allocation Value", "Year", "Month", "Day", "Trip"].map((h) => (
+                {["Allocation Value", "Year", "Month", "Day"].map((h) => (
                   <th key={h} className={cn(thClass, "px-3 py-2.5 text-right")}>
                     {h}
                   </th>
@@ -219,7 +218,7 @@ export function FixedCostSummaryTab() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={editing ? 8 : 7}>
+                  <td colSpan={editing ? 7 : 6}>
                     <EmptyState
                       title={`No fixed cost for ${vehicleType}`}
                       description={
@@ -272,8 +271,7 @@ export function FixedCostSummaryTab() {
                     <td className={num}>{fmtMoney(r.c?.allocation)}</td>
                     <td className={num}>{fmtMoney(r.c?.year)}</td>
                     <td className={num}>{fmtMoney(r.c?.month)}</td>
-                    <td className={num}>{fmtMoney(r.c?.day)}</td>
-                    <td className={cn(num, "font-semibold")}>{fmtMoney(r.c?.trip)}</td>
+                    <td className={cn(num, "font-semibold")}>{fmtMoney(r.c?.day)}</td>
                     {editing && (
                       <td className="px-2 text-center">
                         <button
@@ -292,8 +290,8 @@ export function FixedCostSummaryTab() {
             </tbody>
             <tfoot>
               <tr className="border-t bg-muted/40 font-semibold">
-                <td colSpan={6} className="px-3 py-3 text-right">
-                  Total Fixed Cost (Trip)
+                <td colSpan={5} className="px-3 py-3 text-right">
+                  Total Fixed Cost (Day)
                 </td>
                 <td className={cn(num, "py-3 text-base text-primary")}>{fmtMoney(total)} ₫</td>
                 {editing && <td />}

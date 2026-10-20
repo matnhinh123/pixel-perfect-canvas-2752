@@ -54,16 +54,16 @@ export const costGroupRepository = createCollection<CostGroupRecord>(
   "cost-groups.v2",
   seedCostGroups,
 );
-export const costItemRepository = createCollection<CostItemRecord>("cost-items.v5", seedCostItems);
+export const costItemRepository = createCollection<CostItemRecord>("cost-items.v6", seedCostItems);
 /** COGS of a trip (route × vehicle type) built on the Cost screens. */
 export const cogsRepository = createCollection<CogsRecord>("cogs.v2", seedCogs);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
 export const fixedCostRepository = createCollection<FixedCostRecord>(
-  "fixed-costs.v7",
+  "fixed-costs.v8",
   seedFixedCosts,
 );
 export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
-  "fixed-cost-summaries.v4",
+  "fixed-cost-summaries.v5",
   seedFixedCostSummaries,
 );
 /** Location master; Routing stop pickers read active locations from it. */
@@ -128,6 +128,17 @@ export const commonCodeRepository = createCollection<CommonCodeRecord>(
 for (const id of [CC.FIXED_COST_VEHICLE_TYPE, CC.FIXED_COST_TYPE]) {
   const t = commonCodeRepository.get(id);
   if (t && !t.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: true }));
+}
+// Allocation Base Unit lost "Trip" (Fixed Cost stops at Day): take the system list again.
+{
+  const t = commonCodeRepository.get(CC.ALLOCATION_UNIT);
+  const seed = seedCommonCodes().find((x) => x.id === CC.ALLOCATION_UNIT);
+  if (t && seed && JSON.stringify(t.options) !== JSON.stringify(seed.options))
+    commonCodeRepository.update(t.id, (p) => ({
+      ...p,
+      options: seed.options,
+      remark: seed.remark,
+    }));
 }
 // Vehicle Brand (formerly "Trade Mark") is back: restore the type retired earlier (or add it when
 // missing) and give the stored type its new name.

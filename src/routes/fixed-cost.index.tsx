@@ -142,27 +142,6 @@ function FixedCostList() {
         defaultHidden: true,
       },
       {
-        key: "applyUtilization",
-        label: "Apply Utilization",
-        type: "text",
-        value: (f) => (f.applyUtilization && f.allocationUnit !== "Trip" ? "Yes" : "No"),
-        defaultHidden: true,
-      },
-      {
-        key: "utilContainer",
-        label: "Utilization Rate – Container",
-        type: "number",
-        value: (f) => f.utilContainer,
-        defaultHidden: true,
-      },
-      {
-        key: "utilDay",
-        label: "Utilization Rate – Day",
-        type: "number",
-        value: (f) => f.utilDay,
-        defaultHidden: true,
-      },
-      {
         key: "allocationDays",
         label: "Allocation Days",
         type: "number",
@@ -177,7 +156,7 @@ function FixedCostList() {
         render: (f) => money(calcFixedCost(f).allocation),
         className: "text-right",
       },
-      ...(["year", "month", "day", "trip"] as const).map((k): ListColumn<FixedCostRecord> => ({
+      ...(["year", "month", "day"] as const).map((k): ListColumn<FixedCostRecord> => ({
         key: k,
         label: k[0]!.toUpperCase() + k.slice(1),
         type: "number",

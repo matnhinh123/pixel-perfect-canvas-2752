@@ -174,12 +174,11 @@ function FixedCostForm({
   const toggleLoan = (on: boolean) =>
     withLoan(on ? { amount: 0, ratePct: 0, termMonths: 60, method: "Annuity" } : null);
   const setLoan = (p: Partial<LoanTerms>) => d.loan && withLoan({ ...d.loan, ...p });
-  const isTrip = d.allocationUnit === "Trip";
   const calc = calcFixedCost({ ...d, exchangeRate: rateOf(d.currency) });
 
   /** Number input kept as text-friendly: empty string → 0 so validation flags it. */
   const numInput = (
-    k: "allocationBase" | "utilContainer" | "utilDay" | "allocationDays",
+    k: "allocationBase" | "allocationDays",
     extra: { disabled?: boolean } = {},
   ) => ({
     type: "number" as const,
@@ -230,25 +229,17 @@ function FixedCostForm({
     }
   };
 
-  const unitNote = isTrip
-    ? "Trip: the Allocation Value is already per trip, so Allocation Days and Utilization are not used."
-    : "Only units from the Allocation Base Unit down are calculated; larger units show “—”.";
+  const unitNote =
+    "Cost Value ÷ Allocation Base, then Year → Month (÷ 12) → Day (÷ Allocation Days). Units larger than the one picked show “—”.";
 
   const unitLabel = d.allocationUnit;
   const rate = rateOf(d.currency);
   const preview = [
     `Allocation Value = ${fmtMoney(d.costValue, 2)} ${d.currency}${rate !== 1 ? ` × ${fmtMoney(rate)}` : ""} ÷ ${d.allocationBase || 0} = ${fmtMoney(calc.allocation, 2)} ₫ / ${unitLabel}`,
-    ...(isTrip
-      ? [`Trip = Allocation Value = ${fmtMoney(calc.trip, 2)} ₫`]
-      : [
-          ...(unitLabel === "Year" ? [`Month = Year ÷ 12 = ${fmtMoney(calc.month, 2)} ₫`] : []),
-          ...(unitLabel !== "Day"
-            ? [`Day = Month ÷ ${d.allocationDays || 0} days = ${fmtMoney(calc.day, 2)} ₫`]
-            : []),
-          d.applyUtilization
-            ? `Trip = Day ÷ Utilization (${d.utilContainer || 0} container ÷ ${d.utilDay || 0} day) = ${fmtMoney(calc.trip, 2)} ₫`
-            : `Trip = Day = ${fmtMoney(calc.trip, 2)} ₫ (utilization not applied)`,
-        ]),
+    ...(unitLabel === "Year" ? [`Month = Year ÷ 12 = ${fmtMoney(calc.month, 2)} ₫`] : []),
+    ...(unitLabel !== "Day"
+      ? [`Day = Month ÷ ${d.allocationDays || 0} days = ${fmtMoney(calc.day, 2)} ₫`]
+      : []),
   ];
 
   return (
@@ -417,6 +408,20 @@ function FixedCostForm({
               </div>
             </Field>
             <Field
+              label="Allocation Days"
+              error={errors["allocationDays"]}
+              className={S2}
+              info="Days per month used for Month → Day (e.g. 26 working days; 30 for a 360-day year)."
+            >
+              <div className="flex items-center gap-2">
+                <Input
+                  className={cn("w-16", NUM)}
+                  {...numInput("allocationDays", { disabled: d.allocationUnit === "Day" })}
+                />
+                <span className="text-sm text-muted-foreground">days</span>
+              </div>
+            </Field>
+            <Field
               label="Loan Interest"
               className={cn(S2, "lg:col-start-1")}
               info="ON when the asset is bought on credit: the interest of the loan is the fixed cost (the principal is covered by depreciation)."
@@ -486,65 +491,21 @@ function FixedCostForm({
                 <LoanSummary schedule={loan} currency={d.currency} />
               </>
             )}
-            <Field label="Apply Utilization" className={cn(S2, "lg:col-start-1")}>
-              <label className="flex h-10 cursor-pointer items-center gap-3 group-disabled:cursor-default">
-                <Switch
-                  checked={d.applyUtilization && !isTrip}
-                  disabled={isTrip}
-                  onCheckedChange={(c) => patch({ applyUtilization: c })}
-                />
-                <span className="text-sm">{d.applyUtilization && !isTrip ? "ON" : "OFF"}</span>
-              </label>
-            </Field>
-            <Field
-              label="Utilization Rate – Container"
-              error={errors["utilContainer"]}
-              className={S2}
-              info="Containers handled in one standard cycle of the vehicle type."
-            >
-              <Input
-                className={NUM}
-                {...numInput("utilContainer", {
-                  disabled: isTrip || !d.applyUtilization,
-                })}
-              />
-            </Field>
-            <Field
-              label="Utilization Rate – Day"
-              error={errors["utilDay"]}
-              className={S2}
-              info="Length (days) of that cycle. Utilization = Container ÷ Day."
-            >
-              <Input
-                className={NUM}
-                {...numInput("utilDay", { disabled: isTrip || !d.applyUtilization })}
-              />
-            </Field>
-            <Field
-              label="Allocation Days"
-              error={errors["allocationDays"]}
-              className={S2}
-              info="Days per month used for Month → Day."
-            >
-              <Input className={NUM} {...numInput("allocationDays", { disabled: isTrip })} />
-            </Field>
-
             <div className="sm:col-span-6 lg:col-span-12">
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {(
                   [
                     ["Allocation Value", calc.allocation],
                     ["Year", calc.year],
                     ["Month", calc.month],
                     ["Day", calc.day],
-                    ["Trip", calc.trip],
                   ] as const
                 ).map(([label, v]) => (
                   <div
                     key={label}
                     className={cn(
                       "rounded-lg border px-3.5 py-2.5",
-                      label === "Trip" && "border-primary/40 bg-primary/5",
+                      label === "Day" && "border-primary/40 bg-primary/5",
                     )}
                   >
                     <div className="text-xs font-medium text-muted-foreground">{label}</div>

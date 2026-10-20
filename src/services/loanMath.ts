@@ -40,7 +40,13 @@ export function loanSchedule(l: LoanTerms): LoanSchedule {
   for (let m = 1; m <= n; m++) {
     const interest = balance * r;
     const principal =
-      m === n ? balance : l.method === "Annuity" ? annuity - interest : l.amount / n;
+      m === n
+        ? balance
+        : l.method === "Annuity"
+          ? annuity - interest
+          : l.method === "Equal Principal"
+            ? l.amount / n
+            : 0;
     balance = Math.max(0, balance - principal);
     rows.push({ month: m, payment: principal + interest, principal, interest, balance });
   }

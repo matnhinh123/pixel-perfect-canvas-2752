@@ -15,22 +15,27 @@ const meta = {
 /** Vietnamese names of the demo fixed costs. */
 const LOCAL_NAMES: Record<string, string> = {
   "FC-DEP-TRK": "Khấu hao xe tải",
-  "FC-DEP-CONT": "Khấu hao đầu kéo & rơ moóc",
+  "FC-DEP-HEAD": "Khấu hao đầu kéo",
+  "FC-DEP-TRL": "Khấu hao rơ moóc",
+  "FC-FIN-HEAD": "Chi phí tài chính đầu kéo",
+  "FC-FIN-TRL": "Chi phí tài chính rơ moóc",
+  "FC-MGMT": "Chi phí quản lý",
   "FC-INS": "Bảo hiểm xe",
-  "FC-LOAN": "Lãi vay mua xe",
   "FC-GPS": "Phí GPS & camera",
   "FC-LICENSE": "Phí giấy phép kinh doanh vận tải",
-  "FC-PERMIT": "Phí vào cảng",
   "FC-OLD": "Bộ bạt phủ (ngưng dùng)",
 };
 
-/** Header + trailer bought on credit: 70% of 2.4 billion over 5 years. */
-const HEADER_LOAN: LoanTerms = {
-  amount: 1_680_000_000,
-  ratePct: 10.5,
+/** Financial cost of an asset: 6.8 %/year on its full value for 60 months (interest only). */
+const financing = (amount: number): LoanTerms => ({
+  amount,
+  ratePct: 6.8,
   termMonths: 60,
-  method: "Annuity",
-};
+  method: "Interest Only",
+});
+const interestOf = (l: LoanTerms) => Math.round(loanSchedule(l).totalInterest);
+const HEAD = 1_300_000_000;
+const TRAILER = 280_000_000;
 
 const fc = (
   id: string,
@@ -54,10 +59,7 @@ const fc = (
   allocationBase,
   allocationUnit,
   vehicleTypes,
-  utilContainer: 1,
-  utilDay: 1,
-  applyUtilization: true,
-  allocationDays: 30,
+  allocationDays: 26,
   loan: null,
   status: "Active",
   ...meta,
@@ -65,76 +67,51 @@ const fc = (
 });
 
 export const seedFixedCosts = (): FixedCostRecord[] => [
+  fc("FC-DEP-TRK", "CI-DEP", "FC_DEPRECIATION", "Truck depreciation", 1_200_000_000, 8, "Year", [
+    "TRUCK · 5 tấn",
+    "TRUCK · 8 tấn",
+  ]),
+  // Operating cost of a header + 40 ft trailer per day: depreciation 60 months over 26 days a month,
+  // financial cost 6.8 %/year over 360 days a year (30 a month), management 200,000 a day.
+  fc("FC-DEP-HEAD", "CI-DEP", "FC_DEP_HEAD", "Header depreciation", HEAD, 60, "Month", ["HEADER"]),
+  fc("FC-DEP-TRL", "CI-ADP", "FC_DEP_TRAILER", "Trailer depreciation", TRAILER, 60, "Month", [
+    "TRAILER · 40 ft",
+  ]),
   fc(
-    "FC-DEP-TRK",
-    "CI-DEP",
-    "FC_DEPRECIATION",
-    "Truck depreciation",
-    1_200_000_000,
-    8,
-    "Year",
-    ["TRUCK · 5 tấn", "TRUCK · 8 tấn"],
-    { utilContainer: 20, utilDay: 30 },
-  ),
-  fc(
-    "FC-DEP-CONT",
-    "CI-ADP",
-    "FC_DEP_CONT",
-    "Tractor & trailer depreciation",
-    2_400_000_000,
-    10,
-    "Year",
-    ["HEADER", "TRAILER · 20 ft", "TRAILER · 40 ft"],
-    { utilContainer: 24, utilDay: 30 },
-  ),
-  fc(
-    "FC-INS",
-    "CI-INU",
-    "FC_INSURANCE",
-    "Vehicle insurance",
-    36_000_000,
-    1,
-    "Year",
-    ["TRUCK · 2 tấn", "TRUCK · 5 tấn", "TRUCK · 8 tấn", "HEADER"],
-    { utilContainer: 20, utilDay: 30 },
-  ),
-  fc(
-    "FC-LOAN",
+    "FC-FIN-HEAD",
     "CI-FIN",
-    "FC_LOAN_INTEREST",
-    "Loan interest",
-    Math.round(loanSchedule(HEADER_LOAN).totalInterest),
-    HEADER_LOAN.termMonths,
+    "FC_FIN_HEAD",
+    "Header financial cost",
+    interestOf(financing(HEAD)),
+    60,
     "Month",
-    ["HEADER · HYUNDAI"],
-    { utilContainer: 24, utilDay: 30, loan: HEADER_LOAN },
+    ["HEADER"],
+    { loan: financing(HEAD), allocationDays: 30 },
   ),
   fc(
-    "FC-GPS",
-    "CI-GPS",
-    "FC_GPS",
-    "GPS & camera subscription",
-    150_000,
-    1,
+    "FC-FIN-TRL",
+    "CI-FIN",
+    "FC_FIN_TRAILER",
+    "Trailer financial cost",
+    interestOf(financing(TRAILER)),
+    60,
     "Month",
-    ["TRUCK · 5 tấn", "TRUCK · 8 tấn", "HEADER"],
-    { applyUtilization: false },
+    ["TRAILER · 40 ft"],
+    { loan: financing(TRAILER), allocationDays: 30 },
   ),
-  fc(
-    "FC-LICENSE",
-    "CI-IFR",
-    "FC_LICENSE",
-    "Operating license fee",
-    450_000,
-    1,
-    "Day",
-    ["TRUCK · 8 tấn · HINO"],
-    { utilContainer: 1, utilDay: 1 },
-  ),
-  fc("FC-PERMIT", "CI-CBD", "FC_PERMIT", "Port entry permit", 25, 1, "Trip", ["HEADER"], {
-    currency: "USD",
-    exchangeRate: 25400,
-  }),
+  fc("FC-MGMT", "CI-MGT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", ["HEADER"]),
+  fc("FC-INS", "CI-INU", "FC_INSURANCE", "Vehicle insurance", 36_000_000, 1, "Year", [
+    "TRUCK · 2 tấn",
+    "TRUCK · 5 tấn",
+    "TRUCK · 8 tấn",
+  ]),
+  fc("FC-GPS", "CI-GPS", "FC_GPS", "GPS & camera subscription", 150_000, 1, "Month", [
+    "TRUCK · 5 tấn",
+    "TRUCK · 8 tấn",
+  ]),
+  fc("FC-LICENSE", "CI-IFR", "FC_LICENSE", "Operating license fee", 450_000, 1, "Day", [
+    "TRUCK · 8 tấn · HINO",
+  ]),
   fc("FC-OLD", "CI-DEP", "FC_TARP", "Tarpaulin set (retired)", 6_000_000, 1, "Year", [], {
     status: "Inactive",
   }),
@@ -153,7 +130,7 @@ export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [
     id: "FS-40DC",
     vehicleType: "HEADER",
     assignCostId: "CI-FUE",
-    fixedCostIds: ["FC-DEP-CONT", "FC-INS", "FC-LOAN", "FC-PERMIT"],
+    fixedCostIds: ["FC-DEP-HEAD", "FC-FIN-HEAD", "FC-MGMT"],
     status: "Active",
     ...meta,
   },

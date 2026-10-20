@@ -1,12 +1,19 @@
 import type { BaseRecord } from "./common";
 
-/** Anchor of the allocation chain: the unit Cost Value ÷ Allocation Base is expressed in. */
-export type AllocationUnit = "Year" | "Month" | "Day" | "Trip";
-export const ALLOCATION_UNITS: AllocationUnit[] = ["Year", "Month", "Day", "Trip"];
+/** Anchor of the allocation chain (Year → Month → Day): the unit Cost Value ÷ Allocation Base is in. */
+export type AllocationUnit = "Year" | "Month" | "Day";
+export const ALLOCATION_UNITS: AllocationUnit[] = ["Year", "Month", "Day"];
 
-/** Annuity: the same payment every month. Equal Principal: same principal, interest on the balance. */
-export type RepaymentMethod = "Annuity" | "Equal Principal";
-export const REPAYMENT_METHODS: readonly RepaymentMethod[] = ["Annuity", "Equal Principal"];
+/**
+ * Annuity: the same payment every month. Equal Principal: same principal, interest on the balance.
+ * Interest Only: interest on the full amount every month, the principal paid back at the end.
+ */
+export type RepaymentMethod = "Annuity" | "Equal Principal" | "Interest Only";
+export const REPAYMENT_METHODS: readonly RepaymentMethod[] = [
+  "Annuity",
+  "Equal Principal",
+  "Interest Only",
+];
 
 /** Loan behind a fixed cost (e.g. a vehicle bought on credit). */
 export interface LoanTerms {
@@ -36,10 +43,6 @@ export interface FixedCostRecord extends BaseRecord {
   allocationUnit: AllocationUnit;
   /** Optional; empty = not yet assigned, so it appears in no Summary. */
   vehicleTypes: string[];
-  /** Utilization rate = containers ÷ days (only used for Day → Trip). */
-  utilContainer: number;
-  utilDay: number;
-  applyUtilization: boolean;
   /** Days per month for Month → Day. */
   allocationDays: number;
   /**

@@ -39,14 +39,7 @@ export const rateOf = (currency: string) => FIXED_COST_RATES[currency] ?? 1;
 
 type Calcable = Pick<
   FixedCostRecord,
-  | "costValue"
-  | "exchangeRate"
-  | "allocationBase"
-  | "allocationUnit"
-  | "allocationDays"
-  | "utilContainer"
-  | "utilDay"
-  | "applyUtilization"
+  "costValue" | "exchangeRate" | "allocationBase" | "allocationUnit" | "allocationDays"
 >;
 
 /** Allocation chain of a fixed cost (values in VND). */
@@ -56,9 +49,6 @@ export const calcFixedCost = (f: Calcable): AllocationResult =>
     base: f.allocationBase,
     unit: f.allocationUnit,
     days: f.allocationDays,
-    utilContainer: f.utilContainer,
-    utilDay: f.utilDay,
-    apply: f.applyUtilization,
   });
 
 export type FixedCostDraft = Omit<
@@ -77,9 +67,6 @@ export const newFixedCostDraft = (): FixedCostDraft => ({
   allocationBase: 1,
   allocationUnit: "Year",
   vehicleTypes: [],
-  utilContainer: 1,
-  utilDay: 1,
-  applyUtilization: true,
   allocationDays: 30,
   loan: null,
   status: "Active",
@@ -132,13 +119,8 @@ export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string
   } else if (!(d.costValue > 0)) e["costValue"] = "Cost Value must be greater than 0.";
   if (!(d.allocationBase > 0)) e["allocationBase"] = "Allocation Base must be greater than 0.";
   if (!d.allocationUnit) e["allocationUnit"] = "Allocation Base Unit is required.";
-  if (d.allocationUnit !== "Trip") {
-    if (!(d.allocationDays > 0)) e["allocationDays"] = "Allocation Days must be greater than 0.";
-    if (d.applyUtilization) {
-      if (!(d.utilContainer > 0)) e["utilContainer"] = "Must be greater than 0.";
-      if (!(d.utilDay > 0)) e["utilDay"] = "Must be greater than 0.";
-    }
-  }
+  if (d.allocationUnit !== "Day" && !(d.allocationDays > 0))
+    e["allocationDays"] = "Allocation Days must be greater than 0.";
   return e;
 }
 
@@ -188,11 +170,6 @@ export const fixedCostService = {
       `${next.allocationBase} ${next.allocationUnit}`,
     );
     upd("Vehicle Types", existing.vehicleTypes.join(", "), next.vehicleTypes.join(", "));
-    upd(
-      "Utilization",
-      `${existing.applyUtilization ? `${existing.utilContainer}/${existing.utilDay}` : "off"}`,
-      `${next.applyUtilization ? `${next.utilContainer}/${next.utilDay}` : "off"}`,
-    );
     upd("Allocation Days", String(existing.allocationDays), String(next.allocationDays));
     if (existing.status !== next.status)
       out.push({
@@ -220,7 +197,7 @@ export const summaryOf = (vehicleType: string) =>
 export const totalFixedCost = (ids: string[]) =>
   ids.reduce((sum, id) => {
     const f = fixedCostRepository.get(id);
-    return sum + (f ? (calcFixedCost(f).trip ?? 0) : 0);
+    return sum + (f ? (calcFixedCost(f).day ?? 0) : 0);
   }, 0);
 
 export const activeCostItems = () =>
@@ -280,8 +257,6 @@ export const fixedCostSummaryService = {
 // ---------------------------------------------------------------- Import
 
 const STATUSES = ["Active", "Inactive"] as const;
-const YES = ["yes", "y", "on", "true", "1", "x"];
-const NO = ["no", "n", "off", "false", "0"];
 const choices = () => ({
   unit: codeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS) as AllocationUnit[],
   currency: COST_CURRENCIES,
@@ -297,10 +272,6 @@ const fareIdOf = (cell: string | undefined) => {
 const baseOf = (r: Record<string, string>) => {
   const m = /^\s*([\d.,]+)\s*([A-Za-z]*)\s*$/.exec(r["allocationBase"] ?? "");
   return { base: m ? numCell(m[1]) : NaN, unit: (r["allocationUnit"] || m?.[2] || "").trim() };
-};
-const flag = (v: string | undefined) => {
-  const s = (v ?? "").trim().toLowerCase();
-  return !s || YES.includes(s) ? true : NO.includes(s) ? false : undefined;
 };
 const numOr = (v: string | undefined, dflt: number) => {
   const n = numCell(v);
@@ -336,9 +307,6 @@ const rowDraft = (r: Record<string, string>): FixedCostDraft => {
       const x = parseFcVehicle(v);
       return x ? fcVehicleLabel(x) : v;
     }),
-    applyUtilization: flag(r["applyUtilization"]) ?? true,
-    utilContainer: numOr(r["utilContainer"], 1),
-    utilDay: numOr(r["utilDay"], 1),
     allocationDays: numOr(r["allocationDays"], 30),
     loan: loanOfRow(r),
     status: pick(r["status"], STATUSES) || "Active",
@@ -370,9 +338,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       header: "Vehicle Type",
       example: "TRUCK · 5 tấn; HEADER · HINO",
     },
-    { key: "applyUtilization", header: "Apply Utilization", example: "Yes" },
-    { key: "utilContainer", header: "Utilization Rate – Container", example: "20" },
-    { key: "utilDay", header: "Utilization Rate – Day", example: "30" },
     { key: "allocationDays", header: "Allocation Days", example: "30" },
     { key: "loanAmount", header: "Loan Amount", example: "" },
     { key: "loanRate", header: "Interest Rate (%/year)", example: "" },
@@ -393,19 +358,9 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       e.push({ field: "allocationBase", error: "Must be a number (e.g. 8)" });
     if (unit && pick(unit, c.unit) === undefined)
       e.push({ field: "allocationUnit", error: `Use one of: ${c.unit.join(", ")}` });
-    if (flag(r["applyUtilization"]) === undefined)
-      e.push({ field: "applyUtilization", error: "Yes or No (empty = Yes)" });
     if (pick(r["repaymentMethod"], REPAYMENT_METHODS) === undefined)
       e.push({ field: "repaymentMethod", error: `Use one of: ${REPAYMENT_METHODS.join(", ")}` });
-    for (const k of [
-      "costValue",
-      "utilContainer",
-      "utilDay",
-      "allocationDays",
-      "loanAmount",
-      "loanRate",
-      "loanTerm",
-    ])
+    for (const k of ["costValue", "allocationDays", "loanAmount", "loanRate", "loanTerm"])
       if (r[k] && Number.isNaN(numCell(r[k]))) e.push({ field: k, error: "Must be a number" });
     if (pick(r["status"], STATUSES) === undefined)
       e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
@@ -422,7 +377,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       ["INU", "24000000", "1", "Year", "TRUCK · 2 tấn; TRUCK · 5 tấn · HINO"],
       ["FIN", "12000000", "1", "Month", "HEADER; TRAILER · 40 ft"],
       ["GPS", "120000", "1", "Month", "TRUCK · 8 tấn"],
-      ["IFR", "150000", "1", "Trip", "HEADER · HYUNDAI"],
+      ["IFR", "450000", "1", "Day", "HEADER · HYUNDAI"],
     ];
     const rows = Array.from({ length: 20 }, (_, i) => {
       const [fare, value, base, unit, vts] = plan[i % plan.length]!;
@@ -437,10 +392,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         base,
         unit,
         vts,
-        unit === "Trip" ? "No" : "Yes",
-        "20",
-        "30",
-        "30",
+        "26",
         ...(fare === "FIN" ? ["1680000000", "10.5", "60", "Annuity"] : ["", "", "", ""]),
         "Active",
       ];

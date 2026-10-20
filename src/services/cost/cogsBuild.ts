@@ -19,16 +19,14 @@ import {
 import type { CogsVehicleType } from "./cogsVehicle";
 import { coversCogsVehicle } from "@/services/fixedCostVehicle";
 
-const tripOf = (f: FixedCostRecord) =>
+/** Fixed cost of one day (a trip is counted as one day). */
+const dayOf = (f: FixedCostRecord) =>
   allocate({
     value: f.costValue * f.exchangeRate,
     base: f.allocationBase,
     unit: f.allocationUnit,
     days: f.allocationDays,
-    utilContainer: f.utilContainer,
-    utilDay: f.utilDay,
-    apply: f.applyUtilization,
-  }).trip ?? 0;
+  }).day ?? 0;
 
 export interface CogsBuildInput {
   route: RouteRecord;
@@ -70,8 +68,8 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
       group: "Fixed Cost",
       code: f.code,
       name: f.name,
-      basis: `${formatNumber(f.costValue)} ${f.currency} per ${f.allocationBase} ${f.allocationUnit} → per trip`,
-      amount: Math.round(tripOf(f)),
+      basis: `${formatNumber(f.costValue)} ${f.currency} per ${f.allocationBase} ${f.allocationUnit} → per day`,
+      amount: Math.round(dayOf(f)),
     }));
   const s = v.salary;
   const variableLines: CogsLine[] = [

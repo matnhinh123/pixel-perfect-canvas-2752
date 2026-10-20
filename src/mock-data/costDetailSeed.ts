@@ -777,6 +777,7 @@ export const COST_DETAIL_SEED: readonly (readonly [
   ["IMT", "IMPORT VAT", "THUẾ VAT HÀNG NHẬP KHẨU", "Customs", "", "0%", "USD", "VAT Invoice"],
   ["INS", "INSPECTION FEE", "PHÍ KIỂM HÓA", "Customs", "", "0%", "USD", "VAT Invoice"],
   ["INU", "INSURANCE CHARGE", "PHÍ BẢO HIỂM", "Freight Fee", "", "0%", "USD", "VAT Invoice"],
+  ["MGT", "MANAGEMENT FEE", "CHI PHÍ QUẢN LÝ", "Vehicle Operation", "", "0%", "VND", "No Invoice"],
   [
     "IPA",
     "INTERNAL - PORT ENTRY ALLOWANCE",
