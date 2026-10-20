@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { RouteCostSheet } from "@/components/movex/cost/RouteCostSheet";
+import { CogsPage } from "@/components/movex/cost/CogsPage";
 
 export const Route = createFileRoute("/cogs")({
   head: () => ({ meta: [{ title: "COGS — MoveX" }] }),
-  component: () => <RouteCostSheet mode="cogs" />,
+  component: CogsPage,
 });
