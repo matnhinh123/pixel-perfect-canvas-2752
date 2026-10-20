@@ -12,7 +12,7 @@ import {
   uid,
   vehicleMasterRepository,
 } from "@/repositories";
-import { FIXED_COST_RATES, FIXED_COST_TYPES } from "@/mock-data/fixedCost";
+import { FIXED_COST_RATES } from "@/mock-data/fixedCost";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
 import { CC } from "@/mock-data/commonCodes";
 import { codeOptions } from "./commonCodeService";
@@ -67,7 +67,6 @@ export type FixedCostDraft = Omit<
 
 export const newFixedCostDraft = (): FixedCostDraft => ({
   costDetailId: "",
-  costTypeCode: "",
   code: "",
   name: "",
   costValue: 0,
@@ -93,7 +92,6 @@ export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string
   const e: Record<string, string> = {};
   const code = d.code.trim().toUpperCase();
   if (!d.costDetailId) e["costDetailId"] = "Fare Code is required.";
-  if (!d.costTypeCode) e["costTypeCode"] = "Cost Type Code is required.";
   if (!code) e["code"] = "Fixed Cost Code is required.";
   else if (!/^[A-Z0-9_-]{2,30}$/.test(code))
     e["code"] = "Use 2–30 characters: letters, digits, - or _.";
@@ -147,7 +145,6 @@ export const fixedCostService = {
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
     upd("Fixed Cost Name", existing.name, next.name);
     upd("Fare Code", existing.costDetailId, next.costDetailId);
-    upd("Cost Type", existing.costTypeCode, next.costTypeCode);
     upd(
       "Cost Value",
       `${existing.costValue} ${existing.currency}`,
@@ -254,7 +251,6 @@ const STATUSES = ["Active", "Inactive"] as const;
 const YES = ["yes", "y", "on", "true", "1", "x"];
 const NO = ["no", "n", "off", "false", "0"];
 const choices = () => ({
-  costType: codeOptions(CC.FIXED_COST_TYPE, FIXED_COST_TYPES),
   unit: codeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS) as AllocationUnit[],
   currency: COST_CURRENCIES,
 });
@@ -285,7 +281,6 @@ const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => {
   const currency = pick(r["currency"], c.currency) || "VND";
   return {
     costDetailId: fareIdOf(r["costDetail"]) ?? "",
-    costTypeCode: pick(r["costTypeCode"], c.costType) || "",
     code: (r["code"] ?? "").trim().toUpperCase(),
     name: (r["name"] ?? "").trim(),
     costValue: numOr(r["costValue"], 0),
@@ -312,13 +307,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   keyColumn: "code",
   columns: [
     { key: "costDetail", header: "Fare Code", required: true, example: "DEP" },
-    {
-      key: "costTypeCode",
-      header: "Cost Type Code",
-      required: true,
-      example: "DEPRECIATION",
-      aliases: ["Cost Type"],
-    },
     { key: "code", header: "Fixed Cost Code", required: true, example: "FC_DEP_5T" },
     { key: "name", header: "Fixed Cost Name", required: true, example: "5T truck depreciation" },
     { key: "costValue", header: "Cost Value", required: true, example: "900000000" },
@@ -342,8 +330,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
     const e: { field: string; error: string }[] = [];
     if (r["costDetail"] && !fareIdOf(r["costDetail"]))
       e.push({ field: "costDetail", error: "Fare Code not found in Fare Code Management" });
-    if (r["costTypeCode"] && pick(r["costTypeCode"], c.costType) === undefined)
-      e.push({ field: "costTypeCode", error: `Use one of: ${c.costType.join(", ")}` });
     if (pick(r["currency"], c.currency) === undefined)
       e.push({ field: "currency", error: `Use one of: ${c.currency.join(", ")}` });
     const { base, unit } = baseOf(r);
@@ -364,20 +350,19 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   save: (d) => fixedCostService.save(d),
   rollback: (ids) => fixedCostCrud.removeMany(ids),
   sampleRows: () => {
-    const plan: [string, string, string, string, string, string][] = [
-      // fare, type, value, base, unit, vehicle types
-      ["DEP", "DEPRECIATION", "900000000", "8", "Year", "TRUCK · 5 tấn"],
-      ["INU", "INSURANCE", "24000000", "1", "Year", "TRUCK · 2 tấn; TRUCK · 5 tấn · HINO"],
-      ["FIN", "INTEREST", "12000000", "1", "Month", "HEADER; TRAILER · 40 ft"],
-      ["GPS", "EQUIPMENT", "120000", "1", "Month", "TRUCK · 8 tấn"],
-      ["IFR", "LICENSE", "150000", "1", "Trip", "HEADER · HYUNDAI"],
+    const plan: [string, string, string, string, string][] = [
+      // fare, value, base, unit, vehicle types
+      ["DEP", "900000000", "8", "Year", "TRUCK · 5 tấn"],
+      ["INU", "24000000", "1", "Year", "TRUCK · 2 tấn; TRUCK · 5 tấn · HINO"],
+      ["FIN", "12000000", "1", "Month", "HEADER; TRAILER · 40 ft"],
+      ["GPS", "120000", "1", "Month", "TRUCK · 8 tấn"],
+      ["IFR", "150000", "1", "Trip", "HEADER · HYUNDAI"],
     ];
     const rows = Array.from({ length: 20 }, (_, i) => {
-      const [fare, type, value, base, unit, vts] = plan[i % plan.length]!;
+      const [fare, value, base, unit, vts] = plan[i % plan.length]!;
       const n = String(i + 1).padStart(2, "0");
       return [
         fare,
-        type,
         `FC_IMP_${n}`,
         `Imported fixed cost ${n}`,
         value,
@@ -392,7 +377,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         "Active",
       ];
     });
-    rows[3]![2] = "FC_IMP_01"; // duplicate in the file
+    rows[3]![1] = "FC_IMP_01"; // duplicate in the file
     rows[11]![0] = "NOPE"; // Fare Code not found
     return rows;
   },

@@ -1,7 +1,6 @@
 // Demo seed for Master Data > Cost > Fixed Cost.
 import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
 
-export const FIXED_COST_TYPES = ["DEPRECIATION", "INSURANCE", "INTEREST", "EQUIPMENT", "LICENSE"];
 /** Rate to VND. */
 export const FIXED_COST_RATES: Record<string, number> = { VND: 1, USD: 25400 };
 
@@ -15,7 +14,6 @@ const meta = {
 const fc = (
   id: string,
   costDetailId: string,
-  costTypeCode: string,
   code: string,
   name: string,
   costValue: number,
@@ -26,7 +24,6 @@ const fc = (
 ): FixedCostRecord => ({
   id,
   costDetailId,
-  costTypeCode,
   code,
   name,
   costValue,
@@ -48,7 +45,6 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   fc(
     "FC-DEP-TRK",
     "CI-DEP",
-    "DEPRECIATION",
     "FC_DEPRECIATION",
     "Truck depreciation",
     1_200_000_000,
@@ -60,7 +56,6 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   fc(
     "FC-DEP-CONT",
     "CI-ADP",
-    "DEPRECIATION",
     "FC_DEP_CONT",
     "Tractor & trailer depreciation",
     2_400_000_000,
@@ -72,7 +67,6 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   fc(
     "FC-INS",
     "CI-INU",
-    "INSURANCE",
     "FC_INSURANCE",
     "Vehicle insurance",
     36_000_000,
@@ -84,7 +78,6 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   fc(
     "FC-LOAN",
     "CI-FIN",
-    "INTEREST",
     "FC_LOAN_INTEREST",
     "Loan interest",
     18_000_000,
@@ -96,7 +89,6 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   fc(
     "FC-GPS",
     "CI-GPS",
-    "EQUIPMENT",
     "FC_GPS",
     "GPS & camera subscription",
     150_000,
@@ -108,7 +100,6 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   fc(
     "FC-LICENSE",
     "CI-IFR",
-    "LICENSE",
     "FC_LICENSE",
     "Operating license fee",
     450_000,
@@ -117,30 +108,13 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     ["TRUCK · 8 tấn · HINO"],
     { utilContainer: 1, utilDay: 1 },
   ),
-  fc(
-    "FC-PERMIT",
-    "CI-CBD",
-    "LICENSE",
-    "FC_PERMIT",
-    "Port entry permit",
-    25,
-    1,
-    "Trip",
-    ["HEADER"],
-    { currency: "USD", exchangeRate: 25400 },
-  ),
-  fc(
-    "FC-OLD",
-    "CI-DEP",
-    "EQUIPMENT",
-    "FC_TARP",
-    "Tarpaulin set (retired)",
-    6_000_000,
-    1,
-    "Year",
-    [],
-    { status: "Inactive" },
-  ),
+  fc("FC-PERMIT", "CI-CBD", "FC_PERMIT", "Port entry permit", 25, 1, "Trip", ["HEADER"], {
+    currency: "USD",
+    exchangeRate: 25400,
+  }),
+  fc("FC-OLD", "CI-DEP", "FC_TARP", "Tarpaulin set (retired)", 6_000_000, 1, "Year", [], {
+    status: "Inactive",
+  }),
 ];
 
 export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [

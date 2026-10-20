@@ -32,7 +32,6 @@ import {
 } from "./vehicleMaster";
 import { LOCATION_TYPES } from "./locationCatalog";
 import { COST_TAX_EVIDENCES, COST_TAX_TARIFFS, COST_UOM_CATALOG } from "./costMaster";
-import { FIXED_COST_TYPES } from "./fixedCost";
 
 /** Type codes used by the screens (keep in sync with the seed below). */
 export const CC = {
@@ -309,9 +308,6 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
     Object.keys(COST_UOM_CATALOG),
   ),
   // ---------------------------------------------------------------- Fixed Cost
-  type(CC.FIXED_COST_TYPE, "Fixed Cost Type", "Customizable", FIXED_COST_TYPES, [
-    [FC, "Fixed Cost Detail", "Cost Type Code"],
-  ]),
   type(
     CC.ALLOCATION_UNIT,
     "Allocation Base Unit",

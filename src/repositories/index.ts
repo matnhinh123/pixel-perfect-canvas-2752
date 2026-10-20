@@ -123,9 +123,10 @@ export const commonCodeRepository = createCollection<CommonCodeRecord>(
   const t = commonCodeRepository.get(CC.LOCATION_SUB_TYPE);
   if (t && !t.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: true }));
 }
-// Fixed Cost Vehicle Type was removed (Fixed Cost now picks from the Vehicle master): retire it once.
-{
-  const t = commonCodeRepository.get(CC.FIXED_COST_VEHICLE_TYPE);
+// Fixed Cost Vehicle Type (now picked from the Vehicle master) and Fixed Cost Type were removed:
+// retire the stored types once.
+for (const id of [CC.FIXED_COST_VEHICLE_TYPE, CC.FIXED_COST_TYPE]) {
+  const t = commonCodeRepository.get(id);
   if (t && !t.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: true }));
 }
 // Vehicle Brand (formerly "Trade Mark") is back: restore the type retired earlier (or add it when

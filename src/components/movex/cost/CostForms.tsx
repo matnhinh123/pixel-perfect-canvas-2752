@@ -75,7 +75,7 @@ function FormFooter({ onCancel, onSave }: { onCancel: () => void; onSave: () => 
 }
 
 /** Status select in the header while editing (a new record starts Active). */
-function StatusSelect({
+export function StatusSelect({
   value,
   onChange,
 }: {

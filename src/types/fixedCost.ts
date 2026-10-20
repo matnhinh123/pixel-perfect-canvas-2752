@@ -8,7 +8,6 @@ export const ALLOCATION_UNITS: AllocationUnit[] = ["Year", "Month", "Day", "Trip
 export interface FixedCostRecord extends BaseRecord {
   /** Cost Detail (Master Data > Cost) this fixed cost is booked to. */
   costDetailId: string;
-  costTypeCode: string;
   code: string;
   name: string;
   costValue: number;

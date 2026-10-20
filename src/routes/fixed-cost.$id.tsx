@@ -15,7 +15,10 @@ import {
   FormPageHeader,
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
-import { CollapsiblePanel, ReadOnlyScope, S3, S4 } from "@/components/movex/general/FormParts";
+import { CollapsiblePanel, ReadOnlyScope, S2, S3, S4 } from "@/components/movex/general/FormParts";
+
+/** Five of the 12 columns (Fixed Cost Name). */
+const S5 = "sm:col-span-6 lg:col-span-5";
 import { useCollection } from "@/hooks/use-store";
 import { costItemRepository, fixedCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
@@ -29,8 +32,8 @@ import {
 } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
-import { FIXED_COST_TYPES } from "@/mock-data/fixedCost";
 import { FixedCostVehicleRows } from "@/components/movex/cost/FixedCostVehicleRows";
+import { StatusSelect } from "@/components/movex/cost/CostForms";
 import { ALLOCATION_UNITS, type FixedCostRecord } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -85,7 +88,6 @@ function FixedCostForm({
   readOnly: boolean;
 }) {
   const navigate = useNavigate();
-  const costTypes = useCodeOptions(CC.FIXED_COST_TYPE, FIXED_COST_TYPES);
   const units = useCodeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS);
   const isNew = !source;
   const detailsAll = useCollection(costItemRepository);
@@ -135,7 +137,7 @@ function FixedCostForm({
     ...extra,
   });
   const select = (
-    k: "costTypeCode" | "currency" | "allocationUnit",
+    k: "currency" | "allocationUnit",
     options: readonly string[],
     placeholder: string,
     labels: Record<string, string> = {},
@@ -220,6 +222,12 @@ function FixedCostForm({
         extra={
           source && (
             <>
+              {!readOnly && (
+                <StatusSelect
+                  value={d.status === "Active" ? "Active" : "Inactive"}
+                  onChange={(status) => patch({ status })}
+                />
+              )}
               <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
                 <History className="h-4 w-4" />
                 History
@@ -258,33 +266,15 @@ function FixedCostForm({
                 }}
                 invalid={!!errors["costDetailId"]}
                 disabled={readOnly}
-                searchPlaceholder="Search cost code or name…"
+                searchPlaceholder="Search fare code or name…"
                 emptyText="No matching Fare Code"
               />
-            </Field>
-            <Field label="Cost Type Code" required error={errors["costTypeCode"]} className={S4}>
-              <NativeSelect
-                {...select(
-                  "costTypeCode",
-                  withCurrent(costTypes, d.costTypeCode),
-                  "Select Cost Type Code",
-                )}
-              />
-            </Field>
-            <Field label="Status" required className={S4}>
-              <label className="flex h-10 cursor-pointer items-center gap-3 group-disabled:cursor-default">
-                <Switch
-                  checked={d.status === "Active"}
-                  onCheckedChange={(c) => patch({ status: c ? "Active" : "Inactive" })}
-                />
-                <span className="text-sm">{d.status}</span>
-              </label>
             </Field>
             <Field
               label="Fixed Cost Code"
               required
               error={errors["code"]}
-              className={S4}
+              className={S3}
               info="Unique, upper-case. 2–30 characters: letters, digits, - or _."
             >
               <Input
@@ -295,7 +285,7 @@ function FixedCostForm({
                 onChange={(e) => patch({ code: e.target.value.toUpperCase() })}
               />
             </Field>
-            <Field label="Fixed Cost Name" required error={errors["name"]} className={S4}>
+            <Field label="Fixed Cost Name" required error={errors["name"]} className={S5}>
               <Input
                 placeholder="Enter Fixed Cost Name"
                 value={d.name}
@@ -316,22 +306,27 @@ function FixedCostForm({
             >
               <div className="flex gap-2">
                 <Input placeholder="0" className={cn("flex-1", NUM)} {...numInput("costValue")} />
-                <NativeSelect {...select("currency", COST_CURRENCIES, "")} className="h-10 w-24" />
+                <NativeSelect {...select("currency", COST_CURRENCIES, "")} className="h-10 w-20" />
               </div>
             </Field>
-            <Field label="Allocation Base" required error={errors["allocationBase"]} className={S4}>
-              <Input placeholder="e.g. 8" className={NUM} {...numInput("allocationBase")} />
-            </Field>
             <Field
-              label="Allocation Base Unit"
+              label="Allocation Base"
               required
-              error={errors["allocationUnit"]}
-              className={S4}
-              hint={unitNote}
+              error={errors["allocationBase"] ?? errors["allocationUnit"]}
+              className={S3}
+              info={unitNote}
             >
-              <NativeSelect
-                {...select("allocationUnit", withCurrent(units, d.allocationUnit), "Select unit")}
-              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="8"
+                  className={cn("w-16", NUM)}
+                  {...numInput("allocationBase")}
+                />
+                <NativeSelect
+                  {...select("allocationUnit", withCurrent(units, d.allocationUnit), "Unit")}
+                  className="h-10 flex-1"
+                />
+              </div>
             </Field>
             <FixedCostVehicleRows
               value={d.vehicleTypes}
@@ -344,7 +339,7 @@ function FixedCostForm({
 
         <CollapsiblePanel title="Utilization Rate & Allocation Value">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
-            <Field label="Apply Utilization" className={S3}>
+            <Field label="Apply Utilization" className={S2}>
               <label className="flex h-10 cursor-pointer items-center gap-3 group-disabled:cursor-default">
                 <Switch
                   checked={d.applyUtilization && !isTrip}
@@ -357,7 +352,7 @@ function FixedCostForm({
             <Field
               label="Utilization Rate – Container"
               error={errors["utilContainer"]}
-              className={S3}
+              className={S2}
               info="Containers handled in one standard cycle of the vehicle type."
             >
               <Input
@@ -370,7 +365,7 @@ function FixedCostForm({
             <Field
               label="Utilization Rate – Day"
               error={errors["utilDay"]}
-              className={S3}
+              className={S2}
               info="Length (days) of that cycle. Utilization = Container ÷ Day."
             >
               <Input
@@ -381,7 +376,7 @@ function FixedCostForm({
             <Field
               label="Allocation Days"
               error={errors["allocationDays"]}
-              className={S3}
+              className={S2}
               info="Days per month used for Month → Day."
             >
               <Input className={NUM} {...numInput("allocationDays", { disabled: isTrip })} />

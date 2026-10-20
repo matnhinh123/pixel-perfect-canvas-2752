@@ -67,7 +67,6 @@ function FixedCostList() {
 
   const columns = useMemo<ListColumn<FixedCostRecord>[]>(
     () => [
-      { key: "costType", label: "Cost Type", type: "text", value: (f) => f.costTypeCode },
       {
         key: "code",
         label: "Fixed Cost Code",
