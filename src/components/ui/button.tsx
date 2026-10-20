@@ -5,23 +5,23 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  // HeroUI button: 40px, radius 12, regular weight, scale on press, opacity on hover.
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[12px] text-sm font-normal leading-none cursor-pointer select-none transition-[transform,opacity,background-color,color,border-color] duration-200 active:scale-[0.97] outline-2 outline-offset-2 outline-transparent focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "bg-primary text-primary-foreground hover:opacity-80",
+        destructive: "bg-destructive text-destructive-foreground hover:opacity-80",
+        outline: "border-2 border-border-strong bg-transparent text-foreground hover:opacity-80",
+        secondary: "bg-muted text-ink-2 hover:opacity-80",
+        ghost: "bg-transparent text-ink-2 hover:bg-muted",
+        link: "rounded-none font-semibold text-accent-foreground underline-offset-4 hover:underline hover:opacity-80 active:scale-100",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-10 min-w-20 px-4",
+        sm: "h-8 min-w-16 rounded-[8px] px-3 text-xs",
+        lg: "h-10 min-w-20 px-4",
+        icon: "h-10 w-10 min-w-0",
       },
     },
     defaultVariants: {

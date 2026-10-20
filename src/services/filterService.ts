@@ -2,6 +2,7 @@
 // advanced filter conditions all end up here, so every module behaves the same.
 import type { FieldType, FilterCondition, FilterOperator, SortState } from "@/types";
 import { normalizeText } from "./routing/locationSearch";
+import { parseDurationText } from "@/lib/format";
 
 export type CellValue = string | number | null | undefined;
 
@@ -17,6 +18,7 @@ export const OPERATORS_BY_TYPE: Record<FieldType, FilterOperator[]> = {
   enum: ["eq", "neq"],
   number: ["between", "eq", "neq"],
   date: ["between", "eq"],
+  duration: ["between", "eq", "neq"],
 };
 
 export const OPERATOR_LABEL: Record<FilterOperator, string> = {
@@ -29,6 +31,11 @@ export const OPERATOR_LABEL: Record<FilterOperator, string> = {
 const toNum = (v: string) => (v.trim() === "" ? null : Number(v));
 
 function matches(cell: CellValue, c: FilterCondition, type: FieldType): boolean {
+  // Durations are stored in minutes and typed like on the route detail ("15h 48m", "15:48", hours).
+  if (type === "duration") {
+    const toMin = (v: string) => (v.trim() === "" ? "" : String(parseDurationText(v) ?? NaN));
+    return matches(cell, { ...c, value: toMin(c.value), value2: toMin(c.value2 ?? "") }, "number");
+  }
   if (type === "number") {
     const n = typeof cell === "number" ? cell : cell == null || cell === "" ? null : Number(cell);
     if (c.operator === "between") {

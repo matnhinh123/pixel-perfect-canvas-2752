@@ -41,7 +41,7 @@ export function ColumnSettings({
         <Button variant="outline" className="h-10">
           <Columns3 className="h-4 w-4" />
           {t("Cột", "Columns")}
-          <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+          <span className="inline-flex h-5 items-center rounded-full bg-accent px-[7px] text-xs font-semibold text-accent-foreground">
             {visibleCount}
           </span>
         </Button>
@@ -68,7 +68,7 @@ export function ColumnSettings({
             return (
               <li
                 key={key}
-                className="flex items-center gap-2 px-4 py-1.5 text-sm hover:bg-muted/60"
+                className="mx-1 flex min-h-8 items-center gap-2 rounded-[8px] px-3 py-1.5 text-sm hover:bg-muted"
               >
                 {c.pinned ? (
                   <Lock className="h-4 w-4 text-muted-foreground" />

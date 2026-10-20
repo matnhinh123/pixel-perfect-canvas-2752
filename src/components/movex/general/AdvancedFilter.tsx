@@ -1,18 +1,14 @@
 import { useEffect, useState } from "react";
-import { Filter, History, Plus, Trash2 } from "lucide-react";
+import { Filter, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NativeSelect } from "@/components/movex/common";
 import type { FilterCondition, FilterOperator } from "@/types";
-import {
-  describeCondition,
-  OPERATOR_LABEL,
-  OPERATORS_BY_TYPE,
-  type FieldMeta,
-} from "@/services/filterService";
-import { preferenceService, type RecentFilter } from "@/services/preferenceService";
+import { OPERATOR_LABEL, OPERATORS_BY_TYPE, type FieldMeta } from "@/services/filterService";
 import { uid } from "@/repositories/storage";
+import { parseDurationText } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useT } from "./listLang";
 
 const blank = (f: FieldMeta): FilterCondition => ({
@@ -22,14 +18,15 @@ const blank = (f: FieldMeta): FilterCondition => ({
   value: "",
 });
 
-/** GEN-06 Advanced Filter: multiple AND conditions, =, ≠, contains, number range, date range + recent filters. */
+/** A typed duration that cannot be read ("15h 48m", "15:48", "48m" or hours are fine). */
+const badDuration = (v: string | undefined) => !!v?.trim() && parseDurationText(v) === null;
+
+/** GEN-06 Advanced Filter: multiple AND conditions, =, ≠, contains, number / duration / date range. */
 export function AdvancedFilter({
-  screen,
   fields,
   value,
   onApply,
 }: {
-  screen: string;
   fields: FieldMeta[];
   value: FilterCondition[];
   onApply: (c: FilterCondition[]) => void;
@@ -37,12 +34,10 @@ export function AdvancedFilter({
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<FilterCondition[]>(value);
-  const [recent, setRecent] = useState<RecentFilter[]>([]);
 
   useEffect(() => {
     if (open) {
       setDraft(value.length ? value : fields[0] ? [blank(fields[0])] : []);
-      setRecent(preferenceService.getRecentFilters(screen));
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -53,24 +48,20 @@ export function AdvancedFilter({
   const apply = (conds: FilterCondition[]) => {
     const active = conds.filter((c) => c.value !== "" || (c.value2 ?? "") !== "");
     onApply(active);
-    if (active.length)
-      preferenceService.pushRecentFilter(screen, {
-        id: uid("rf-"),
-        label: active.map((c) => describeCondition(c, fields)).join(" AND "),
-        conditions: active,
-        savedAt: new Date().toISOString(),
-      });
     setOpen(false);
   };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant={value.length ? "secondary" : "outline"} className="h-10">
+        <Button
+          variant="outline"
+          className={cn(value.length > 0 && "border-primary text-accent-foreground")}
+        >
           <Filter className="h-4 w-4" />
           {t("Bộ lọc", "Filter")}
           {value.length > 0 && (
-            <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+            <span className="inline-flex h-5 items-center rounded-full bg-accent px-[7px] text-xs font-semibold text-accent-foreground">
               {value.length}
             </span>
           )}
@@ -95,6 +86,10 @@ export function AdvancedFilter({
           {draft.map((c, i) => {
             const f = fieldOf(c.field);
             const inputType = f.type === "number" ? "number" : f.type === "date" ? "date" : "text";
+            const isDuration = f.type === "duration";
+            const hint = isDuration ? t("VD: 15h 48m", "e.g. 15h 48m") : undefined;
+            const bad = (v: string | undefined) =>
+              isDuration && badDuration(v) && "border-destructive focus-visible:ring-destructive";
             return (
               <div key={c.id} className="flex items-center gap-2">
                 <span className="w-10 text-right text-xs font-semibold text-muted-foreground">
@@ -133,26 +128,26 @@ export function AdvancedFilter({
                 ) : c.operator === "between" ? (
                   <div className="flex flex-1 items-center gap-1">
                     <Input
-                      className="h-9"
+                      className={cn("h-9", bad(c.value))}
                       type={inputType}
-                      placeholder={t("Từ", "From")}
+                      placeholder={hint ?? t("Từ", "From")}
                       value={c.value}
                       onChange={(e) => set(c.id, { value: e.target.value })}
                     />
                     <span className="text-xs text-muted-foreground">–</span>
                     <Input
-                      className="h-9"
+                      className={cn("h-9", bad(c.value2))}
                       type={inputType}
-                      placeholder={t("Đến", "To")}
+                      placeholder={hint ?? t("Đến", "To")}
                       value={c.value2 ?? ""}
                       onChange={(e) => set(c.id, { value2: e.target.value })}
                     />
                   </div>
                 ) : (
                   <Input
-                    className="h-9 flex-1"
+                    className={cn("h-9 flex-1", bad(c.value))}
                     type={inputType}
-                    placeholder={t("Giá trị", "Value")}
+                    placeholder={hint ?? t("Giá trị", "Value")}
                     value={c.value}
                     onChange={(e) => set(c.id, { value: e.target.value })}
                   />
@@ -178,26 +173,6 @@ export function AdvancedFilter({
             {t("Thêm điều kiện", "Add condition")}
           </Button>
         </div>
-        {recent.length > 0 && (
-          <div className="border-t px-4 py-3">
-            <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-              <History className="h-3.5 w-3.5" />
-              {t("Bộ lọc gần đây", "Recent filters")}
-            </div>
-            <div className="flex flex-col gap-1">
-              {recent.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => apply(r.conditions.map((c) => ({ ...c, id: uid("f-") })))}
-                  className="truncate rounded px-2 py-1 text-left text-xs hover:bg-accent"
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         <div className="flex justify-end gap-2 border-t px-4 py-3">
           <Button
             variant="outline"
@@ -210,7 +185,15 @@ export function AdvancedFilter({
           >
             {t("Xoá lọc", "Clear")}
           </Button>
-          <Button size="sm" onClick={() => apply(draft)}>
+          <Button
+            size="sm"
+            disabled={draft.some(
+              (c) =>
+                fieldOf(c.field).type === "duration" &&
+                (badDuration(c.value) || badDuration(c.value2)),
+            )}
+            onClick={() => apply(draft)}
+          >
             {t("Áp dụng", "Apply")}
           </Button>
         </div>

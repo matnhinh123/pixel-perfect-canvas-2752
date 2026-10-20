@@ -23,7 +23,7 @@ export function FormGroup({
 }) {
   return (
     <section>
-      <h3 className="mb-3 flex items-center gap-3 text-sm font-semibold text-card-title">
+      <h3 className="mb-3 flex items-center gap-3 text-sm font-semibold text-foreground">
         <span>
           {title}
           {required && <span className="ml-0.5 text-destructive">*</span>}
@@ -52,9 +52,9 @@ export function ReadOnlyScope({
       disabled={readOnly}
       className={cn(
         "group min-w-0",
-        "[&_input:disabled]:bg-muted/40 [&_input:disabled]:text-foreground [&_input:disabled]:opacity-100 [&_input:disabled]:placeholder:text-transparent",
-        "[&_textarea:disabled]:bg-muted/40 [&_textarea:disabled]:text-foreground [&_textarea:disabled]:opacity-100 [&_textarea:disabled]:placeholder:text-transparent",
-        "[&_select:disabled]:appearance-none [&_select:disabled]:bg-muted/40 [&_select:disabled]:text-foreground [&_select:disabled]:opacity-100",
+        "[&_input:disabled]:border-transparent [&_input:disabled]:bg-muted [&_input:disabled]:shadow-none [&_input:disabled]:text-foreground [&_input:disabled]:opacity-100 [&_input:disabled]:placeholder:text-transparent",
+        "[&_textarea:disabled]:border-transparent [&_textarea:disabled]:bg-muted [&_textarea:disabled]:shadow-none [&_textarea:disabled]:text-foreground [&_textarea:disabled]:opacity-100 [&_textarea:disabled]:placeholder:text-transparent",
+        "[&_select:disabled]:appearance-none [&_select:disabled]:border-transparent [&_select:disabled]:bg-muted [&_select:disabled]:shadow-none [&_select:disabled]:text-foreground [&_select:disabled]:opacity-100",
         className,
       )}
     >
@@ -81,20 +81,26 @@ export function CollapsiblePanel({
     if (forceOpen) setOpen(true);
   }, [forceOpen]);
   return (
-    <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+    <section className="overflow-hidden rounded-[14px] bg-card shadow-hu-sm">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 border-b bg-card-header px-4 py-2.5 text-left"
+        className={cn(
+          "flex w-full items-center justify-between gap-3 px-5 py-4 text-left",
+          open && "border-b",
+        )}
       >
-        <h2 className="text-[17px] font-semibold text-card-title">{title}</h2>
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
         <ChevronUp
-          className={cn("h-5 w-5 text-card-title transition-transform", !open && "rotate-180")}
+          className={cn(
+            "h-5 w-5 text-muted-foreground transition-transform",
+            !open && "rotate-180",
+          )}
         />
       </button>
       {/* Hidden (not unmounted) so field state and validation survive folding. */}
-      <div className={cn("space-y-6 p-4", !open && "hidden")}>{children}</div>
+      <div className={cn("space-y-6 p-5", !open && "hidden")}>{children}</div>
     </section>
   );
 }

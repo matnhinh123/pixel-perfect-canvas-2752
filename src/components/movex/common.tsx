@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Home, Info } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
@@ -8,7 +9,8 @@ import { useT } from "@/lib/i18n";
 const tones: Record<string, string> = {
   Active: "bg-success-soft text-success",
   Draft: "bg-info-soft text-primary",
-  Inactive: "bg-muted text-muted-foreground",
+  Inactive: "bg-muted text-ink-2",
+  Archived: "bg-warning-soft text-warning",
   Auto: "bg-info-soft text-info",
   "UN/LOCODE": "bg-info-soft text-info",
   "IATA Code": "bg-success-soft text-success",
@@ -31,8 +33,9 @@ export function Tag({ children, tone }: { children: ReactNode; tone?: string }) 
   return (
     <span
       className={cn(
-        "inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold",
-        tones[key] ?? "bg-secondary text-secondary-foreground",
+        // HeroUI chip (flat, sm).
+        "inline-flex h-6 items-center whitespace-nowrap rounded-full px-2 text-xs font-normal leading-none",
+        tones[key] ?? "bg-muted text-ink-2",
       )}
     >
       {children}
@@ -50,10 +53,20 @@ export interface Crumb {
   to?: string;
 }
 
+/** Id of the breadcrumb slot in the AppShell top bar (the design shows the trail there). */
+export const HEADER_CRUMBS_ID = "app-header-crumbs";
+
+/** Renders into the top-bar slot when the shell has one, else in place. */
+function CrumbSlot({ children }: { children: ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => setSlot(document.getElementById(HEADER_CRUMBS_ID)), []);
+  return slot ? createPortal(children, slot) : <div className="mb-3">{children}</div>;
+}
+
 /**
  * Page header from the MoveX design:
- *   🏠 / Danh mục / Routing / Tạo mới
- *   [←] Title  [badge]                      [actions]
+ *   top bar:  Master Data / Routing / Tạo mới
+ *   page:     [←] Title  [badge]                      [actions]
  */
 export function PageHeader({
   title,
@@ -74,51 +87,67 @@ export function PageHeader({
   rootLabel?: string;
 }) {
   const { t } = useT();
-  const trail: Crumb[] = [{ label: rootLabel ?? t("Danh mục", "Master Data") }, ...(crumbs ?? [])];
+  const trail: Crumb[] = [
+    { label: rootLabel ?? t("Danh mục", "Master Data"), to: "/" },
+    ...(crumbs ?? []),
+  ];
   return (
-    <div className="mb-5">
-      <nav
-        aria-label="Breadcrumb"
-        className="mb-3 flex items-center gap-1.5 text-[15px] text-muted-foreground"
-      >
-        <Link to="/" aria-label={t("Trang chủ", "Home")} className="hover:text-primary">
-          <Home className="h-4 w-4" />
-        </Link>
-        {trail.map((c, i) => (
-          <span key={i} className="flex items-center gap-1.5">
-            <span className="text-muted-foreground/70">/</span>
-            {c.to ? (
-              <Link to={c.to} className="hover:text-primary">
-                {c.label}
-              </Link>
-            ) : (
-              <span
-                className={i === trail.length - 1 ? "font-semibold text-foreground" : undefined}
-              >
-                {c.label}
+    <div className="mb-4">
+      <CrumbSlot>
+        <nav
+          aria-label="Breadcrumb"
+          className="flex min-w-0 items-center gap-2 whitespace-nowrap text-[13px]"
+        >
+          {trail.map((c, i) => {
+            const last = i === trail.length - 1;
+            return (
+              <span key={i} className="flex min-w-0 items-center gap-2">
+                {i > 0 && <span className="text-ink-4">/</span>}
+                {c.to && !last ? (
+                  <Link
+                    to={c.to}
+                    className="truncate font-medium text-muted-foreground hover:text-accent-foreground"
+                  >
+                    {c.label}
+                  </Link>
+                ) : (
+                  <span
+                    aria-current={last ? "page" : undefined}
+                    className={cn(
+                      "truncate",
+                      last ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
+                    )}
+                  >
+                    {c.label}
+                  </span>
+                )}
               </span>
-            )}
-          </span>
-        ))}
-      </nav>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
+            );
+          })}
+        </nav>
+      </CrumbSlot>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
               aria-label={t("Quay lại", "Back")}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-card text-foreground shadow-sm hover:border-primary hover:text-primary"
+              title={t("Quay lại", "Back")}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border-2 border-border-strong bg-transparent text-foreground transition-[opacity,transform] duration-200 hover:opacity-80 active:scale-[0.97]"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" />
             </button>
           )}
-          <div className="min-w-0">
-            <h1 className="flex flex-wrap items-center gap-3 text-[28px] font-bold leading-tight tracking-tight">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="flex flex-wrap items-center gap-2.5 text-2xl font-bold leading-tight tracking-[-0.3px] text-foreground">
               {title}
               {badge}
             </h1>
-            {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
+            {/* Only record pages (with ←) keep a subtitle — the record code; list pages show the title alone. */}
+            {subtitle && onBack && (
+              <p className="text-sm font-medium text-muted-foreground">{subtitle}</p>
+            )}
           </div>
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -127,7 +156,7 @@ export function PageHeader({
   );
 }
 
-/** Card with the tinted blue header bar used throughout the design. */
+/** HeroUI card: radius 14, soft shadow; header row with a 16px title over a divider. */
 export function Panel({
   title,
   actions,
@@ -142,14 +171,14 @@ export function Panel({
   bodyClassName?: string | undefined;
 }) {
   return (
-    <section className={cn("overflow-hidden rounded-xl border bg-card shadow-sm", className)}>
+    <section className={cn("overflow-hidden rounded-[14px] bg-card shadow-hu-sm", className)}>
       {title && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-card-header px-4 py-2.5">
-          <h2 className="text-[17px] font-semibold text-card-title">{title}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
           {actions}
         </div>
       )}
-      <div className={cn("p-4", bodyClassName)}>{children}</div>
+      <div className={cn("p-5", bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -173,8 +202,8 @@ export function Field({
   hint?: ReactNode;
 }) {
   return (
-    <label className={cn("flex flex-col gap-1.5", className)}>
-      <span className="text-sm font-semibold text-foreground">
+    <label className={cn("flex min-w-0 flex-col gap-1.5", className)}>
+      <span className="text-sm font-normal text-foreground">
         {label}
         {required && <span className="ml-0.5 text-destructive">*</span>}
         {info && (
@@ -220,7 +249,7 @@ export function NativeSelect({
       aria-invalid={invalid || undefined}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "h-9 rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-destructive",
+        "select-chevron h-10 cursor-pointer rounded-[12px] border-2 border-input bg-transparent pl-3 text-sm text-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] outline-none transition-colors hover:border-border-strong focus:border-primary disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-destructive",
         className,
       )}
     >
@@ -245,7 +274,7 @@ export function StatCard({
   icon?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm">
+    <div className="rounded-[14px] bg-card p-4 shadow-hu-sm">
       <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
         {label}
         {icon && <span className="text-primary">{icon}</span>}
@@ -277,5 +306,5 @@ export function EmptyState({
   );
 }
 
-export const thClass =
-  "bg-muted/60 text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+/** Table header cell (HeroUI): grey band, 12px semibold, rounded at the row ends. */
+export const thClass = "bg-muted text-xs font-semibold text-muted-foreground";

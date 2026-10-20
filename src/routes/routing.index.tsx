@@ -90,8 +90,8 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
     {
       key: "waypoints",
       label: t("Số điểm dừng", "Number of stops"),
-      type: "text",
-      value: (r) => r.waypoints.map((w) => w.name).join(" → "),
+      type: "number",
+      value: (r) => r.waypoints.length,
       render: (r) =>
         r.waypoints.length ? (
           <span title={r.waypoints.map((w) => w.name).join(" → ")}>
@@ -143,8 +143,10 @@ const columnsFor = (t: T): ListColumn<RouteRecord>[] => {
     {
       key: "time",
       label: t("Thời gian", "Est. time"),
-      type: "number",
+      // Minutes; filtered with the same input as the route detail ("15h 48m", "15:48", hours).
+      type: "duration",
       value: (r) => (r.outbound ? routeTotals(r).estimatedTimeMin : null),
+      exportValue: (r) => (r.outbound ? formatDuration(routeTotals(r).estimatedTimeMin) : ""),
       render: (r) => (r.outbound ? formatDuration(routeTotals(r).estimatedTimeMin) : "—"),
     },
     {

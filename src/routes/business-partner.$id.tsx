@@ -514,7 +514,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
       </ReadOnlyScope>
 
       <Tabs value={visibleTab} onValueChange={(v) => setTab(v as Tab)} className="mt-4">
-        <TabsList className="h-auto w-full justify-start rounded-t-xl bg-card-header p-0">
+        <TabsList className="mb-3">
           {(
             [
               ["documents", "Documents", true],
@@ -524,13 +524,13 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
           )
             .filter(([, , shown]) => shown)
             .map(([k, label]) => (
-              <TabsTrigger key={k} value={k} className="rounded-none px-6 py-3 text-sm">
+              <TabsTrigger key={k} value={k}>
                 {label}
               </TabsTrigger>
             ))}
         </TabsList>
         <ReadOnlyScope readOnly={readOnly}>
-          <div className="rounded-b-xl border border-t-0 bg-card p-4">
+          <div className="rounded-[14px] bg-card p-5 shadow-hu-sm">
             {visibleTab === "documents" && <DocumentsTab d={d} set={patchTables} errors={errors} />}
             {visibleTab === "customer" && <CustomerTab d={d} set={patchTables} errors={errors} />}
             {visibleTab === "vendor" && <VendorTab d={d} set={patchTables} errors={errors} />}
@@ -539,7 +539,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
       </Tabs>
 
       {!readOnly && (
-        <div className="sticky bottom-0 z-20 -mx-7 mt-4 flex items-center justify-end gap-2 border-t bg-card/95 px-7 py-3 backdrop-blur">
+        <div className="sticky bottom-0 z-20 -mx-6 mt-4 flex items-center justify-end gap-2 border-t bg-card/95 px-6 py-3 backdrop-blur">
           {dirty && (
             <span className="mr-auto text-sm font-medium text-warning">
               {t("Có thay đổi chưa lưu", "You have unsaved changes")}

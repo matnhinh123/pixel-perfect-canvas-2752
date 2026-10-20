@@ -1,16 +1,32 @@
 import { Link, useHydrated, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  ArrowRightLeft,
   Bell,
   Check,
   ChevronDown,
-  ChevronsLeft,
-  ChevronsRight,
-  EllipsisVertical,
+  ChevronRight,
+  ChevronsUpDown,
+  Code,
+  Coins,
+  Database,
+  FileText,
   History,
   Home,
+  Landmark,
+  LayoutDashboard,
   LogOut,
+  MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Route,
   RotateCcw,
+  Tag,
+  Truck,
+  Users,
+  Wallet,
+  Wrench,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -31,6 +47,7 @@ import { useCollection } from "@/hooks/use-store";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { setLang, useT } from "@/lib/i18n";
+import { HEADER_CRUMBS_ID } from "./common";
 import { useConfirm } from "./general/ConfirmDialog";
 import { ExpiringDocumentsList } from "./vehicle/VehicleAlerts";
 import { useExpiringDocumentCount } from "./vehicle/useVehicleData";
@@ -38,23 +55,23 @@ import { useExpiringDocumentCount } from "./vehicle/useVehicleData";
 interface NavItem {
   to: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
   /** Sub-pages shown in a drop-down under the item. */
   children?: { to: string; label: string }[];
 }
 
-/** Master Data menu (design: colourful emoji-style icons, orange active item). */
+/** Master Data menu (line icons; the active row is orange as in the original MoveX design). */
 export const NAV: NavItem[] = [
-  { to: "/business-partner", label: "Business Partner", icon: "💼" },
-  { to: "/location", label: "Location", icon: "📍" },
-  { to: "/vehicle", label: "Vehicle", icon: "🚚" },
-  { to: "/toll-station", label: "Toll Station", icon: "🏛️" },
-  { to: "/routing", label: "Route Management", icon: "🗺️" },
-  { to: "/service", label: "Service", icon: "🧩" },
+  { to: "/business-partner", label: "Business Partner", icon: Users },
+  { to: "/location", label: "Location", icon: MapPin },
+  { to: "/vehicle", label: "Vehicle", icon: Truck },
+  { to: "/toll-station", label: "Toll Station", icon: Landmark },
+  { to: "/routing", label: "Route Management", icon: Route },
+  { to: "/service", label: "Service", icon: Wrench },
   {
     to: "/cost",
     label: "Cost",
-    icon: "💰",
+    icon: Coins,
     children: [
       { to: "/cost", label: "Fare Code Management" },
       { to: "/fixed-cost", label: "Fixed Cost" },
@@ -62,14 +79,18 @@ export const NAV: NavItem[] = [
       { to: "/cogs", label: "COGS" },
     ],
   },
-  { to: "/pricing", label: "Pricing", icon: "🏷️" },
-  { to: "/vendor-tariff", label: "Vendor Tariff", icon: "📜" },
-  { to: "/common-code", label: "Common Code", icon: "📋" },
-  { to: "/exchange-rate", label: "Exchange Rate / UoM", icon: "💲" },
+  { to: "/pricing", label: "Pricing", icon: Tag },
+  { to: "/vendor-tariff", label: "Vendor Tariff", icon: FileText },
+  { to: "/common-code", label: "Common Code", icon: Code },
+  { to: "/exchange-rate", label: "Exchange Rate / UoM", icon: ArrowRightLeft },
 ];
 
-const navLinkClass =
-  "flex items-center gap-3 rounded-xl px-4 py-2.5 text-[15px] font-semibold text-white/95 transition-colors hover:bg-white/10";
+/** Menu row (design: 37px high, radius 10, 13px text). */
+const navRow =
+  "relative flex h-[37px] w-full items-center gap-2.5 rounded-[10px] pl-3 pr-[9px] text-[13px] font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent";
+const navActive = "bg-brand font-semibold text-white shadow-md hover:bg-brand";
+/** A collapsed (icon-only) menu row. */
+const railRow = "h-10 w-10 justify-center px-0";
 
 /** Menu item with sub-pages: expands in place, or opens a drop-down when the sidebar is collapsed. */
 function NavGroup({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
@@ -80,7 +101,7 @@ function NavGroup({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   useEffect(() => {
     if (inside) setOpen(true);
   }, [inside]);
-  const icon = <span className="w-6 text-center text-lg leading-none">{item.icon}</span>;
+  const Icon = item.icon;
 
   if (collapsed)
     return (
@@ -89,13 +110,9 @@ function NavGroup({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
           <button
             type="button"
             aria-label={item.label}
-            className={cn(
-              navLinkClass,
-              "justify-center px-0",
-              inside && "bg-brand text-white shadow-md",
-            )}
+            className={cn(navRow, railRow, inside && navActive)}
           >
-            {icon}
+            <Icon className="h-4 w-4" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start">
@@ -115,21 +132,23 @@ function NavGroup({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={cn(navLinkClass, "w-full", inside && !open && "bg-brand text-white shadow-md")}
+        className={cn(navRow, inside && !open && navActive)}
       >
-        {icon}
+        <Icon className="h-4 w-4 shrink-0" />
         <span className="flex-1 text-left">{item.label}</span>
-        <ChevronDown className={cn("h-4 w-4 transition-transform", !open && "-rotate-90")} />
+        <ChevronRight
+          className={cn("h-3.5 w-3.5 text-sidebar-ring transition-transform", open && "rotate-90")}
+        />
       </button>
       {open && (
-        <div className="mt-1 flex flex-col gap-1 pl-9">
+        <div className="mt-0.5 flex flex-col gap-0.5 pl-[26px]">
           {children.map((c) => (
             <Link
               key={c.to}
               to={c.to}
               activeOptions={{ exact: false }}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-white/90 transition-colors hover:bg-white/10"
-              activeProps={{ className: "bg-brand! text-white shadow-md" }}
+              className={cn(navRow, "h-[34px]")}
+              activeProps={{ className: navActive }}
             >
               {c.label}
             </Link>
@@ -181,6 +200,10 @@ function UnreadCounter({ onUnread }: { onUnread: (n: number) => void }) {
   return null;
 }
 
+/** Bordered 40px icon button of the top bar (design: HeroUI bordered). */
+const barButton =
+  "relative flex h-10 items-center justify-center rounded-[12px] border-2 border-border-strong text-foreground transition-[opacity,transform] duration-200 hover:opacity-80 active:scale-[0.97]";
+
 function Notifications() {
   const { t } = useT();
   const hydrated = useHydrated();
@@ -202,17 +225,17 @@ function Notifications() {
         <button
           type="button"
           aria-label={t("Thông báo", "Notifications")}
-          className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 text-amber-500 shadow-sm hover:bg-white"
+          className={cn(barButton, "w-10")}
         >
-          <Bell className="h-4 w-4 fill-amber-400" />
+          <Bell className="h-4 w-4" />
           {unread > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-card bg-destructive px-1 text-[11px] font-semibold text-white">
               {unread > 99 ? "99+" : unread}
             </span>
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" side="right" className="w-96 p-0">
+      <PopoverContent align="end" className="w-96 overflow-hidden p-0">
         {open && <ExpiringDocumentsList onNavigate={() => setOpen(false)} />}
         <div className="border-b px-4 py-3 text-sm font-semibold">
           {t("Hoạt động gần đây", "Recent activity")}
@@ -221,7 +244,7 @@ function Notifications() {
         <Link
           to="/audit-log"
           onClick={() => setOpen(false)}
-          className="flex items-center justify-center gap-1 border-t px-4 py-2.5 text-sm font-medium text-primary hover:bg-accent"
+          className="flex items-center justify-center gap-1 border-t px-4 py-2.5 text-sm font-semibold text-accent-foreground hover:bg-muted"
         >
           <History className="h-4 w-4" />
           {t("Xem toàn bộ Audit Log", "View full Audit Log")}
@@ -267,9 +290,10 @@ function LanguageMenu() {
           type="button"
           aria-label={t("Ngôn ngữ", "Language")}
           title={t("Ngôn ngữ", "Language")}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 shadow-sm hover:bg-white"
+          className={cn(barButton, "gap-2 pl-3 pr-2.5 text-muted-foreground")}
         >
           <Flag className="h-4 w-6" />
+          <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -290,47 +314,41 @@ function LanguageMenu() {
 }
 
 /** Top-level modules (the level of "Master Data"); only Master Data is part of this demo. */
-const MODULES: { key: string; label: string; icon: string; to?: string }[] = [
-  { key: "master-data", label: "Master Data", icon: "🗂️", to: "/business-partner" },
-  { key: "operations", label: "Operations", icon: "🚛" },
-  { key: "finance", label: "Finance", icon: "💰" },
+const MODULES: { key: string; label: string; icon: LucideIcon; to?: string }[] = [
+  { key: "master-data", label: "Master Data", icon: Database, to: "/business-partner" },
+  { key: "operations", label: "Operations", icon: Truck },
+  { key: "finance", label: "Finance", icon: Wallet },
 ];
 
 /** Sidebar on Home: Home itself + the modules (no module menu until one is picked). */
 function ModuleMenu({ collapsed }: { collapsed: boolean }) {
   const { t } = useT();
-  const row = cn(
-    "flex items-center gap-3 rounded-xl px-4 py-2.5 text-[15px] font-semibold",
-    collapsed && "justify-center px-0",
-  );
+  const row = cn(navRow, collapsed && railRow);
   return (
-    <nav className="no-scrollbar mt-2 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
-      <Link to="/" className={cn(row, "bg-brand text-white shadow-md")}>
-        <span className="w-6 text-center text-lg leading-none">🏠</span>
+    <nav
+      className={cn(
+        "no-scrollbar flex flex-1 flex-col gap-1 overflow-y-auto pb-4",
+        collapsed && "items-center",
+      )}
+    >
+      <Link to="/" className={cn(row, navActive)}>
+        <Home className="h-4 w-4 shrink-0" />
         {!collapsed && t("Trang chủ", "Home")}
       </Link>
-      {!collapsed && (
-        <div className="mt-3 px-4 text-xs font-semibold uppercase tracking-wide text-white/60">
-          {t("Phân hệ", "Modules")}
-        </div>
-      )}
-      {MODULES.map((m) =>
-        m.to ? (
-          <Link
-            key={m.key}
-            to={m.to}
-            className={cn(row, "text-white/95 transition-colors hover:bg-white/10")}
-          >
-            <span className="w-6 text-center text-lg leading-none">{m.icon}</span>
+      {MODULES.map((m) => {
+        const Icon = m.icon;
+        return m.to ? (
+          <Link key={m.key} to={m.to} className={row}>
+            <Icon className="h-4 w-4 shrink-0" />
             {!collapsed && m.label}
           </Link>
         ) : (
           <div
             key={m.key}
-            className={cn(row, "cursor-not-allowed text-white/45")}
+            className={cn(row, "cursor-not-allowed opacity-50 hover:bg-transparent")}
             title={t("Ngoài phạm vi demo", "Not in this demo")}
           >
-            <span className="w-6 text-center text-lg leading-none opacity-60">{m.icon}</span>
+            <Icon className="h-4 w-4 shrink-0" />
             {!collapsed && (
               <>
                 {m.label}
@@ -338,8 +356,8 @@ function ModuleMenu({ collapsed }: { collapsed: boolean }) {
               </>
             )}
           </div>
-        ),
-      )}
+        );
+      })}
     </nav>
   );
 }
@@ -357,6 +375,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       writeJson(COLLAPSE_KEY, !c);
       return !c;
     });
+  const toggleLabel = collapsed
+    ? t("Mở rộng menu", "Expand menu")
+    : t("Thu gọn menu", "Collapse menu");
 
   const resetDemo = async () => {
     const r = await confirm({
@@ -379,119 +400,122 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen w-full bg-background">
       <aside
         className={cn(
-          "bg-sidebar-gradient sticky top-0 flex h-screen shrink-0 flex-col text-white transition-[width]",
-          collapsed ? "w-[76px]" : "w-[300px]",
+          "bg-sidebar-gradient sticky top-0 z-30 flex h-screen shrink-0 flex-col border-r border-sidebar-border pb-3.5 pt-[18px] text-white transition-[width]",
+          collapsed ? "w-[72px] items-center" : "w-[260px] px-3.5",
         )}
       >
-        <div className={cn("flex items-center gap-2 px-4 pb-4 pt-5", collapsed && "flex-col")}>
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-between pb-5",
+            collapsed ? "flex-col gap-2" : "pl-1.5",
+          )}
+        >
+          {/* Original MoveX logo. */}
           <Link
             to="/"
-            className="text-[28px] font-extrabold leading-none tracking-tight text-white"
             title={t("Trang chủ", "Home")}
+            className="text-[28px] font-extrabold leading-none tracking-tight text-white"
+          >
+            {collapsed ? "M" : "Move"}
+            <span className="text-brand">X</span>
+          </Link>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={toggleLabel}
+            title={toggleLabel}
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-sidebar-ring transition-colors hover:bg-sidebar-accent"
           >
             {collapsed ? (
-              <>
-                M<span className="text-brand">X</span>
-              </>
+              <PanelLeftOpen className="h-4 w-4" />
             ) : (
-              <>
-                Move<span className="text-brand">X</span>
-              </>
+              <PanelLeftClose className="h-4 w-4" />
             )}
-          </Link>
-          <div
-            className={cn(
-              "flex items-center gap-2",
-              !collapsed && "ml-auto",
-              collapsed && "flex-col",
-            )}
-          >
-            <LanguageMenu />
-            <Notifications />
-            <button
-              type="button"
-              onClick={toggle}
-              aria-label={
-                collapsed ? t("Mở rộng menu", "Expand menu") : t("Thu gọn menu", "Collapse menu")
-              }
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 text-primary shadow-sm hover:bg-white"
-            >
-              {collapsed ? (
-                <ChevronsRight className="h-4 w-4" />
-              ) : (
-                <ChevronsLeft className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+          </button>
         </div>
 
         {atHome ? (
           <ModuleMenu collapsed={collapsed} />
         ) : (
           <>
-            <div className="px-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3 text-left text-[15px] font-bold text-brand shadow-sm",
-                      collapsed && "justify-center px-0",
-                    )}
-                  >
-                    <Home className="h-5 w-5" />
-                    {!collapsed && (
-                      <>
-                        <span>Master Data</span>
-                        <EllipsisVertical className="ml-auto h-4 w-4 text-muted-foreground" />
-                      </>
-                    )}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  <DropdownMenuItem onClick={() => void navigate({ to: "/" })}>
-                    <span className="w-4 text-center">🏠</span>
-                    {t("Trang chủ", "Home")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>{t("Phân hệ", "Modules")}</DropdownMenuLabel>
-                  <DropdownMenuItem>
-                    <Home className="h-4 w-4 text-brand" />
-                    Master Data
-                    <Check className="ml-auto h-4 w-4" />
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled>
-                    Operations {t("(ngoài phạm vi demo)", "(not in this demo)")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled>
-                    Finance {t("(ngoài phạm vi demo)", "(not in this demo)")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => void navigate({ to: "/dashboard" })}>
-                    Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void navigate({ to: "/audit-log" })}>
-                    Audit Log
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t("Chuyển phân hệ", "Switch module")}
+                  className={cn(
+                    "relative flex shrink-0 items-center gap-2.5 overflow-hidden rounded-[12px] border border-sidebar-border bg-[#0455c4] text-left",
+                    collapsed ? "h-10 w-10 justify-center" : "h-11 w-full pl-[13px] pr-2.5",
+                  )}
+                >
+                  {!collapsed && (
+                    <span className="absolute inset-y-0 left-0 w-[3px] bg-[#6366f1]" />
+                  )}
+                  <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] bg-[#ebf3fe] text-[#0459c9]">
+                    <Database className="h-3.5 w-3.5" />
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="text-[13px] font-semibold text-white">Master Data</span>
+                        <span className="text-[10px] text-sidebar-ring">
+                          {t("Danh mục dùng chung", "Shared catalogs")}
+                        </span>
+                      </span>
+                      <ChevronsUpDown className="h-3.5 w-3.5 text-sidebar-ring" />
+                    </>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuItem onClick={() => void navigate({ to: "/" })}>
+                  <Home className="h-4 w-4" />
+                  {t("Trang chủ", "Home")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{t("Phân hệ", "Modules")}</DropdownMenuLabel>
+                <DropdownMenuItem>
+                  <Database className="h-4 w-4 text-primary" />
+                  Master Data
+                  <Check className="ml-auto h-4 w-4" />
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  Operations {t("(ngoài phạm vi demo)", "(not in this demo)")}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  Finance {t("(ngoài phạm vi demo)", "(not in this demo)")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => void navigate({ to: "/dashboard" })}>
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void navigate({ to: "/audit-log" })}>
+                  <History className="h-4 w-4" />
+                  Audit Log
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            <nav className="no-scrollbar mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-4">
+            <nav
+              className={cn(
+                "no-scrollbar mt-4 flex flex-1 flex-col gap-1 overflow-y-auto pb-4",
+                collapsed && "items-center",
+              )}
+            >
               {NAV.map((n) => {
                 if (n.children) return <NavGroup key={n.to} item={n} collapsed={collapsed} />;
+                const Icon = n.icon;
                 const item = (
                   <Link
                     key={n.to}
                     to={n.to}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl px-4 py-2.5 text-[15px] font-semibold text-white/95 transition-colors hover:bg-white/10",
-                      collapsed && "justify-center px-0",
-                    )}
-                    activeProps={{ className: "bg-brand! text-white shadow-md" }}
+                    aria-label={collapsed ? n.label : undefined}
+                    className={cn(navRow, collapsed && railRow)}
+                    activeProps={{ className: navActive }}
                   >
-                    <span className="w-6 text-center text-lg leading-none">{n.icon}</span>
-                    {!collapsed && n.label}
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {!collapsed && <span className="flex-1 truncate">{n.label}</span>}
                   </Link>
                 );
                 return collapsed ? (
@@ -509,35 +533,50 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div
           className={cn(
-            "flex items-center gap-3 border-t border-white/15 px-4 py-4",
-            collapsed && "flex-col",
+            "shrink-0 rounded-[14px] border border-sidebar-border bg-[#0455c4]",
+            collapsed ? "p-1" : "w-full p-2.5",
           )}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/95 text-sm font-bold text-primary">
-            {currentUser.initials}
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate font-semibold">{currentUser.name}</div>
-              <div className="truncate text-xs text-white/75">{currentUser.email}</div>
-            </div>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label={t("Tài khoản", "Account")}
-                className="rounded-md p-1.5 text-white/90 hover:bg-white/10"
+                title={t("Tài khoản", "Account")}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-[10px] p-1 text-left transition-colors hover:bg-sidebar-accent",
+                  collapsed && "justify-center",
+                )}
               >
-                <LogOut className="h-4 w-4" />
+                <span className="relative h-[34px] w-[34px] shrink-0">
+                  <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#ebf3fe] text-[13px] font-bold text-[#0459c9]">
+                    {currentUser.initials}
+                  </span>
+                  <span className="absolute -bottom-px -right-px h-2.5 w-2.5 rounded-full border-2 border-[#0455c4] bg-[#059669]" />
+                </span>
+                {!collapsed && (
+                  <>
+                    <span className="flex min-w-0 flex-1 flex-col gap-px">
+                      <span className="truncate text-[13px] font-semibold text-white">
+                        {currentUser.name}
+                      </span>
+                      <span className="truncate text-[11px] text-sidebar-ring">
+                        {currentUser.email}
+                      </span>
+                    </span>
+                    <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-white" />
+                  </>
+                )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top">
+            <DropdownMenuContent align="start" side="top" className="w-60">
               <DropdownMenuItem onClick={() => void resetDemo()}>
                 <RotateCcw className="h-4 w-4" />
                 {t("Reset dữ liệu demo", "Reset demo data")}
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
+                className="text-destructive focus:bg-destructive focus:text-white"
                 onClick={() =>
                   toast.info(
                     t(
@@ -554,7 +593,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 px-7 py-5">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex min-h-16 flex-wrap items-center gap-x-7 gap-y-3 border-b bg-card px-6 py-3">
+          <div id={HEADER_CRUMBS_ID} className="min-w-0 flex-1" />
+          <div className="ml-auto flex items-center gap-3">
+            <LanguageMenu />
+            <Notifications />
+          </div>
+        </header>
+        <div className="min-w-0 flex-1 px-6 pb-8 pt-6">{children}</div>
+      </main>
     </div>
   );
 }

@@ -9,7 +9,6 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -124,10 +123,11 @@ export function DataTable<T extends { id: string }>({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
+      {/* HeroUI table inside a card: grey header band, borderless rows with a hover band. */}
+      <div className="overflow-x-auto rounded-[14px] bg-card p-4 shadow-hu-sm">
+        <Table className="border-separate border-spacing-0">
+          <TableHeader className="after:table-row after:h-[5px] after:content-['']">
+            <TableRow className="hover:bg-transparent">
               {selected && (
                 <TableHead className={cn(thClass, "w-10")}>
                   <Checkbox
@@ -191,7 +191,7 @@ export function DataTable<T extends { id: string }>({
                         type="button"
                         onClick={() => cycleSort(c.key)}
                         className={cn(
-                          "inline-flex items-center gap-1 uppercase hover:text-foreground",
+                          "inline-flex items-center gap-1.5 transition-opacity hover:opacity-70",
                           active && "text-foreground",
                         )}
                       >
@@ -237,7 +237,7 @@ export function DataTable<T extends { id: string }>({
                   <TableRow
                     key={r.id}
                     data-state={selected?.has(r.id) ? "selected" : undefined}
-                    className={onRowClick ? "cursor-pointer" : undefined}
+                    className={cn(rowClass, onRowClick && "cursor-pointer")}
                     onClick={() => onRowClick?.(r)}
                   >
                     {selected && (
@@ -292,7 +292,7 @@ export function DataTable<T extends { id: string }>({
           </TableBody>
         </Table>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 px-1 text-sm text-muted-foreground">
         <span>
           {totalRows === 0
             ? t("Không có bản ghi", "No records")
@@ -304,60 +304,103 @@ export function DataTable<T extends { id: string }>({
                 )}
         </span>
         {!hidePager && (
-          <div className="flex items-center gap-2">
-            <span>{t("Số dòng / trang", "Rows per page")}</span>
-            <NativeSelect
-              className="h-8 w-20"
-              value={String(pageSize)}
-              onChange={(v) => onPageSize(Number(v))}
-              options={PAGE_SIZE_OPTIONS}
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              disabled={page <= 1}
-              onClick={() => onPage(1)}
-              aria-label="First page"
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              disabled={page <= 1}
-              onClick={() => onPage(page - 1)}
-              aria-label="Previous page"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="min-w-20 text-center">
-              {t("Trang", "Page")} {page} / {pages}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              disabled={page >= pages}
-              onClick={() => onPage(page + 1)}
-              aria-label="Next page"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              disabled={page >= pages}
-              onClick={() => onPage(pages)}
-              aria-label="Last page"
-            >
-              <ChevronsRight className="h-4 w-4" />
-            </Button>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2">
+              {t("Số dòng / trang", "Rows per page")}
+              <NativeSelect
+                className="h-8 w-[76px] rounded-[8px] pl-2"
+                value={String(pageSize)}
+                onChange={(v) => onPageSize(Number(v))}
+                options={PAGE_SIZE_OPTIONS}
+              />
+            </label>
+            <nav aria-label={t("Phân trang", "Pagination")} className="flex items-center gap-1">
+              <PageButton disabled={page <= 1} onClick={() => onPage(1)} label="First page">
+                <ChevronsLeft className="h-4 w-4" />
+              </PageButton>
+              <PageButton
+                disabled={page <= 1}
+                onClick={() => onPage(page - 1)}
+                label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </PageButton>
+              {pageWindow(page, pages).map((n, i) =>
+                n === null ? (
+                  <span key={`gap-${i}`} className="w-6 text-center text-ink-4">
+                    …
+                  </span>
+                ) : (
+                  <PageButton
+                    key={n}
+                    current={n === page}
+                    onClick={() => onPage(n)}
+                    label={`${t("Trang", "Page")} ${n}`}
+                  >
+                    {n}
+                  </PageButton>
+                ),
+              )}
+              <PageButton
+                disabled={page >= pages}
+                onClick={() => onPage(page + 1)}
+                label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </PageButton>
+              <PageButton disabled={page >= pages} onClick={() => onPage(pages)} label="Last page">
+                <ChevronsRight className="h-4 w-4" />
+              </PageButton>
+            </nav>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+/** Body row: no borders; the hover band is drawn on the cells, rounded at the row ends. */
+const rowClass =
+  "hover:bg-transparent [&:hover>td]:bg-muted [&>td:first-child]:rounded-l-[8px] [&>td:last-child]:rounded-r-[8px] data-[state=selected]:[&>td]:bg-accent";
+
+/** Page numbers around the current page, with null for a gap ("…"). */
+function pageWindow(page: number, pages: number): (number | null)[] {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+  const from = Math.max(2, Math.min(page - 1, pages - 4));
+  const to = Math.min(pages - 1, Math.max(page + 1, 5));
+  const mid = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  return [1, ...(from > 2 ? [null] : []), ...mid, ...(to < pages - 1 ? [null] : []), pages];
+}
+
+/** HeroUI pagination item (flat): 36px, radius 12; the current page is solid primary. */
+function PageButton({
+  children,
+  label,
+  onClick,
+  disabled,
+  current,
+}: {
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  current?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-current={current ? "page" : undefined}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-9 min-w-9 items-center justify-center rounded-[12px] px-2 text-sm transition-[background-color,transform] duration-200 enabled:active:scale-[0.97] disabled:cursor-default disabled:opacity-50",
+        current
+          ? "bg-primary text-primary-foreground shadow-hu-sm"
+          : "bg-muted text-foreground enabled:hover:bg-border",
+      )}
+    >
+      {children}
+    </button>
   );
 }

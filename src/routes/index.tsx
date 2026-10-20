@@ -285,7 +285,7 @@ function Home() {
         </div>
         <div className="grid gap-4 xl:grid-cols-3">
           {/* Master Data: the module of this demo */}
-          <div className="flex flex-col rounded-xl border bg-card p-6 shadow-sm xl:col-span-2">
+          <div className="flex flex-col rounded-[14px] bg-card p-6 shadow-hu-sm xl:col-span-2">
             <div className="flex items-start gap-4">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-2xl">
                 🗂️
@@ -373,7 +373,7 @@ function Home() {
       </section>
 
       {/* Setup flow */}
-      <section className="rounded-xl border bg-card p-6 shadow-sm">
+      <section className="rounded-[14px] bg-card p-6 shadow-hu-sm">
         <h2 className="text-lg font-bold text-card-title">
           {t("Master Data — thứ tự thiết lập dữ liệu", "Master Data — setting up the data")}
         </h2>

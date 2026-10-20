@@ -90,7 +90,7 @@ export function FormPageHeader({
         <>
           {badge}
           {dirty && !readOnly && (
-            <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning">
+            <span className="inline-flex h-6 items-center rounded-full bg-warning-soft px-2 text-xs font-normal text-warning">
               {unsavedLabel ?? t("Chưa lưu", "Unsaved")}
             </span>
           )}
@@ -135,13 +135,13 @@ export function FormErrorBanner({
   return (
     <div
       role="alert"
-      className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/40 bg-danger-soft px-4 py-3 text-sm"
+      className="mb-4 flex items-start gap-3 rounded-[12px] bg-danger-soft px-4 py-3 text-sm text-destructive"
     >
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <div>
         <div className="font-semibold text-destructive">{message}</div>
         {list.length > 0 && (
-          <ul className="mt-1 list-disc pl-5 text-foreground/80">
+          <ul className="mt-1 list-disc pl-5">
             {list.map((e) => (
               <li key={e}>{e}</li>
             ))}

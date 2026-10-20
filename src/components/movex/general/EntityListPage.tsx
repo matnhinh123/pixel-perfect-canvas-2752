@@ -29,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState, PageHeader, Panel } from "@/components/movex/common";
+import { EmptyState, PageHeader } from "@/components/movex/common";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import type { BaseRecord, EntityType, FilterCondition, SortState } from "@/types";
 import type { EntityCrud } from "@/services/crudService";
@@ -175,7 +175,7 @@ function QuickFilterSelect({
       aria-label={filter.allLabel}
       title={filter.allLabel}
       onChange={(e) => onChange(e.target.value === ALL ? "" : e.target.value)}
-      className="h-10 rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+      className="select-chevron h-10 cursor-pointer rounded-[12px] border-2 border-input bg-transparent pl-3 text-sm text-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] outline-none transition-colors hover:border-border-strong focus:border-primary"
     >
       <option value="" hidden>
         {filter.allLabel}
@@ -652,7 +652,8 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
           />
         )}
         {p.above}
-        <Panel>
+        {/* Design: toolbar on the page background, the table in its own card (DataTable). */}
+        <div>
           {p.embedded && (
             <div className="mb-4 flex flex-wrap justify-end gap-2">
               {importBtn}
@@ -661,9 +662,9 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             </div>
           )}
           {/* One toolbar for every list: Search · Filter · Columns · quick filters; tree controls on the right. */}
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <div className="relative w-full min-w-56 max-w-sm flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="relative w-full min-w-48 max-w-[280px] flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -674,19 +675,14 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 <button
                   type="button"
                   onClick={() => setQ("")}
-                  className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                  className="absolute right-2.5 top-3 text-muted-foreground hover:text-foreground"
                   aria-label={t("Xoá tìm kiếm", "Clear search")}
                 >
                   <X className="h-4 w-4" />
                 </button>
               )}
             </div>
-            <AdvancedFilter
-              screen={screen}
-              fields={filterFields}
-              value={advanced}
-              onApply={setAdvanced}
-            />
+            <AdvancedFilter fields={filterFields} value={advanced} onApply={setAdvanced} />
             <ColumnSettings
               columns={columns}
               pref={pref}
@@ -721,7 +717,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
               )}
               {tree && (
                 <div
-                  className="flex rounded-md border p-0.5"
+                  className="flex h-10 items-center gap-1 rounded-[12px] bg-muted p-1"
                   role="group"
                   aria-label={t("Kiểu hiển thị", "View")}
                 >
@@ -737,10 +733,10 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                       aria-pressed={view === k}
                       onClick={() => setView(k)}
                       className={cn(
-                        "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold",
+                        "flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-sm transition-[opacity,background-color,color] duration-200",
                         view === k
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground",
+                          ? "bg-card text-foreground shadow-hu-sm"
+                          : "text-muted-foreground hover:opacity-50",
                       )}
                     >
                       <Icon className="h-3.5 w-3.5" />
@@ -750,7 +746,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 </div>
               )}
               {p.showRefresh !== false && (
-                <Button variant="outline" onClick={refresh} aria-label="Refresh">
+                <Button variant="outline" size="icon" onClick={refresh} aria-label="Refresh">
                   <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
                 </Button>
               )}
@@ -759,17 +755,17 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
 
           {/* One chip per applied condition; × removes it, "Clear all" removes them all. */}
           {chips.length > 0 && (
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
               {chips.map((c) => (
                 <span
                   key={c.key}
-                  className="inline-flex items-center gap-1 rounded-full bg-accent py-1 pl-2.5 pr-1 font-medium text-accent-foreground"
+                  className="inline-flex h-7 items-center gap-1 rounded-full bg-accent pl-2.5 pr-1 font-normal text-accent-foreground"
                 >
                   {c.label}
                   <button
                     type="button"
                     onClick={c.onRemove}
-                    className="rounded-full p-0.5 hover:bg-primary/15"
+                    className="rounded-full p-0.5 transition-colors hover:bg-primary/15"
                     aria-label={t(`Bỏ lọc ${c.label}`, `Remove filter ${c.label}`)}
                   >
                     <X className="h-3 w-3" />
@@ -778,7 +774,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
               ))}
               <button
                 type="button"
-                className="font-semibold text-primary hover:underline"
+                className="text-sm font-semibold text-accent-foreground hover:underline hover:opacity-80"
                 onClick={() => clearAll(false)}
               >
                 {t("Xoá tất cả lọc", "Clear all")}
@@ -787,7 +783,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
           )}
 
           {selected.size > 0 && (
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-accent px-3 py-2 text-sm">
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[12px] bg-accent px-4 py-2 text-sm">
               <span className="font-semibold text-accent-foreground">
                 {t("Đã chọn", "Selected")} {selected.size}
               </span>
@@ -905,7 +901,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
               )
             }
           />
-        </Panel>
+        </div>
 
         {p.importConfig && importOpen && (
           <ImportDialog

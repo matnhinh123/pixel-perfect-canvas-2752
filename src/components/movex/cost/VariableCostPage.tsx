@@ -257,12 +257,12 @@ function SalaryRangeTab() {
         </div>
       </Panel>
 
-      <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <section className="overflow-hidden rounded-[14px] bg-card shadow-hu-sm">
         <button
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center justify-between bg-card-header px-4 py-3 text-left"
+          className="flex w-full items-center justify-between border-b px-5 py-4 text-left"
         >
           <h2 className="text-[17px] font-semibold text-card-title">Driver Salary Range</h2>
           <ChevronDown className={cn("h-5 w-5 transition-transform", !open && "-rotate-90")} />
@@ -328,7 +328,7 @@ function CategoryTiers({ category }: { category: VehicleCategory }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between bg-card-header px-4 py-2.5 text-left"
+        className="flex w-full items-center justify-between border-b px-5 py-3 text-left"
       >
         <h3 className="font-semibold text-card-title">{category}</h3>
         <ChevronDown className={cn("h-5 w-5 transition-transform", !open && "-rotate-90")} />
@@ -517,7 +517,7 @@ function ReferenceTab() {
       </Panel>
 
       <div className="space-y-2">
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-[14px] bg-card shadow-hu-sm">
           <div className="border-b px-3 py-2.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Salary tier applied

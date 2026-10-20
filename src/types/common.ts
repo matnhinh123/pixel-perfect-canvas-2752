@@ -100,7 +100,7 @@ export interface ColumnPreference {
 }
 
 // ---------- Filtering ----------
-export type FieldType = "text" | "number" | "date" | "enum";
+export type FieldType = "text" | "number" | "date" | "enum" | "duration";
 export type FilterOperator = "eq" | "neq" | "contains" | "between";
 
 export interface FilterCondition {

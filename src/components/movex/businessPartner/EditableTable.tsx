@@ -207,7 +207,7 @@ export function EditableTable<T extends { rid: string }>({
   };
 
   return (
-    <div className="rounded-xl border bg-card-header/40 p-4">
+    <div className="rounded-[12px] border p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-card-title">{title}</h3>
         <Button

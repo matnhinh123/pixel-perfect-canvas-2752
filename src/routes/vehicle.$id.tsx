@@ -777,7 +777,7 @@ function VehicleForm({
       </ReadOnlyScope>
 
       {!readOnly && (
-        <div className="sticky bottom-0 z-20 -mx-7 mt-4 flex items-center justify-end gap-2 border-t bg-card/95 px-7 py-3 backdrop-blur">
+        <div className="sticky bottom-0 z-20 -mx-6 mt-4 flex items-center justify-end gap-2 border-t bg-card/95 px-6 py-3 backdrop-blur">
           {dirty && (
             <span className="mr-auto text-sm font-medium text-warning">
               {t("Có thay đổi chưa lưu", "You have unsaved changes")}
