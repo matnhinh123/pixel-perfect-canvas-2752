@@ -370,7 +370,6 @@ function FixedCostForm({
               readOnly={readOnly}
               error={errors["vehicleTypes"]}
             />
-            <div className="border-t sm:col-span-6 lg:col-span-12" />
             <Field label="Apply Utilization" className={S2}>
               <label className="flex h-10 cursor-pointer items-center gap-3 group-disabled:cursor-default">
                 <Switch
