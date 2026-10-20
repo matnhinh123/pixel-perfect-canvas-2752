@@ -294,7 +294,7 @@ export function CostDetailForm({
                 )}
               />
             </Field>
-            <Field label="Def Currency" className={S2}>
+            <Field label="Default Currency" className={S2}>
               <NativeSelect {...select("currency", COST_CURRENCIES, "Select currency")} />
             </Field>
             <Field label="Default Tax Tariff" className={S2}>

@@ -84,7 +84,7 @@ function CostListPage() {
       {
         key: "currency",
         width: 110,
-        label: "Def Currency",
+        label: "Default Currency",
         type: "text",
         value: (c) => c.currency,
       },

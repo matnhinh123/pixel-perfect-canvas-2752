@@ -265,7 +265,7 @@ export const costItemService = {
     upd("UPDATE", "Sub Group Name", existing.subGroup ?? "", next.subGroup);
     upd("UPDATE", "Services", joinNames(existing.serviceIds ?? []), joinNames(next.serviceIds));
     upd("UPDATE", "Tax Evidence", existing.taxEvidence, next.taxEvidence);
-    upd("UPDATE", "Def Currency", existing.currency, next.currency);
+    upd("UPDATE", "Default Currency", existing.currency, next.currency);
     upd("UPDATE", "Default Tax Tariff", existing.taxTariff, next.taxTariff);
     upd("UPDATE", "Remark", existing.remark, next.remark);
     upd(

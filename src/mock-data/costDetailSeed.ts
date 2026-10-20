@@ -1,5 +1,5 @@
 // Cost Detail demo seed, taken from the ELSA fare list and mapped to the current fields:
-// [Cost Code, English Name, Local Name, Cost Group, Sub Group, Default Tax Tariff, Def Currency, Tax Evidence].
+// [Cost Code, English Name, Local Name, Cost Group, Sub Group, Default Tax Tariff, Default Currency, Tax Evidence].
 // Cost Groups are the five sample groups; ELSA tax types become tariffs (0% VAT → 0%, FCT (5%) → 5%,
 // Oversea / Free Tax → empty), Local / Foreign → VND / USD, Tax / Internal → VAT Invoice / No Invoice.
 export const COST_GROUPS = [
