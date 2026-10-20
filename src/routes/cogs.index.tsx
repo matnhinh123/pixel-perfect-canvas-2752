@@ -5,9 +5,9 @@ import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
 import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts";
 import { useCollection } from "@/hooks/use-store";
-import { cogsRepository } from "@/repositories";
+import { cogsRepository, vehicleMasterRepository } from "@/repositories";
 import { cogsCrud } from "@/services/cost/cogsService";
-import { ALL_VEHICLE_TYPES } from "@/services/cost/salaryRange";
+import { cogsVehicleTypes } from "@/services/cost/cogsVehicle";
 import { formatNumber } from "@/lib/format";
 import type { CogsLineGroup, CogsRecord } from "@/types";
 
@@ -23,6 +23,16 @@ const money = (n: number) => <span className="tabular-nums">{formatNumber(Math.r
 function CogsListPage() {
   const all = useCollection(cogsRepository);
   const rows = useMemo(() => all.filter((c) => !c.deleted), [all]);
+  const vehiclesAll = useCollection(vehicleMasterRepository);
+  const vehicleTypes = useMemo(
+    () => [
+      ...new Set([
+        ...cogsVehicleTypes(vehiclesAll).map((t) => t.key),
+        ...rows.map((c) => c.vehicleType),
+      ]),
+    ],
+    [vehiclesAll, rows],
+  );
   const navigate = useNavigate();
   const open = (c: CogsRecord, mode: "view" | "edit") =>
     void navigate({ to: "/cogs/$id", params: { id: c.id }, search: { mode } });
@@ -57,7 +67,7 @@ function CogsListPage() {
         width: 140,
         label: "Vehicle Type",
         type: "enum",
-        options: ALL_VEHICLE_TYPES,
+        options: vehicleTypes,
         value: (c) => c.vehicleType,
       },
       {
@@ -104,7 +114,7 @@ function CogsListPage() {
       updatedAtColumn<CogsRecord>(),
       { key: "remark", label: "Remark", type: "text", value: (c) => c.remark, defaultHidden: true },
     ],
-    [],
+    [vehicleTypes],
   );
 
   return (
@@ -124,7 +134,7 @@ function CogsListPage() {
         {
           key: "vehicleType",
           allLabel: "All vehicle types",
-          options: ALL_VEHICLE_TYPES.map((t) => ({
+          options: vehicleTypes.map((t) => ({
             label: t,
             conditions: [{ field: "vehicleType", operator: "eq", value: t }],
           })),

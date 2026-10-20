@@ -7,12 +7,17 @@ import {
   routeRepository,
   tollStationRepository,
   uid,
+  vehicleMasterRepository,
 } from "@/repositories";
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "@/services/crudService";
 import { formatNumber } from "@/lib/format";
 import { buildCogs } from "./cogsBuild";
+import { cogsVehicleTypes } from "./cogsVehicle";
 import { fuelService, salaryRangeService } from "./salaryRange";
+
+/** Vehicle types of the current Vehicle master. */
+export const currentCogsVehicleTypes = () => cogsVehicleTypes(vehicleMasterRepository.all());
 
 export const cogsCrud = makeCrud<CogsRecord>({
   entityType: "COGS",
@@ -25,6 +30,7 @@ export interface CogsDraft {
   routeId: string;
   vehicleType: string;
   excluded: string[];
+  overrides: Record<string, number>;
   others: CogsOtherCost[];
   remark: string;
   status: "Active" | "Inactive";
@@ -32,8 +38,9 @@ export interface CogsDraft {
 
 export const newCogsDraft = (): CogsDraft => ({
   routeId: "",
-  vehicleType: "Xe tải 2T",
+  vehicleType: "",
   excluded: [],
+  overrides: {},
   others: [],
   remark: "",
   status: "Active",
@@ -43,6 +50,7 @@ export const draftOfCogs = (c: CogsRecord): CogsDraft => ({
   routeId: c.routeId,
   vehicleType: c.vehicleType,
   excluded: [...c.excluded],
+  overrides: { ...(c.overrides ?? {}) },
   others: c.others.map((o) => ({ ...o })),
   remark: c.remark,
   status: c.status === "Inactive" ? "Inactive" : "Active",
@@ -57,12 +65,16 @@ export function validateCogs(d: CogsDraft, id?: string): Record<string, string> 
   else if (!route.outbound)
     e["routeId"] = "This route has not been calculated: open it and click Calculate Route.";
   if (!d.vehicleType) e["vehicleType"] = "Vehicle Type is required.";
+  else if (!currentCogsVehicleTypes().some((t) => t.key === d.vehicleType))
+    e["vehicleType"] = `No active vehicle of type ${d.vehicleType} in Vehicle.`;
   if (route && d.vehicleType) {
     const dup = live().find(
       (c) => c.id !== id && c.routeId === d.routeId && c.vehicleType === d.vehicleType,
     );
     if (dup) e["routeId"] = `${dup.code} already exists for ${route.code} · ${d.vehicleType}.`;
   }
+  const badEdit = Object.values(d.overrides).some((v) => !(v >= 0));
+  if (badEdit) e["overrides"] = "An edited amount must be 0 or more.";
   const badOther = d.others.findIndex((o) => !o.costId || !(o.amount > 0));
   if (badOther >= 0)
     e["others"] = `Other Cost row ${badOther + 1}: pick a Cost Detail and enter an amount above 0.`;
@@ -77,16 +89,18 @@ const nextCode = () => {
 /** Builds the COGS of a draft from the current Route / Fixed Cost / Variable Cost / Cost setup. */
 export const buildCogsOf = (d: CogsDraft) => {
   const route = routeRepository.get(d.routeId);
-  if (!route) return null;
+  const vehicle = currentCogsVehicleTypes().find((t) => t.key === d.vehicleType);
+  if (!route || !vehicle) return null;
   return buildCogs({
     route,
-    vehicleType: d.vehicleType,
+    vehicle,
     tables: salaryRangeService.get().current.tables,
     fuel: fuelService.get(),
     tollMasters: tollStationRepository.all().filter((t) => !t.deleted),
     fixedCosts: fixedCostRepository.all(),
     costs: costItemRepository.all().filter((c) => !c.deleted),
     excluded: d.excluded,
+    overrides: d.overrides,
     others: d.others,
   });
 };
@@ -104,6 +118,7 @@ export const cogsService = {
       routeName: route.name,
       vehicleType: d.vehicleType,
       excluded: d.excluded,
+      overrides: d.overrides,
       others: d.others,
       lines: b.lines,
       total: b.total,

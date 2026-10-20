@@ -392,11 +392,13 @@ export function routeVariableCost(
   route: RouteRecord,
   type: string,
   ctx: VariableContext,
+  /** A vehicle of the Vehicle master: its own toll group and fuel rate. */
+  vehicle: { group?: number; fuelNorm?: number } = {},
 ): RouteVariableCost {
   const t = routeTotals(route);
-  const group = defOf(type)?.group ?? 1;
+  const group = vehicle.group || (defOf(type)?.group ?? 1);
   const stdKm = Math.round(t.distanceKm);
-  const fuelNorm = ctx.fuel.norms[type] ?? 0;
+  const fuelNorm = vehicle.fuelNorm || (ctx.fuel.norms[type] ?? 0);
   const fuel = fuelCostOf(stdKm, fuelNorm, ctx.fuel.price);
   const stations = routeTollStations(route, ctx.masters);
   const toll = tollTotals(stations)[group - 1] ?? 0;

@@ -1,5 +1,5 @@
-// COGS of one trip from a route, a vehicle type and the costs set up elsewhere. Pure (no storage),
-// so the screen, the save and the demo seed all build it the same way.
+// COGS of one trip from a route, a vehicle type (from the Vehicle master) and the costs set up
+// elsewhere. Pure (no storage), so the screen, the save and the demo seed all build it the same way.
 import type {
   CogsLine,
   CogsOtherCost,
@@ -16,14 +16,7 @@ import {
   type SalaryTier,
   type TollMaster,
 } from "./salaryRange";
-
-/** Fixed Cost vehicle type codes of a vehicle type ("Xe tải 2T" → 2T / TRUCK, "CNTR · Dry" → 40DC / 20DC / HEAD). */
-export const fixedCostCodes = (type: string): string[] => {
-  const t = /(\d+)T$/.exec(type);
-  if (t) return [`${t[1]}T`, "TRUCK"];
-  if (type.startsWith("CNTR")) return ["40DC", "20DC", "HEAD"];
-  return [];
-};
+import type { CogsVehicleType } from "./cogsVehicle";
 
 const tripOf = (f: FixedCostRecord) =>
   allocate({
@@ -38,37 +31,40 @@ const tripOf = (f: FixedCostRecord) =>
 
 export interface CogsBuildInput {
   route: RouteRecord;
-  vehicleType: string;
+  vehicle: CogsVehicleType;
   tables: Record<string, SalaryTier[]>;
   fuel: Pick<FuelSetup, "price" | "norms">;
   tollMasters: TollMaster[];
   fixedCosts: FixedCostRecord[];
   costs: CostItemRecord[];
   excluded: readonly string[];
+  overrides: Readonly<Record<string, number>>;
   others: readonly CogsOtherCost[];
 }
 
 export interface CogsBuild {
   variable: RouteVariableCost;
-  fixedLines: CogsLine[];
-  variableLines: CogsLine[];
-  otherLines: CogsLine[];
-  /** Lines included in the COGS (fixed / variable not excluded + other costs). */
+  /** Every Fixed / Variable cost that applies, before removal or edits. */
+  autoLines: CogsLine[];
+  /** Lines in the COGS: auto lines not removed (edited amounts applied) + other costs. */
   lines: CogsLine[];
   total: number;
 }
 
 export function buildCogs(i: CogsBuildInput): CogsBuild {
-  const v = routeVariableCost(i.route, i.vehicleType, {
-    tables: i.tables,
-    fuel: i.fuel,
-    masters: i.tollMasters,
-    others: {},
-  });
-  const codes = fixedCostCodes(i.vehicleType);
+  const vt = i.vehicle;
+  const v = routeVariableCost(
+    i.route,
+    vt.salaryTable,
+    { tables: i.tables, fuel: i.fuel, masters: i.tollMasters, others: {} },
+    { group: vt.group, fuelNorm: vt.fuelNorm },
+  );
   const fixedLines: CogsLine[] = i.fixedCosts
     .filter(
-      (f) => !f.deleted && f.status === "Active" && f.vehicleTypes.some((t) => codes.includes(t)),
+      (f) =>
+        !f.deleted &&
+        f.status === "Active" &&
+        f.vehicleTypes.some((t) => vt.fixedCodes.includes(t)),
     )
     .map((f) => ({
       key: `F:${f.id}`,
@@ -85,7 +81,9 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
       group: "Variable Cost",
       code: "TDS",
       name: "Trip Salary",
-      basis: s ? `Tier ${s.tier} (${s.tierRange}) · ${v.stdKm} km` : "Out of range",
+      basis: s
+        ? `${vt.salaryTable} · Tier ${s.tier} (${s.tierRange}) · ${v.stdKm} km`
+        : "Out of range",
       amount: s?.base ?? 0,
     },
     {
@@ -93,7 +91,7 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
       group: "Variable Cost",
       code: "IRA",
       name: "Toll Allowance",
-      basis: s ? `Tier ${s.tier}` : "—",
+      basis: s ? `${vt.salaryTable} · Tier ${s.tier}` : "—",
       amount: s?.tollAllowance ?? 0,
     },
     {
@@ -113,6 +111,13 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
       amount: v.fuel,
     },
   ];
+  const autoLines = [...fixedLines, ...variableLines];
+  const kept = autoLines
+    .filter((l) => !i.excluded.includes(l.key))
+    .map((l): CogsLine => {
+      const o = i.overrides[l.key];
+      return o === undefined || o === l.amount ? l : { ...l, amount: o, calculated: l.amount };
+    });
   const otherLines = i.others
     .map((o): CogsLine | null => {
       const c = i.costs.find((x) => x.id === o.costId);
@@ -128,16 +133,6 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
         : null;
     })
     .filter((l): l is CogsLine => !!l);
-  const lines = [
-    ...[...fixedLines, ...variableLines].filter((l) => !i.excluded.includes(l.key)),
-    ...otherLines,
-  ];
-  return {
-    variable: v,
-    fixedLines,
-    variableLines,
-    otherLines,
-    lines,
-    total: lines.reduce((sum, l) => sum + l.amount, 0),
-  };
+  const lines = [...kept, ...otherLines];
+  return { variable: v, autoLines, lines, total: lines.reduce((sum, l) => sum + l.amount, 0) };
 }

@@ -11,6 +11,8 @@ export interface CogsLine {
   /** How the amount was obtained (e.g. "Tier 4 + 35 km × 2,400"). */
   basis: string;
   amount: number;
+  /** Set when the amount was edited by hand: the calculated amount. */
+  calculated?: number;
 }
 
 /** An extra Cost Detail added to a COGS by hand. */
@@ -27,10 +29,13 @@ export interface CogsRecord extends BaseRecord {
   /** Route code when saved (kept if the route is renamed or removed). */
   routeCode: string;
   routeName: string;
+  /** Vehicle type from Master Data > Vehicle, e.g. "Truck 5 tấn", "Header + 40 ft". */
   vehicleType: string;
   /** Fixed / Variable cost keys left out of the COGS. */
   excluded: string[];
   others: CogsOtherCost[];
+  /** Amounts edited by hand, by line key (Fixed / Variable cost). */
+  overrides: Record<string, number>;
   /** Snapshot of the costs included, and their total. */
   lines: CogsLine[];
   total: number;

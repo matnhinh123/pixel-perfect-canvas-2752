@@ -1,11 +1,11 @@
-// Create / view / edit a COGS: a route, a vehicle type and the costs set up elsewhere that make up the
-// cost of one trip. View shows the costs as saved; Create / Edit rebuild them from the current setup.
+// Create / view / edit a COGS: a route, a vehicle type (from Master Data > Vehicle) and the costs that
+// make up the cost of one trip. Fixed / Variable costs are filled in from their setup and can be
+// edited or removed; other Cost Details can be added. View shows the costs as saved.
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { History, Pencil, Plus, X } from "lucide-react";
+import { History, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -37,16 +37,18 @@ import {
   fixedCostRepository,
   routeRepository,
   tollStationRepository,
+  vehicleMasterRepository,
 } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import { buildCogs } from "@/services/cost/cogsBuild";
+import { cogsVehicleTypes } from "@/services/cost/cogsVehicle";
 import {
   cogsService,
   draftOfCogs,
   newCogsDraft,
   type CogsDraft,
 } from "@/services/cost/cogsService";
-import { ALL_VEHICLE_TYPES, useFuelSetup, useSalaryRanges } from "@/services/cost/salaryRange";
+import { useFuelSetup, useSalaryRanges } from "@/services/cost/salaryRange";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CogsLine, CogsLineGroup, CogsRecord } from "@/types";
@@ -54,6 +56,7 @@ import type { CogsLine, CogsLineGroup, CogsRecord } from "@/types";
 const money = (n: number) => formatNumber(Math.round(n));
 const num = "text-right tabular-nums";
 const GROUPS: CogsLineGroup[] = ["Fixed Cost", "Variable Cost", "Other Cost"];
+const digits = (s: string) => Number(s.replace(/[^\d]/g, "")) || 0;
 let seq = 0;
 
 export function CogsForm({ source, readOnly }: { source: CogsRecord | null; readOnly: boolean }) {
@@ -62,6 +65,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   const routesAll = useCollection(routeRepository);
   const fixedAll = useCollection(fixedCostRepository);
   const costsAll = useCollection(costItemRepository);
+  const vehiclesAll = useCollection(vehicleMasterRepository);
   const salary = useSalaryRanges();
   const fuel = useFuelSetup();
   const tollAll = useCollection(tollStationRepository);
@@ -74,6 +78,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
     () => costsAll.filter((c) => !c.deleted && c.status === "Active"),
     [costsAll],
   );
+  const vehicleTypes = useMemo(() => cogsVehicleTypes(vehiclesAll), [vehiclesAll]);
   const initial = useMemo<CogsDraft>(
     () => (source ? draftOfCogs(source) : newCogsDraft()),
     [], // eslint-disable-line react-hooks/exhaustive-deps
@@ -94,23 +99,37 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
     });
   };
   const route = routes.find((r) => r.id === d.routeId);
-  const built = route
-    ? buildCogs({
-        route,
-        vehicleType: d.vehicleType,
-        tables: salary.current.tables,
-        fuel,
-        tollMasters,
-        fixedCosts: fixedAll,
-        costs,
-        excluded: d.excluded,
-        others: d.others,
-      })
-    : null;
-  const toggle = (key: string, on: boolean) =>
-    patch({ excluded: on ? d.excluded.filter((k) => k !== key) : [...d.excluded, key] });
+  const vehicle = vehicleTypes.find((t) => t.key === d.vehicleType);
+  const built =
+    route && vehicle
+      ? buildCogs({
+          route,
+          vehicle,
+          tables: salary.current.tables,
+          fuel,
+          tollMasters,
+          fixedCosts: fixedAll,
+          costs,
+          excluded: d.excluded,
+          overrides: d.overrides,
+          others: d.others,
+        })
+      : null;
+
+  const removeAuto = (key: string) => {
+    const { [key]: _drop, ...overrides } = d.overrides;
+    patch({ excluded: [...d.excluded, key], overrides });
+  };
+  const restoreAuto = (key: string) => patch({ excluded: d.excluded.filter((k) => k !== key) });
+  const editAuto = (l: CogsLine, amount: number) => {
+    const calc = l.calculated ?? l.amount;
+    const { [l.key]: _drop, ...rest } = d.overrides;
+    patch({ overrides: amount === calc ? rest : { ...rest, [l.key]: amount } });
+  };
   const setOther = (rid: string, p: Partial<CogsDraft["others"][number]>) =>
     patch({ others: d.others.map((o) => (o.rid === rid ? { ...o, ...p } : o)) });
+  const addOther = () =>
+    patch({ others: [...d.others, { rid: `o${Date.now()}${++seq}`, costId: "", amount: 0 }] });
 
   const back = () =>
     source
@@ -135,6 +154,12 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   // View: the costs as saved. Create / Edit: rebuilt from the current setup.
   const lines: CogsLine[] = readOnly && source ? source.lines : (built?.lines ?? []);
   const total = readOnly && source ? source.total : (built?.total ?? 0);
+  const removed = built ? built.autoLines.filter((l) => d.excluded.includes(l.key)) : [];
+  const typeOptions = [
+    "",
+    ...vehicleTypes.map((t) => t.key),
+    ...(d.vehicleType && !vehicle ? [d.vehicleType] : []),
+  ];
 
   return (
     <div>
@@ -210,32 +235,39 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
               label="Vehicle Type"
               required
               error={errors["vehicleType"]}
-              className="sm:col-span-3"
+              className="sm:col-span-4"
+              info="From Master Data > Vehicle: Truck by Truck Type, Header by trailer size."
             >
               {readOnly ? (
                 <div className="flex h-9 items-center text-sm">{source?.vehicleType}</div>
               ) : (
                 <NativeSelect
                   value={d.vehicleType}
-                  onChange={(vehicleType) => patch({ vehicleType })}
-                  options={ALL_VEHICLE_TYPES}
+                  onChange={(vehicleType) => patch({ vehicleType, excluded: [], overrides: {} })}
+                  options={typeOptions}
+                  labels={{
+                    "": "Select Vehicle Type",
+                    ...Object.fromEntries(
+                      vehicleTypes.map((t) => [
+                        t.key,
+                        `${t.key} (${t.vehicleCount} vehicle${t.vehicleCount === 1 ? "" : "s"})`,
+                      ]),
+                    ),
+                  }}
+                  invalid={!!errors["vehicleType"]}
                   className="w-full"
                 />
               )}
             </Field>
             {route && (
-              <div className="flex flex-wrap items-end gap-x-6 gap-y-1 text-sm sm:col-span-4">
-                <span>
-                  <span className="text-muted-foreground">Type </span>
-                  {route.type}
-                </span>
-                <span>
-                  <span className="text-muted-foreground">Terrain </span>
-                  {route.terrain ?? "Plain"}
-                </span>
+              <div className="flex flex-wrap items-end gap-x-6 gap-y-1 text-sm sm:col-span-3">
                 <span>
                   <span className="text-muted-foreground">Distance </span>
-                  {built?.variable.calculated ? `${formatNumber(built.variable.stdKm)} km` : "—"}
+                  {built?.variable.calculated
+                    ? `${formatNumber(built.variable.stdKm)} km`
+                    : route.outbound
+                      ? "—"
+                      : "Not calculated"}
                 </span>
                 <Link
                   to="/routing/$id"
@@ -247,101 +279,37 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                 </Link>
               </div>
             )}
+            {!readOnly && vehicle && (
+              <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-md bg-muted/40 px-3 py-2 text-xs sm:col-span-12">
+                <span>
+                  <span className="text-muted-foreground">Vehicle Group </span>Group {vehicle.group}
+                </span>
+                <span>
+                  <span className="text-muted-foreground">Fuel Rate </span>
+                  {vehicle.fuelNorm
+                    ? `${vehicle.fuelNorm} l/100km (average of the vehicles)`
+                    : `${fuel.norms[vehicle.salaryTable] ?? 0} l/100km (Fuel Cost setup)`}
+                </span>
+                <span>
+                  <span className="text-muted-foreground">Salary Range </span>
+                  {vehicle.salaryTable}
+                </span>
+                <span>
+                  <span className="text-muted-foreground">Fixed Cost for </span>
+                  {vehicle.fixedCodes.join(", ")}
+                </span>
+                <Link to="/vehicle" className="text-primary hover:underline">
+                  Open Vehicle
+                </Link>
+              </div>
+            )}
+            {!readOnly && vehicleTypes.length === 0 && (
+              <p className="text-xs text-destructive sm:col-span-12">
+                No active vehicle in Vehicle yet: add a truck (with Truck Type) or a header first.
+              </p>
+            )}
           </div>
         </Panel>
-
-        {!readOnly && built && (
-          <Panel title="Costs" bodyClassName="p-0">
-            <CostChecklist
-              title="Fixed Cost"
-              hint={`Fixed Costs that apply to ${d.vehicleType}, allocated per trip`}
-              lines={built.fixedLines}
-              excluded={d.excluded}
-              onToggle={toggle}
-              empty="No active Fixed Cost applies to this vehicle type."
-            />
-            <CostChecklist
-              title="Variable Cost"
-              hint="From the Variable Cost setup and the route"
-              lines={built.variableLines}
-              excluded={d.excluded}
-              onToggle={toggle}
-              empty="—"
-            />
-            <div className="border-t px-4 py-3">
-              <div className="mb-2 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold">Other Cost</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Any other Cost Detail of this trip, with its amount
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    patch({
-                      others: [
-                        ...d.others,
-                        { rid: `o${Date.now()}${++seq}`, costId: "", amount: 0 },
-                      ],
-                    })
-                  }
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Cost
-                </Button>
-              </div>
-              {errors["others"] && (
-                <p className="mb-2 text-xs font-medium text-destructive">{errors["others"]}</p>
-              )}
-              {d.others.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No other cost.</p>
-              ) : (
-                <div className="space-y-2">
-                  {d.others.map((o) => (
-                    <div key={o.rid} className="flex items-center gap-2">
-                      <div className="min-w-0 flex-1">
-                        <SearchableSelect
-                          value={o.costId}
-                          onChange={(costId) => setOther(o.rid, { costId })}
-                          options={["", ...costs.map((c) => c.id)]}
-                          labels={{
-                            "": "Select Cost Detail",
-                            ...Object.fromEntries(
-                              costs.map((c) => [c.id, `${c.code} - ${c.name}`]),
-                            ),
-                          }}
-                          searchPlaceholder="Search cost…"
-                          emptyText="No matching cost"
-                        />
-                      </div>
-                      <Input
-                        inputMode="numeric"
-                        placeholder="Amount (₫)"
-                        value={o.amount ? String(o.amount) : ""}
-                        onChange={(e) =>
-                          setOther(o.rid, {
-                            amount: Number(e.target.value.replace(/[^\d]/g, "")) || 0,
-                          })
-                        }
-                        className="w-40 text-right tabular-nums"
-                      />
-                      <button
-                        type="button"
-                        aria-label="Remove cost"
-                        className="text-destructive hover:opacity-70"
-                        onClick={() => patch({ others: d.others.filter((x) => x.rid !== o.rid) })}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Panel>
-        )}
 
         <Panel
           title={route || source ? "COGS / Trip" : "COGS"}
@@ -351,39 +319,128 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
               <span className="text-xs text-muted-foreground">
                 As saved {formatDateTime(source.updatedAt)} · {source.updatedBy}
               </span>
+            ) : built ? (
+              <Button variant="outline" size="sm" onClick={addOther}>
+                <Plus className="h-4 w-4" />
+                Add Cost
+              </Button>
             ) : undefined
           }
         >
-          {lines.length === 0 ? (
-            <EmptyState
-              title={route || source ? "No cost selected" : "Select a route to build its COGS"}
-            />
+          {(errors["others"] || errors["overrides"]) && (
+            <p className="px-4 pt-3 text-xs font-medium text-destructive">
+              {errors["others"] ?? errors["overrides"]}
+            </p>
+          )}
+          {!readOnly && !built ? (
+            <EmptyState title="Select a route and a vehicle type to build its COGS" />
+          ) : lines.length === 0 && d.others.length === 0 ? (
+            <EmptyState title="No cost in this COGS" />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className={thClass}>Group</TableHead>
-                  <TableHead className={thClass}>Cost Code</TableHead>
+                  <TableHead className={cn(thClass, "w-32")}>Group</TableHead>
+                  <TableHead className={cn(thClass, "w-28")}>Cost Code</TableHead>
                   <TableHead className={thClass}>Cost Name</TableHead>
                   <TableHead className={thClass}>Basis</TableHead>
-                  <TableHead className={cn(thClass, "text-right")}>Amount / Trip (₫)</TableHead>
+                  <TableHead className={cn(thClass, "w-44 text-right")}>
+                    Amount / Trip (₫)
+                  </TableHead>
+                  {!readOnly && <TableHead className="w-12" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lines.map((l) => (
-                  <TableRow key={l.key}>
-                    <TableCell className="py-2 text-muted-foreground">{l.group}</TableCell>
-                    <TableCell className="py-2 font-semibold text-primary">{l.code}</TableCell>
-                    <TableCell className="py-2">{l.name}</TableCell>
-                    <TableCell
-                      className="max-w-md truncate py-2 text-xs text-muted-foreground"
-                      title={l.basis}
-                    >
-                      {l.basis}
-                    </TableCell>
-                    <TableCell className={cn("py-2", num)}>{money(l.amount)}</TableCell>
-                  </TableRow>
-                ))}
+                {lines
+                  .filter((l) => readOnly || l.group !== "Other Cost")
+                  .map((l) => (
+                    <TableRow key={l.key}>
+                      <TableCell className="py-2 text-muted-foreground">{l.group}</TableCell>
+                      <TableCell className="py-2 font-semibold text-primary">{l.code}</TableCell>
+                      <TableCell className="py-2">{l.name}</TableCell>
+                      <TableCell
+                        className="max-w-md truncate py-2 text-xs text-muted-foreground"
+                        title={l.basis}
+                      >
+                        {l.basis}
+                      </TableCell>
+                      <TableCell className={cn("py-1.5", num)}>
+                        {readOnly ? (
+                          money(l.amount)
+                        ) : (
+                          <Input
+                            inputMode="numeric"
+                            value={String(l.amount)}
+                            onChange={(e) => editAuto(l, digits(e.target.value))}
+                            className="ml-auto h-8 w-36 text-right tabular-nums"
+                          />
+                        )}
+                        {l.calculated !== undefined && (
+                          <div className="mt-0.5 text-[10px] text-warning">
+                            Edited · calculated {money(l.calculated)}
+                            {!readOnly && (
+                              <button
+                                type="button"
+                                className="ml-1 inline-flex items-center gap-0.5 text-primary hover:underline"
+                                onClick={() => editAuto(l, l.calculated!)}
+                              >
+                                <RotateCcw className="h-3 w-3" />
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                      {!readOnly && (
+                        <TableCell className="py-1.5">
+                          <RemoveButton onClick={() => removeAuto(l.key)} />
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                {!readOnly &&
+                  d.others.map((o) => {
+                    const c = costs.find((x) => x.id === o.costId);
+                    return (
+                      <TableRow key={o.rid}>
+                        <TableCell className="py-2 text-muted-foreground">Other Cost</TableCell>
+                        <TableCell className="py-2 font-semibold text-primary">
+                          {c?.code ?? "—"}
+                        </TableCell>
+                        <TableCell className="py-1.5" colSpan={2}>
+                          <SearchableSelect
+                            value={o.costId}
+                            onChange={(costId) => setOther(o.rid, { costId })}
+                            options={["", ...costs.map((x) => x.id)]}
+                            labels={{
+                              "": "Select Cost Detail",
+                              ...Object.fromEntries(
+                                costs.map((x) => [x.id, `${x.code} - ${x.name}`]),
+                              ),
+                            }}
+                            searchPlaceholder="Search cost…"
+                            emptyText="No matching cost"
+                          />
+                        </TableCell>
+                        <TableCell className={cn("py-1.5", num)}>
+                          <Input
+                            inputMode="numeric"
+                            placeholder="0"
+                            value={o.amount ? String(o.amount) : ""}
+                            onChange={(e) => setOther(o.rid, { amount: digits(e.target.value) })}
+                            className="ml-auto h-8 w-36 text-right tabular-nums"
+                          />
+                        </TableCell>
+                        <TableCell className="py-1.5">
+                          <RemoveButton
+                            onClick={() =>
+                              patch({ others: d.others.filter((x) => x.rid !== o.rid) })
+                            }
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 {GROUPS.map((g) => (
                   <TableRow key={g} className="bg-muted/30 hover:bg-muted/30">
                     <TableCell colSpan={4} className="py-1.5 text-sm text-muted-foreground">
@@ -392,6 +449,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                     <TableCell className={cn("py-1.5", num)}>
                       {money(lines.filter((l) => l.group === g).reduce((s, l) => s + l.amount, 0))}
                     </TableCell>
+                    {!readOnly && <TableCell />}
                   </TableRow>
                 ))}
                 <TableRow className="bg-accent hover:bg-accent">
@@ -401,9 +459,27 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                   <TableCell className={cn("py-2.5 text-base font-bold", num)}>
                     {money(total)}
                   </TableCell>
+                  {!readOnly && <TableCell />}
                 </TableRow>
               </TableBody>
             </Table>
+          )}
+          {!readOnly && removed.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5 text-xs">
+              <span className="text-muted-foreground">Removed:</span>
+              {removed.map((l) => (
+                <button
+                  key={l.key}
+                  type="button"
+                  onClick={() => restoreAuto(l.key)}
+                  className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 hover:bg-accent"
+                  title="Add back"
+                >
+                  <Plus className="h-3 w-3" />
+                  {l.code} · {l.name}
+                </button>
+              ))}
+            </div>
           )}
         </Panel>
 
@@ -447,48 +523,16 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   );
 }
 
-function CostChecklist({
-  title,
-  hint,
-  lines,
-  excluded,
-  onToggle,
-  empty,
-}: {
-  title: string;
-  hint: string;
-  lines: CogsLine[];
-  excluded: string[];
-  onToggle: (key: string, on: boolean) => void;
-  empty: string;
-}) {
+function RemoveButton({ onClick }: { onClick: () => void }) {
   return (
-    <div className="border-t px-4 py-3 first:border-t-0">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      <p className="mb-2 text-xs text-muted-foreground">{hint}</p>
-      {lines.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{empty}</p>
-      ) : (
-        <div className="divide-y rounded-md border">
-          {lines.map((l) => (
-            <label key={l.key} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
-              <Checkbox
-                checked={!excluded.includes(l.key)}
-                onCheckedChange={(c) => onToggle(l.key, c === true)}
-              />
-              <span className="w-28 shrink-0 font-semibold text-primary">{l.code}</span>
-              <span className="w-44 shrink-0">{l.name}</span>
-              <span
-                className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
-                title={l.basis}
-              >
-                {l.basis}
-              </span>
-              <span className={cn("w-32 shrink-0", num)}>{money(l.amount)} ₫</span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      aria-label="Remove cost"
+      title="Remove"
+      className="text-destructive hover:opacity-70"
+      onClick={onClick}
+    >
+      <Trash2 className="h-4 w-4" />
+    </button>
   );
 }
