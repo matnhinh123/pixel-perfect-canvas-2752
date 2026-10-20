@@ -11,6 +11,18 @@ const meta = {
   updatedBy: "Nguyễn Minh Anh",
 };
 
+/** Vietnamese names of the demo fixed costs. */
+const LOCAL_NAMES: Record<string, string> = {
+  "FC-DEP-TRK": "Khấu hao xe tải",
+  "FC-DEP-CONT": "Khấu hao đầu kéo & rơ moóc",
+  "FC-INS": "Bảo hiểm xe",
+  "FC-LOAN": "Lãi vay mua xe",
+  "FC-GPS": "Phí GPS & camera",
+  "FC-LICENSE": "Phí giấy phép kinh doanh vận tải",
+  "FC-PERMIT": "Phí vào cảng",
+  "FC-OLD": "Bộ bạt phủ (ngưng dùng)",
+};
+
 const fc = (
   id: string,
   costDetailId: string,
@@ -26,6 +38,7 @@ const fc = (
   costDetailId,
   code,
   name,
+  localName: LOCAL_NAMES[id] ?? "",
   costValue,
   currency: "VND",
   exchangeRate: 1,

@@ -9,7 +9,10 @@ export interface FixedCostRecord extends BaseRecord {
   /** Cost Detail (Master Data > Cost) this fixed cost is booked to. */
   costDetailId: string;
   code: string;
+  /** Fixed Cost Name (EN). */
   name: string;
+  /** Fixed Cost Name (Local), optional. */
+  localName: string;
   costValue: number;
   currency: string;
   /** Rate to VND on the day it was saved (1 for VND). */

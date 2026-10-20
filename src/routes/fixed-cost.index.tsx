@@ -72,7 +72,19 @@ function FixedCostList() {
         value: (f) => f.code,
         render: (f) => <span className="font-semibold text-primary">{f.code}</span>,
       },
-      { key: "name", label: "Fixed Cost Name", type: "text", pinned: true, value: (f) => f.name },
+      {
+        key: "name",
+        label: "Fixed Cost Name (EN)",
+        type: "text",
+        pinned: true,
+        value: (f) => f.name,
+      },
+      {
+        key: "localName",
+        label: "Fixed Cost Name (Local)",
+        type: "text",
+        value: (f) => f.localName ?? "",
+      },
       {
         key: "vehicleTypes",
         label: "Vehicle Type",

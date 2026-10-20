@@ -17,6 +17,9 @@ import {
 } from "@/components/movex/general/FormPage";
 import { CollapsiblePanel, ReadOnlyScope, S2, S3, S4 } from "@/components/movex/general/FormParts";
 
+/** Five of the 12 columns (the two Fixed Cost Names). */
+const S5 = "sm:col-span-6 lg:col-span-5";
+
 import { useCollection } from "@/hooks/use-store";
 import { costItemRepository, fixedCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
@@ -273,6 +276,36 @@ function FixedCostForm({
         <CollapsiblePanel title="Fixed Cost Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
+              label="Fixed Cost Code"
+              required
+              error={errors["code"]}
+              className={S2}
+              info="Unique, upper-case. 2–30 characters: letters, digits, - or _."
+            >
+              <Input
+                placeholder="Enter code"
+                maxLength={30}
+                value={d.code}
+                aria-invalid={!!errors["code"] || undefined}
+                onChange={(e) => patch({ code: e.target.value.toUpperCase() })}
+              />
+            </Field>
+            <Field label="Fixed Cost Name (EN)" required error={errors["name"]} className={S5}>
+              <Input
+                placeholder="Enter Fixed Cost Name (EN)"
+                value={d.name}
+                aria-invalid={!!errors["name"] || undefined}
+                onChange={(e) => patch({ name: e.target.value })}
+              />
+            </Field>
+            <Field label="Fixed Cost Name (Local)" className={S5}>
+              <Input
+                placeholder="Enter Fixed Cost Name (Local)"
+                value={d.localName}
+                onChange={(e) => patch({ localName: e.target.value })}
+              />
+            </Field>
+            <Field
               label="Fare Code"
               required
               error={errors["costDetailId"] ?? fareMiss(codeText)}
@@ -299,29 +332,6 @@ function FixedCostForm({
                 placeholder="Enter Fare Name"
                 invalid={!!errors["costDetailId"] || !!fareMiss(nameText)}
                 emptyText="No matching Fare Name"
-              />
-            </Field>
-            <Field
-              label="Fixed Cost Code"
-              required
-              error={errors["code"]}
-              className={S2}
-              info="Unique, upper-case. 2–30 characters: letters, digits, - or _."
-            >
-              <Input
-                placeholder="Enter code"
-                maxLength={30}
-                value={d.code}
-                aria-invalid={!!errors["code"] || undefined}
-                onChange={(e) => patch({ code: e.target.value.toUpperCase() })}
-              />
-            </Field>
-            <Field label="Fixed Cost Name" required error={errors["name"]} className={S4}>
-              <Input
-                placeholder="Enter Fixed Cost Name"
-                value={d.name}
-                aria-invalid={!!errors["name"] || undefined}
-                onChange={(e) => patch({ name: e.target.value })}
               />
             </Field>
             <Field

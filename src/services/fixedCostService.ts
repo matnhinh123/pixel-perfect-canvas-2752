@@ -69,6 +69,7 @@ export const newFixedCostDraft = (): FixedCostDraft => ({
   costDetailId: "",
   code: "",
   name: "",
+  localName: "",
   costValue: 0,
   currency: "VND",
   exchangeRate: 1,
@@ -85,7 +86,7 @@ export const newFixedCostDraft = (): FixedCostDraft => ({
 export const draftOfFixedCost = (f: FixedCostRecord): FixedCostDraft => {
   const { id, deleted, createdAt, createdBy, updatedAt, updatedBy, ...d } = f;
   void [id, deleted, createdAt, createdBy, updatedAt, updatedBy];
-  return d;
+  return { ...d, localName: d.localName ?? "" };
 };
 
 export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string, string> {
@@ -122,6 +123,7 @@ export const fixedCostService = {
       ...d,
       code: d.code.trim().toUpperCase(),
       name: d.name.trim(),
+      localName: d.localName.trim(),
       exchangeRate: rateOf(d.currency),
     };
     const existing = id ? fixedCostRepository.get(id) : undefined;
@@ -143,7 +145,8 @@ export const fixedCostService = {
     const upd = (field: string, a: string, b: string) =>
       a !== b &&
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
-    upd("Fixed Cost Name", existing.name, next.name);
+    upd("Fixed Cost Name (EN)", existing.name, next.name);
+    upd("Fixed Cost Name (Local)", existing.localName ?? "", next.localName);
     upd("Fare Code", existing.costDetailId, next.costDetailId);
     upd(
       "Cost Value",
@@ -283,6 +286,7 @@ const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => {
     costDetailId: fareIdOf(r["costDetail"]) ?? "",
     code: (r["code"] ?? "").trim().toUpperCase(),
     name: (r["name"] ?? "").trim(),
+    localName: (r["localName"] ?? "").trim(),
     costValue: numOr(r["costValue"], 0),
     currency,
     exchangeRate: rateOf(currency),
@@ -308,7 +312,14 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   columns: [
     { key: "costDetail", header: "Fare Code", required: true, example: "DEP" },
     { key: "code", header: "Fixed Cost Code", required: true, example: "FC_DEP_5T" },
-    { key: "name", header: "Fixed Cost Name", required: true, example: "5T truck depreciation" },
+    {
+      key: "name",
+      header: "Fixed Cost Name (EN)",
+      required: true,
+      example: "5T truck depreciation",
+      aliases: ["Fixed Cost Name"],
+    },
+    { key: "localName", header: "Fixed Cost Name (Local)", example: "Khấu hao xe 5 tấn" },
     { key: "costValue", header: "Cost Value", required: true, example: "900000000" },
     { key: "currency", header: "Currency", example: "VND" },
     { key: "allocationBase", header: "Allocation Base", required: true, example: "8" },
@@ -365,6 +376,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         fare,
         `FC_IMP_${n}`,
         `Imported fixed cost ${n}`,
+        `Chi phí cố định nhập mẫu ${n}`,
         value,
         "VND",
         base,
