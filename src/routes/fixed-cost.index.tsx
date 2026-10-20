@@ -53,10 +53,7 @@ function FixedCostList() {
   const details = useCollection(costItemRepository);
   const rowsAll = useCollection(fixedCostRepository);
   const rows = useMemo(() => rowsAll.filter((f) => !f.deleted), [rowsAll]);
-  const detailName = (id: string) => {
-    const c = details.find((x) => x.id === id);
-    return c ? `${c.code} · ${c.name}` : "";
-  };
+  const detailOf = (id: string) => details.find((x) => x.id === id);
   const open = (f: FixedCostRecord, mode: "view" | "edit") => {
     if (mode === "edit" && f.status !== "Active") {
       toast.error("Activate this Fixed Cost before editing it.");
@@ -176,7 +173,14 @@ function FixedCostList() {
         key: "costDetail",
         label: "Fare Code",
         type: "text",
-        value: (f) => detailName(f.costDetailId),
+        value: (f) => detailOf(f.costDetailId)?.code ?? "",
+        defaultHidden: true,
+      },
+      {
+        key: "fareName",
+        label: "Fare Name",
+        type: "text",
+        value: (f) => detailOf(f.costDetailId)?.name ?? "",
         defaultHidden: true,
       },
       {

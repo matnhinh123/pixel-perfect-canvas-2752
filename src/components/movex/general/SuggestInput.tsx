@@ -18,6 +18,7 @@ export function SuggestInput({
   invalid,
   upper,
   emptyText,
+  hint,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -28,13 +29,17 @@ export function SuggestInput({
   upper?: boolean;
   /** Shown when nothing matches (omit to show nothing). */
   emptyText?: string;
+  /** Secondary text next to a suggestion (e.g. the name of a code); also searched. */
+  hint?: (s: string) => string;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<CSSProperties | null>(null);
   const needle = fold(value.trim());
-  const hits = suggestions.filter((s) => !needle || fold(s).includes(needle));
+  const hits = [...new Set(suggestions)].filter(
+    (s) => !needle || fold(s).includes(needle) || (!!hint && fold(hint(s)).includes(needle)),
+  );
   // Nothing to suggest when the box already holds exactly the only match.
   const shown = hits.length === 1 && hits[0] === value ? [] : hits;
   const listOpen = open && (shown.length > 0 || (!!emptyText && !hits.length));
@@ -129,6 +134,7 @@ export function SuggestInput({
                   }}
                 >
                   {s}
+                  {hint && <span className="ml-2 text-xs text-muted-foreground">{hint(s)}</span>}
                 </li>
               ))
             )}

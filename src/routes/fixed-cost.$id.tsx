@@ -1,14 +1,14 @@
 import { CC } from "@/mock-data/commonCodes";
 import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { History, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
-import { SearchableSelect } from "@/components/movex/general/SearchableSelect";
+import { SuggestInput } from "@/components/movex/general/SuggestInput";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
@@ -17,8 +17,6 @@ import {
 } from "@/components/movex/general/FormPage";
 import { CollapsiblePanel, ReadOnlyScope, S2, S3, S4 } from "@/components/movex/general/FormParts";
 
-/** Five of the 12 columns (Fixed Cost Name). */
-const S5 = "sm:col-span-6 lg:col-span-5";
 import { useCollection } from "@/hooks/use-store";
 import { costItemRepository, fixedCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
@@ -119,12 +117,35 @@ function FixedCostForm({
       return n;
     });
   };
+
+  // Fare Code / Fare Name: typed or picked; an exact match selects the Fare Code and fills the other.
+  const current = details.find((c) => c.id === d.costDetailId);
+  const [codeText, setCodeText] = useState(current?.code ?? "");
+  const [nameText, setNameText] = useState(current?.name ?? "");
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const typeCode = (v: string) => {
+    setCodeText(v);
+    const m = details.find((c) => same(c.code, v));
+    patch({ costDetailId: m?.id ?? "" });
+    if (m) setNameText(m.name);
+    else if (current && same(nameText, current.name)) setNameText("");
+  };
+  const typeName = (v: string) => {
+    setNameText(v);
+    const m = details.find((c) => same(c.name, v));
+    patch({ costDetailId: m?.id ?? "" });
+    if (m) setCodeText(m.code);
+    else if (current && same(codeText, current.code)) setCodeText("");
+  };
+  /** Typed text that matches no Fare Code. */
+  const fareMiss = (text: string) =>
+    text.trim() && !d.costDetailId ? "Not found in Fare Code Management." : undefined;
   const isTrip = d.allocationUnit === "Trip";
   const calc = calcFixedCost({ ...d, exchangeRate: rateOf(d.currency) });
 
   /** Number input kept as text-friendly: empty string → 0 so validation flags it. */
   const numInput = (
-    k: "costValue" | "allocationBase" | "utilContainer" | "utilDay" | "allocationDays",
+    k: "allocationBase" | "utilContainer" | "utilDay" | "allocationDays",
     extra: { disabled?: boolean } = {},
   ) => ({
     type: "number" as const,
@@ -252,40 +273,48 @@ function FixedCostForm({
             <Field
               label="Fare Code"
               required
-              error={errors["costDetailId"]}
-              className={S4}
-              info="The Fare Code (Fare Code Management) this fixed cost is booked to."
+              error={errors["costDetailId"] ?? fareMiss(codeText)}
+              className={S2}
+              info="Type or pick a Fare Code or a Fare Name (Fare Code Management): the other one follows."
             >
-              <SearchableSelect
-                value={d.costDetailId}
-                onChange={(v) => patch({ costDetailId: v })}
-                options={["", ...details.map((c) => c.id)]}
-                labels={{
-                  "": readOnly ? "—" : "Select Fare Code",
-                  ...Object.fromEntries(details.map((c) => [c.id, `${c.code} · ${c.name}`])),
-                }}
-                invalid={!!errors["costDetailId"]}
-                disabled={readOnly}
-                searchPlaceholder="Search fare code or name…"
+              <SuggestInput
+                value={codeText}
+                onChange={typeCode}
+                suggestions={details.map((c) => c.code)}
+                hint={(code) => details.find((c) => c.code === code)?.name ?? ""}
+                placeholder="Enter Fare Code"
+                invalid={!!errors["costDetailId"] || !!fareMiss(codeText)}
+                upper
                 emptyText="No matching Fare Code"
+              />
+            </Field>
+            <Field label="Fare Name" required error={fareMiss(nameText)} className={S4}>
+              <SuggestInput
+                value={nameText}
+                onChange={typeName}
+                suggestions={details.map((c) => c.name)}
+                hint={(name) => details.find((c) => c.name === name)?.code ?? ""}
+                placeholder="Enter Fare Name"
+                invalid={!!errors["costDetailId"] || !!fareMiss(nameText)}
+                emptyText="No matching Fare Name"
               />
             </Field>
             <Field
               label="Fixed Cost Code"
               required
               error={errors["code"]}
-              className={S3}
+              className={S2}
               info="Unique, upper-case. 2–30 characters: letters, digits, - or _."
             >
               <Input
-                placeholder="Enter Fixed Cost Code"
+                placeholder="Enter code"
                 maxLength={30}
                 value={d.code}
                 aria-invalid={!!errors["code"] || undefined}
                 onChange={(e) => patch({ code: e.target.value.toUpperCase() })}
               />
             </Field>
-            <Field label="Fixed Cost Name" required error={errors["name"]} className={S5}>
+            <Field label="Fixed Cost Name" required error={errors["name"]} className={S4}>
               <Input
                 placeholder="Enter Fixed Cost Name"
                 value={d.name}
@@ -297,7 +326,7 @@ function FixedCostForm({
               label="Cost Value"
               required
               error={errors["costValue"]}
-              className={S4}
+              className={S3}
               hint={
                 d.currency !== "VND"
                   ? `1 ${d.currency} = ${fmtMoney(rate)} ₫ (exchange rate)`
@@ -305,8 +334,13 @@ function FixedCostForm({
               }
             >
               <div className="flex gap-2">
-                <Input placeholder="0" className={cn("flex-1", NUM)} {...numInput("costValue")} />
-                <NativeSelect {...select("currency", COST_CURRENCIES, "")} className="h-10 w-20" />
+                <MoneyInput
+                  value={d.costValue}
+                  decimals={d.currency === "VND" ? 0 : 2}
+                  onChange={(costValue) => patch({ costValue })}
+                  invalid={!!errors["costValue"]}
+                />
+                <NativeSelect {...select("currency", COST_CURRENCIES, "")} className="h-10 w-24" />
               </div>
             </Field>
             <Field
@@ -443,5 +477,52 @@ function FixedCostForm({
         />
       )}
     </div>
+  );
+}
+
+/** "1200000,5" → "1.200.000,5" while typing (vi-VN grouping), and its number. */
+const groupMoney = (s: string, decimals: number) => {
+  const [int = "", ...rest] = s.replace(/[^\d,]/g, "").split(",");
+  const comma = decimals > 0 && s.includes(",");
+  const dec = rest.join("").slice(0, decimals);
+  const n = Number(int || "0");
+  return {
+    text: (int ? n.toLocaleString("vi-VN") : comma ? "0" : "") + (comma ? `,${dec}` : ""),
+    value: Number(`${n}.${dec || "0"}`),
+  };
+};
+const moneyText = (v: number, decimals: number) =>
+  v ? v.toLocaleString("vi-VN", { maximumFractionDigits: decimals }) : "";
+
+/** Amount input with a dot every 3 digits (decimals after a comma for foreign currencies). */
+function MoneyInput({
+  value,
+  onChange,
+  decimals,
+  invalid,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  decimals: number;
+  invalid?: boolean;
+}) {
+  const [text, setText] = useState(() => moneyText(value, decimals));
+  useEffect(() => {
+    if (groupMoney(text, decimals).value !== value) setText(moneyText(value, decimals));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, decimals]);
+  return (
+    <Input
+      inputMode="decimal"
+      placeholder="0"
+      value={text}
+      aria-invalid={invalid || undefined}
+      onChange={(e) => {
+        const g = groupMoney(e.target.value, decimals);
+        setText(g.text);
+        onChange(g.value);
+      }}
+      className={cn("min-w-0 flex-1", NUM)}
+    />
   );
 }
