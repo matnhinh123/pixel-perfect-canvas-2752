@@ -10,6 +10,7 @@ export type EntityType =
   | "Cost Group"
   | "Fixed Cost"
   | "Fixed Cost Summary"
+  | "COGS"
   | "Location"
   | "Vehicle"
   | "Toll Station"

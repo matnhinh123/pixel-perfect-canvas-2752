@@ -220,6 +220,7 @@ export function validateCostItem(d: CostItemDraft, id?: string): Record<string, 
   else if (items().some((c) => c.id !== id && c.code.toUpperCase() === code))
     e["code"] = `Cost Detail Code ${code} already exists.`;
   if (!d.name.trim()) e["name"] = "Cost Name is required.";
+  if (!d.group.trim()) e["group"] = "Group Name is required.";
   return e;
 }
 

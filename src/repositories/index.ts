@@ -5,6 +5,7 @@ import type {
   AuditEvent,
   BusinessPartnerRecord,
   CostGroupRecord,
+  CogsRecord,
   CostItemRecord,
   CostRecord,
   FixedCostRecord,
@@ -27,6 +28,7 @@ import {
 } from "@/mock-data/seed";
 import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
 import { seedFixedCosts, seedFixedCostSummaries } from "@/mock-data/fixedCost";
+import { seedCogs } from "@/mock-data/cogs";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
 import { seedFiveTonTrucks, seedVehicleMasters } from "@/mock-data/vehicleMaster";
 import { seedBusinessPartners, seedPetrolimexTienGiang } from "@/mock-data/businessPartners";
@@ -53,6 +55,8 @@ export const costGroupRepository = createCollection<CostGroupRecord>(
   seedCostGroups,
 );
 export const costItemRepository = createCollection<CostItemRecord>("cost-items.v4", seedCostItems);
+/** COGS of a trip (route × vehicle type) built on the Cost screens. */
+export const cogsRepository = createCollection<CogsRecord>("cogs.v1", seedCogs);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
 export const fixedCostRepository = createCollection<FixedCostRecord>(
   "fixed-costs.v3",

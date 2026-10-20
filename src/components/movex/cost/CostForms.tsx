@@ -260,6 +260,7 @@ export function CostDetailForm({
             </Field>
             <Field
               label="Group Name"
+              required
               error={errors["group"]}
               className={S3}
               info="Pick a group from the list, or type a new one: it is saved with this Cost Detail."

@@ -6,4 +6,5 @@ export * from "./costMaster";
 export * from "./businessPartner";
 export * from "./vehicleMaster";
 export * from "./fixedCost";
+export * from "./cogs";
 export * from "./commonCode";

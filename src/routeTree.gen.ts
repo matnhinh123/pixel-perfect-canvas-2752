@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuditLogRouteImport } from './routes/audit-log'
-import { Route as CogsRouteImport } from './routes/cogs'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ExchangeRateRouteImport } from './routes/exchange-rate'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -19,6 +18,8 @@ import { Route as VariableCostRouteImport } from './routes/variable-cost'
 import { Route as VendorTariffRouteImport } from './routes/vendor-tariff'
 import { Route as BusinessPartnerIndexRouteImport } from './routes/business-partner.index'
 import { Route as BusinessPartnerIdRouteImport } from './routes/business-partner.$id'
+import { Route as CogsIndexRouteImport } from './routes/cogs.index'
+import { Route as CogsIdRouteImport } from './routes/cogs.$id'
 import { Route as CommonCodeIndexRouteImport } from './routes/common-code.index'
 import { Route as CommonCodeIdRouteImport } from './routes/common-code.$id'
 import { Route as CostGroupIndexRouteImport } from './routes/cost-group.index'
@@ -47,11 +48,6 @@ const IndexRoute = IndexRouteImport.update({
 const AuditLogRoute = AuditLogRouteImport.update({
   id: '/audit-log',
   path: '/audit-log',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CogsRoute = CogsRouteImport.update({
-  id: '/cogs',
-  path: '/cogs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -87,6 +83,16 @@ const BusinessPartnerIndexRoute = BusinessPartnerIndexRouteImport.update({
 const BusinessPartnerIdRoute = BusinessPartnerIdRouteImport.update({
   id: '/business-partner/$id',
   path: '/business-partner/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CogsIndexRoute = CogsIndexRouteImport.update({
+  id: '/cogs/',
+  path: '/cogs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CogsIdRoute = CogsIdRouteImport.update({
+  id: '/cogs/$id',
+  path: '/cogs/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CommonCodeIndexRoute = CommonCodeIndexRouteImport.update({
@@ -188,13 +194,13 @@ const ApiVietmapSplatRoute = ApiVietmapSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/cogs': typeof CogsRoute
   '/dashboard': typeof DashboardRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
   '/variable-cost': typeof VariableCostRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
+  '/cogs/$id': typeof CogsIdRoute
   '/common-code/$id': typeof CommonCodeIdRoute
   '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
@@ -205,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
+  '/cogs/': typeof CogsIndexRoute
   '/common-code/': typeof CommonCodeIndexRoute
   '/cost-group/': typeof CostGroupIndexRoute
   '/cost/': typeof CostIndexRoute
@@ -219,13 +226,13 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/cogs': typeof CogsRoute
   '/dashboard': typeof DashboardRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
   '/variable-cost': typeof VariableCostRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
+  '/cogs/$id': typeof CogsIdRoute
   '/common-code/$id': typeof CommonCodeIdRoute
   '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
@@ -236,6 +243,7 @@ export interface FileRoutesByTo {
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner': typeof BusinessPartnerIndexRoute
+  '/cogs': typeof CogsIndexRoute
   '/common-code': typeof CommonCodeIndexRoute
   '/cost-group': typeof CostGroupIndexRoute
   '/cost': typeof CostIndexRoute
@@ -251,13 +259,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/audit-log': typeof AuditLogRoute
-  '/cogs': typeof CogsRoute
   '/dashboard': typeof DashboardRoute
   '/exchange-rate': typeof ExchangeRateRoute
   '/pricing': typeof PricingRoute
   '/variable-cost': typeof VariableCostRoute
   '/vendor-tariff': typeof VendorTariffRoute
   '/business-partner/$id': typeof BusinessPartnerIdRoute
+  '/cogs/$id': typeof CogsIdRoute
   '/common-code/$id': typeof CommonCodeIdRoute
   '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
@@ -268,6 +276,7 @@ export interface FileRoutesById {
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
+  '/cogs/': typeof CogsIndexRoute
   '/common-code/': typeof CommonCodeIndexRoute
   '/cost-group/': typeof CostGroupIndexRoute
   '/cost/': typeof CostIndexRoute
@@ -284,13 +293,13 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/audit-log'
-    | '/cogs'
     | '/dashboard'
     | '/exchange-rate'
     | '/pricing'
     | '/variable-cost'
     | '/vendor-tariff'
     | '/business-partner/$id'
+    | '/cogs/$id'
     | '/common-code/$id'
     | '/cost-group/$id'
     | '/cost/$id'
@@ -301,6 +310,7 @@ export interface FileRouteTypes {
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner/'
+    | '/cogs/'
     | '/common-code/'
     | '/cost-group/'
     | '/cost/'
@@ -315,13 +325,13 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/audit-log'
-    | '/cogs'
     | '/dashboard'
     | '/exchange-rate'
     | '/pricing'
     | '/variable-cost'
     | '/vendor-tariff'
     | '/business-partner/$id'
+    | '/cogs/$id'
     | '/common-code/$id'
     | '/cost-group/$id'
     | '/cost/$id'
@@ -332,6 +342,7 @@ export interface FileRouteTypes {
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner'
+    | '/cogs'
     | '/common-code'
     | '/cost-group'
     | '/cost'
@@ -346,13 +357,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/audit-log'
-    | '/cogs'
     | '/dashboard'
     | '/exchange-rate'
     | '/pricing'
     | '/variable-cost'
     | '/vendor-tariff'
     | '/business-partner/$id'
+    | '/cogs/$id'
     | '/common-code/$id'
     | '/cost-group/$id'
     | '/cost/$id'
@@ -363,6 +374,7 @@ export interface FileRouteTypes {
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner/'
+    | '/cogs/'
     | '/common-code/'
     | '/cost-group/'
     | '/cost/'
@@ -378,13 +390,13 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuditLogRoute: typeof AuditLogRoute
-  CogsRoute: typeof CogsRoute
   DashboardRoute: typeof DashboardRoute
   ExchangeRateRoute: typeof ExchangeRateRoute
   PricingRoute: typeof PricingRoute
   VariableCostRoute: typeof VariableCostRoute
   VendorTariffRoute: typeof VendorTariffRoute
   BusinessPartnerIdRoute: typeof BusinessPartnerIdRoute
+  CogsIdRoute: typeof CogsIdRoute
   CommonCodeIdRoute: typeof CommonCodeIdRoute
   CostGroupIdRoute: typeof CostGroupIdRoute
   CostIdRoute: typeof CostIdRoute
@@ -395,6 +407,7 @@ export interface RootRouteChildren {
   TollStationIdRoute: typeof TollStationIdRoute
   VehicleIdRoute: typeof VehicleIdRoute
   BusinessPartnerIndexRoute: typeof BusinessPartnerIndexRoute
+  CogsIndexRoute: typeof CogsIndexRoute
   CommonCodeIndexRoute: typeof CommonCodeIndexRoute
   CostGroupIndexRoute: typeof CostGroupIndexRoute
   CostIndexRoute: typeof CostIndexRoute
@@ -421,13 +434,6 @@ declare module '@tanstack/react-router' {
       path: '/audit-log'
       fullPath: '/audit-log'
       preLoaderRoute: typeof AuditLogRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cogs': {
-      id: '/cogs'
-      path: '/cogs'
-      fullPath: '/cogs'
-      preLoaderRoute: typeof CogsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -477,6 +483,20 @@ declare module '@tanstack/react-router' {
       path: '/business-partner/$id'
       fullPath: '/business-partner/$id'
       preLoaderRoute: typeof BusinessPartnerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cogs/': {
+      id: '/cogs/'
+      path: '/cogs'
+      fullPath: '/cogs/'
+      preLoaderRoute: typeof CogsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cogs/$id': {
+      id: '/cogs/$id'
+      path: '/cogs/$id'
+      fullPath: '/cogs/$id'
+      preLoaderRoute: typeof CogsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/common-code/': {
@@ -618,13 +638,13 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditLogRoute: AuditLogRoute,
-  CogsRoute: CogsRoute,
   DashboardRoute: DashboardRoute,
   ExchangeRateRoute: ExchangeRateRoute,
   PricingRoute: PricingRoute,
   VariableCostRoute: VariableCostRoute,
   VendorTariffRoute: VendorTariffRoute,
   BusinessPartnerIdRoute: BusinessPartnerIdRoute,
+  CogsIdRoute: CogsIdRoute,
   CommonCodeIdRoute: CommonCodeIdRoute,
   CostGroupIdRoute: CostGroupIdRoute,
   CostIdRoute: CostIdRoute,
@@ -635,6 +655,7 @@ const rootRouteChildren: RootRouteChildren = {
   TollStationIdRoute: TollStationIdRoute,
   VehicleIdRoute: VehicleIdRoute,
   BusinessPartnerIndexRoute: BusinessPartnerIndexRoute,
+  CogsIndexRoute: CogsIndexRoute,
   CommonCodeIndexRoute: CommonCodeIndexRoute,
   CostGroupIndexRoute: CostGroupIndexRoute,
   CostIndexRoute: CostIndexRoute,
