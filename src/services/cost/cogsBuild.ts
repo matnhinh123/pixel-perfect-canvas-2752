@@ -9,14 +9,19 @@ import type {
 } from "@/types";
 import { allocate } from "@/services/fixedCostMath";
 import { formatNumber } from "@/lib/format";
-import { routeVariableCost, type RouteVariableCost, type SalaryTier } from "./salaryRange";
+import {
+  routeVariableCost,
+  type FuelSetup,
+  type RouteVariableCost,
+  type SalaryTier,
+  type TollMaster,
+} from "./salaryRange";
 
-/** Fixed Cost vehicle type codes of a vehicle type ("Xe tải 2T" → 2T / TRUCK, "Đầu kéo 40ft" → 40DC / HEAD). */
+/** Fixed Cost vehicle type codes of a vehicle type ("Xe tải 2T" → 2T / TRUCK, "CNTR · Dry" → 40DC / 20DC / HEAD). */
 export const fixedCostCodes = (type: string): string[] => {
   const t = /(\d+)T$/.exec(type);
   if (t) return [`${t[1]}T`, "TRUCK"];
-  if (type.endsWith("20ft")) return ["20DC", "HEAD"];
-  if (type.endsWith("40ft")) return ["40DC", "HEAD"];
+  if (type.startsWith("CNTR")) return ["40DC", "20DC", "HEAD"];
   return [];
 };
 
@@ -34,7 +39,9 @@ const tripOf = (f: FixedCostRecord) =>
 export interface CogsBuildInput {
   route: RouteRecord;
   vehicleType: string;
-  tiers: SalaryTier[];
+  tables: Record<string, SalaryTier[]>;
+  fuel: Pick<FuelSetup, "price" | "norms">;
+  tollMasters: TollMaster[];
   fixedCosts: FixedCostRecord[];
   costs: CostItemRecord[];
   excluded: readonly string[];
@@ -52,7 +59,12 @@ export interface CogsBuild {
 }
 
 export function buildCogs(i: CogsBuildInput): CogsBuild {
-  const v = routeVariableCost(i.route, i.vehicleType, i.tiers);
+  const v = routeVariableCost(i.route, i.vehicleType, {
+    tables: i.tables,
+    fuel: i.fuel,
+    masters: i.tollMasters,
+    others: {},
+  });
   const codes = fixedCostCodes(i.vehicleType);
   const fixedLines: CogsLine[] = i.fixedCosts
     .filter(
@@ -73,10 +85,8 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
       group: "Variable Cost",
       code: "TDS",
       name: "Trip Salary",
-      basis: s
-        ? `Tier ${s.tier} (${s.tierRange}) + ${s.extraKm} km × ${formatNumber(s.extraRate)}`
-        : "—",
-      amount: s?.salary ?? 0,
+      basis: s ? `Tier ${s.tier} (${s.tierRange}) · ${v.stdKm} km` : "Out of range",
+      amount: s?.base ?? 0,
     },
     {
       key: "V:allowance",
@@ -91,15 +101,15 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
       group: "Variable Cost",
       code: "TOL",
       name: "Toll Cost",
-      basis: "Tolls, ferries and manual costs of the route",
-      amount: v.routeCost,
+      basis: `${v.stationCount} stations · Group ${v.group}`,
+      amount: v.toll,
     },
     {
       key: "V:fuel",
       group: "Variable Cost",
       code: "FUE",
       name: "Fuel Cost",
-      basis: `${v.fuelNorm} l/100km × ${v.distanceKm} km = ${v.fuelLitres} l × ${formatNumber(v.fuelPrice)} ₫`,
+      basis: `${v.fuelNorm} l/100km × ${v.stdKm} km = ${v.fuelLitres} l × ${formatNumber(v.fuelPrice)} ₫`,
       amount: v.fuel,
     },
   ];

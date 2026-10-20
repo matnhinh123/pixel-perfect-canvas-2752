@@ -32,7 +32,12 @@ import {
   useUnsavedChangesGuard,
 } from "@/components/movex/general/FormPage";
 import { useCollection } from "@/hooks/use-store";
-import { costItemRepository, fixedCostRepository, routeRepository } from "@/repositories";
+import {
+  costItemRepository,
+  fixedCostRepository,
+  routeRepository,
+  tollStationRepository,
+} from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import { buildCogs } from "@/services/cost/cogsBuild";
 import {
@@ -41,7 +46,7 @@ import {
   newCogsDraft,
   type CogsDraft,
 } from "@/services/cost/cogsService";
-import { ALL_VEHICLE_TYPES, useSalaryRanges } from "@/services/cost/salaryRange";
+import { ALL_VEHICLE_TYPES, useFuelSetup, useSalaryRanges } from "@/services/cost/salaryRange";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CogsLine, CogsLineGroup, CogsRecord } from "@/types";
@@ -58,6 +63,9 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   const fixedAll = useCollection(fixedCostRepository);
   const costsAll = useCollection(costItemRepository);
   const salary = useSalaryRanges();
+  const fuel = useFuelSetup();
+  const tollAll = useCollection(tollStationRepository);
+  const tollMasters = useMemo(() => tollAll.filter((t) => !t.deleted), [tollAll]);
   const routes = useMemo(
     () => routesAll.filter((r) => !r.deleted).sort((a, b) => a.code.localeCompare(b.code)),
     [routesAll],
@@ -90,7 +98,9 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
     ? buildCogs({
         route,
         vehicleType: d.vehicleType,
-        tiers: salary.current.tables[d.vehicleType] ?? [],
+        tables: salary.current.tables,
+        fuel,
+        tollMasters,
         fixedCosts: fixedAll,
         costs,
         excluded: d.excluded,
@@ -225,9 +235,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                 </span>
                 <span>
                   <span className="text-muted-foreground">Distance </span>
-                  {built?.variable.calculated
-                    ? `${formatNumber(built.variable.distanceKm)} km`
-                    : "—"}
+                  {built?.variable.calculated ? `${formatNumber(built.variable.stdKm)} km` : "—"}
                 </span>
                 <Link
                   to="/routing/$id"

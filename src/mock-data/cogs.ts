@@ -1,10 +1,11 @@
 // Demo COGS: a few routes priced for a vehicle type with every cost included.
 import type { CogsRecord } from "@/types";
 import { buildCogs } from "@/services/cost/cogsBuild";
-import { seedSalaryRanges } from "@/services/cost/salaryRange";
+import { seedFuelSetup, seedSalaryRanges } from "@/services/cost/salaryRange";
 import { routeTotals } from "@/services/cost/costMath";
 import { seedCostItems } from "./costMaster";
 import { seedFixedCosts } from "./fixedCost";
+import { seedTollStations } from "./tollCatalog";
 import { seedRoutes } from "./seed";
 
 const meta = {
@@ -20,8 +21,8 @@ export function seedCogs(): CogsRecord[] {
   const costs = seedCostItems();
   const routes = seedRoutes().filter((r) => routeTotals(r).calculated);
   const picks: [number, string][] = [
-    [0, "Xe tải 8T"],
-    [1, "Đầu kéo 40ft"],
+    [0, "Xe tải 10T"],
+    [1, "CNTR · Dry"],
     [2, "Xe tải 5T"],
   ];
   return picks
@@ -31,7 +32,9 @@ export function seedCogs(): CogsRecord[] {
       const b = buildCogs({
         route,
         vehicleType,
-        tiers: tables[vehicleType] ?? [],
+        tables,
+        fuel: seedFuelSetup(),
+        tollMasters: seedTollStations(),
         fixedCosts,
         costs,
         excluded: [],

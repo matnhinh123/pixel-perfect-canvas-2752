@@ -6,7 +6,8 @@ export const ALLOCATION_UNITS: AllocationUnit[] = ["Year", "Month", "Day", "Trip
 
 /** One fixed-cost line (depreciation, insurance, interest, GPS…) with its allocation settings. */
 export interface FixedCostRecord extends BaseRecord {
-  costGroupId: string;
+  /** Cost Detail (Master Data > Cost) this fixed cost is booked to. */
+  costDetailId: string;
   costTypeCode: string;
   code: string;
   name: string;

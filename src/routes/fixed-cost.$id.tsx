@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
+import { SearchableSelect } from "@/components/movex/general/SearchableSelect";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
@@ -16,7 +17,7 @@ import {
 } from "@/components/movex/general/FormPage";
 import { CollapsiblePanel, ReadOnlyScope, S3, S4 } from "@/components/movex/general/FormParts";
 import { useCollection } from "@/hooks/use-store";
-import { costGroupRepository, fixedCostRepository } from "@/repositories";
+import { costItemRepository, fixedCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
   calcFixedCost,
@@ -88,8 +89,14 @@ function FixedCostForm({
   const vehicleTypes = useCodeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES);
   const units = useCodeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS);
   const isNew = !source;
-  const groupsAll = useCollection(costGroupRepository);
-  const groups = useMemo(() => groupsAll.filter((g) => !g.deleted), [groupsAll]);
+  const detailsAll = useCollection(costItemRepository);
+  const details = useMemo(
+    () =>
+      detailsAll.filter(
+        (c) => !c.deleted && (c.status === "Active" || c.id === source?.costDetailId),
+      ),
+    [detailsAll, source],
+  );
 
   const initial = useMemo<FixedCostDraft>(
     () => (source ? draftOfFixedCost(source) : newFixedCostDraft()),
@@ -129,7 +136,7 @@ function FixedCostForm({
     ...extra,
   });
   const select = (
-    k: "costGroupId" | "costTypeCode" | "currency" | "allocationUnit",
+    k: "costTypeCode" | "currency" | "allocationUnit",
     options: readonly string[],
     placeholder: string,
     labels: Record<string, string> = {},
@@ -242,14 +249,25 @@ function FixedCostForm({
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
         <CollapsiblePanel title="General Information">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
-            <Field label="Cost Group" required error={errors["costGroupId"]} className={S4}>
-              <NativeSelect
-                {...select(
-                  "costGroupId",
-                  groups.map((g) => g.id),
-                  "Select Cost Group",
-                  Object.fromEntries(groups.map((g) => [g.id, g.name])),
-                )}
+            <Field
+              label="Cost Detail"
+              required
+              error={errors["costDetailId"]}
+              className={S4}
+              info="The Cost Detail (Master Data > Cost) this fixed cost is booked to."
+            >
+              <SearchableSelect
+                value={d.costDetailId}
+                onChange={(v) => patch({ costDetailId: v })}
+                options={["", ...details.map((c) => c.id)]}
+                labels={{
+                  "": readOnly ? "—" : "Select Cost Detail",
+                  ...Object.fromEntries(details.map((c) => [c.id, `${c.code} · ${c.name}`])),
+                }}
+                invalid={!!errors["costDetailId"]}
+                disabled={readOnly}
+                searchPlaceholder="Search cost code or name…"
+                emptyText="No matching Cost Detail"
               />
             </Field>
             <Field label="Cost Type Code" required error={errors["costTypeCode"]} className={S4}>

@@ -5,13 +5,14 @@ import {
   costItemRepository,
   fixedCostRepository,
   routeRepository,
+  tollStationRepository,
   uid,
 } from "@/repositories";
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "@/services/crudService";
 import { formatNumber } from "@/lib/format";
 import { buildCogs } from "./cogsBuild";
-import { salaryRangeService } from "./salaryRange";
+import { fuelService, salaryRangeService } from "./salaryRange";
 
 export const cogsCrud = makeCrud<CogsRecord>({
   entityType: "COGS",
@@ -80,7 +81,9 @@ export const buildCogsOf = (d: CogsDraft) => {
   return buildCogs({
     route,
     vehicleType: d.vehicleType,
-    tiers: salaryRangeService.get().current.tables[d.vehicleType] ?? [],
+    tables: salaryRangeService.get().current.tables,
+    fuel: fuelService.get(),
+    tollMasters: tollStationRepository.all().filter((t) => !t.deleted),
     fixedCosts: fixedCostRepository.all(),
     costs: costItemRepository.all().filter((c) => !c.deleted),
     excluded: d.excluded,

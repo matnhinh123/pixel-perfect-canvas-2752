@@ -16,11 +16,14 @@ describe("Driver salary range (Variable Cost)", () => {
     });
   });
 
-  it("trip salary = tier salary + (km − tier start) × extra rate", () => {
-    expect(tripSalaryOf(tiers2T, 30)).toMatchObject({ tier: 1, salary: 400_000, total: 450_000 });
-    // Tier 2 (51–100 km): 400,000 + (100 − 51) × 2,900 = 542,100 ≈ Tier 3 start 545,000.
-    expect(tripSalaryOf(tiers2T, 100)).toMatchObject({ tier: 2, salary: 542_100 });
-    expect(tripSalaryOf(tiers2T, 101)?.salary).toBe(545_000);
+  it("tier is picked by standard km; extra km is paid at the tier rate", () => {
+    const s = tripSalaryOf(tiers2T, 420, 452)!;
+    expect(s.tier).toBe(6);
+    expect(s.extraKm).toBe(32);
+    expect(s.extra).toBe(32 * s.extraRate);
+    expect(s.total).toBe(s.base + s.extra + s.tollAllowance);
+    expect(tripSalaryOf(tiers2T, 420, 452, 100_000)?.tollAllowance).toBe(100_000);
+    expect(tripSalaryOf(tiers2T, 5_000)).toBeNull();
   });
 
   it("rejects gaps, overlaps and a first tier that does not start at 0", () => {

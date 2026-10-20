@@ -32,7 +32,7 @@ const meta = {
 
 const fc = (
   id: string,
-  costGroupId: string,
+  costDetailId: string,
   costTypeCode: string,
   code: string,
   name: string,
@@ -43,7 +43,7 @@ const fc = (
   extra: Partial<FixedCostRecord> = {},
 ): FixedCostRecord => ({
   id,
-  costGroupId,
+  costDetailId,
   costTypeCode,
   code,
   name,
@@ -65,7 +65,7 @@ const fc = (
 export const seedFixedCosts = (): FixedCostRecord[] => [
   fc(
     "FC-DEP-TRK",
-    "CG-VEH-INV",
+    "CI-DEP",
     "DEPRECIATION",
     "FC_DEPRECIATION",
     "Truck depreciation",
@@ -77,7 +77,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-DEP-CONT",
-    "CG-VEH-INV",
+    "CI-ADP",
     "DEPRECIATION",
     "FC_DEP_CONT",
     "Tractor & trailer depreciation",
@@ -89,7 +89,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-INS",
-    "CG-VEH-INV",
+    "CI-INU",
     "INSURANCE",
     "FC_INSURANCE",
     "Vehicle insurance",
@@ -101,7 +101,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-LOAN",
-    "CG-VEH-INV",
+    "CI-FIN",
     "INTEREST",
     "FC_LOAN_INTEREST",
     "Loan interest",
@@ -113,7 +113,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-GPS",
-    "CG-VEH-INV",
+    "CI-GPS",
     "EQUIPMENT",
     "FC_GPS",
     "GPS & camera subscription",
@@ -125,7 +125,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-LICENSE",
-    "CG-VEH-INV",
+    "CI-IFR",
     "LICENSE",
     "FC_LICENSE",
     "Operating license fee",
@@ -137,7 +137,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-PERMIT",
-    "CG-VEH-OPS",
+    "CI-CBD",
     "LICENSE",
     "FC_PERMIT",
     "Port entry permit",
@@ -149,7 +149,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-OLD",
-    "CG-VEH-INV",
+    "CI-DEP",
     "EQUIPMENT",
     "FC_TARP",
     "Tarpaulin set (retired)",

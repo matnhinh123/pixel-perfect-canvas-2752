@@ -11,7 +11,7 @@ import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts
 import { FixedCostTabs, type FixedCostTab } from "@/components/movex/cost/FixedCostTabs";
 import { FixedCostSummaryTab } from "@/components/movex/cost/FixedCostSummaryTab";
 import { useCollection } from "@/hooks/use-store";
-import { costGroupRepository, fixedCostRepository } from "@/repositories";
+import { costItemRepository, fixedCostRepository } from "@/repositories";
 import { FIXED_COST_VEHICLE_TYPES } from "@/mock-data/fixedCost";
 import { calcFixedCost, fixedCostCrud } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
@@ -51,10 +51,13 @@ const money = (n: number | null) => <span className="tabular-nums">{fmtMoney(n)}
 function FixedCostList() {
   const navigate = useNavigate();
   const vehicleTypes = useCodeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES);
-  const groups = useCollection(costGroupRepository);
+  const details = useCollection(costItemRepository);
   const rowsAll = useCollection(fixedCostRepository);
   const rows = useMemo(() => rowsAll.filter((f) => !f.deleted), [rowsAll]);
-  const groupName = (id: string) => groups.find((g) => g.id === id)?.name ?? "";
+  const detailName = (id: string) => {
+    const c = details.find((x) => x.id === id);
+    return c ? `${c.code} · ${c.name}` : "";
+  };
   const open = (f: FixedCostRecord, mode: "view" | "edit") => {
     if (mode === "edit" && f.status !== "Active") {
       toast.error("Activate this Fixed Cost before editing it.");
@@ -137,10 +140,10 @@ function FixedCostList() {
         render: (f) => <StatusBadge status={f.status} />,
       },
       {
-        key: "group",
-        label: "Cost Group",
+        key: "costDetail",
+        label: "Cost Detail",
         type: "text",
-        value: (f) => groupName(f.costGroupId),
+        value: (f) => detailName(f.costDetailId),
         defaultHidden: true,
       },
       {
@@ -167,7 +170,7 @@ function FixedCostList() {
       updatedAtColumn<FixedCostRecord>(),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [groups],
+    [details],
   );
 
   return (

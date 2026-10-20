@@ -59,7 +59,7 @@ export const costItemRepository = createCollection<CostItemRecord>("cost-items.v
 export const cogsRepository = createCollection<CogsRecord>("cogs.v1", seedCogs);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
 export const fixedCostRepository = createCollection<FixedCostRecord>(
-  "fixed-costs.v3",
+  "fixed-costs.v4",
   seedFixedCosts,
 );
 export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
