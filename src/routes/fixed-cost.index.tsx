@@ -13,7 +13,7 @@ import { FixedCostSummaryTab } from "@/components/movex/cost/FixedCostSummaryTab
 import { useCollection } from "@/hooks/use-store";
 import { costItemRepository, fixedCostRepository } from "@/repositories";
 import { FIXED_COST_VEHICLE_TYPES } from "@/mock-data/fixedCost";
-import { calcFixedCost, fixedCostCrud } from "@/services/fixedCostService";
+import { calcFixedCost, fixedCostCrud, fixedCostImportConfig } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
 import type { FixedCostRecord } from "@/types";
 
@@ -116,6 +116,41 @@ function FixedCostList() {
         value: (f) => `${f.allocationBase} ${f.allocationUnit}`,
       },
       {
+        key: "currency",
+        label: "Currency",
+        type: "text",
+        value: (f) => f.currency,
+        defaultHidden: true,
+      },
+      {
+        key: "applyUtilization",
+        label: "Apply Utilization",
+        type: "text",
+        value: (f) => (f.applyUtilization && f.allocationUnit !== "Trip" ? "Yes" : "No"),
+        defaultHidden: true,
+      },
+      {
+        key: "utilContainer",
+        label: "Utilization Rate – Container",
+        type: "number",
+        value: (f) => f.utilContainer,
+        defaultHidden: true,
+      },
+      {
+        key: "utilDay",
+        label: "Utilization Rate – Day",
+        type: "number",
+        value: (f) => f.utilDay,
+        defaultHidden: true,
+      },
+      {
+        key: "allocationDays",
+        label: "Allocation Days",
+        type: "number",
+        value: (f) => f.allocationDays,
+        defaultHidden: true,
+      },
+      {
         key: "allocationValue",
         label: "Allocation Value",
         type: "number",
@@ -197,6 +232,7 @@ function FixedCostList() {
         },
         statusFilter,
       ]}
+      importConfig={fixedCostImportConfig}
       crud={fixedCostCrud}
       allowDelete={false}
       addLabel="Add Fixed Cost"

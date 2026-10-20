@@ -1,12 +1,25 @@
 // Master Data > Cost > Fixed Cost: fixed-cost lines + the per-vehicle-type Summary.
-import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
+import {
+  ALLOCATION_UNITS,
+  type AllocationUnit,
+  type FixedCostRecord,
+  type FixedCostSummaryRecord,
+} from "@/types";
 import {
   costItemRepository,
   fixedCostRepository,
   fixedCostSummaryRepository,
   uid,
 } from "@/repositories";
-import { FIXED_COST_RATES } from "@/mock-data/fixedCost";
+import {
+  FIXED_COST_RATES,
+  FIXED_COST_TYPES,
+  FIXED_COST_VEHICLE_TYPES,
+} from "@/mock-data/fixedCost";
+import { COST_CURRENCIES } from "@/mock-data/costMaster";
+import { CC } from "@/mock-data/commonCodes";
+import { codeOptions } from "./commonCodeService";
+import { draftImportConfig, listCell, numCell, pick } from "./importExportService";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { allocate, type AllocationResult } from "./fixedCostMath";
@@ -234,3 +247,152 @@ export const fixedCostSummaryService = {
     return next;
   },
 };
+
+// ---------------------------------------------------------------- Import
+
+const STATUSES = ["Active", "Inactive"] as const;
+const YES = ["yes", "y", "on", "true", "1", "x"];
+const NO = ["no", "n", "off", "false", "0"];
+const choices = () => ({
+  costType: codeOptions(CC.FIXED_COST_TYPE, FIXED_COST_TYPES),
+  vehicleType: codeOptions(CC.FIXED_COST_VEHICLE_TYPE, FIXED_COST_VEHICLE_TYPES),
+  unit: codeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS) as AllocationUnit[],
+  currency: COST_CURRENCIES,
+});
+/** "DEP" or "DEP · Asset depreciation" (as exported) → the Fare Code record id. */
+const fareIdOf = (cell: string | undefined) => {
+  const code = (cell ?? "").split("·")[0]!.trim().toLowerCase();
+  return code
+    ? costItemRepository.all().find((c) => !c.deleted && c.code.toLowerCase() === code)?.id
+    : undefined;
+};
+/** "8" (+ unit column) or "8 Year" (as exported). */
+const baseOf = (r: Record<string, string>) => {
+  const m = /^\s*([\d.,]+)\s*([A-Za-z]*)\s*$/.exec(r["allocationBase"] ?? "");
+  return { base: m ? numCell(m[1]) : NaN, unit: (r["allocationUnit"] || m?.[2] || "").trim() };
+};
+const flag = (v: string | undefined) => {
+  const s = (v ?? "").trim().toLowerCase();
+  return !s || YES.includes(s) ? true : NO.includes(s) ? false : undefined;
+};
+const numOr = (v: string | undefined, dflt: number) => {
+  const n = numCell(v);
+  return Number.isNaN(n) ? dflt : n;
+};
+
+const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => {
+  const c = choices();
+  const { base, unit } = baseOf(r);
+  const currency = pick(r["currency"], c.currency) || "VND";
+  return {
+    costDetailId: fareIdOf(r["costDetail"]) ?? "",
+    costTypeCode: pick(r["costTypeCode"], c.costType) || "",
+    code: (r["code"] ?? "").trim().toUpperCase(),
+    name: (r["name"] ?? "").trim(),
+    costValue: numOr(r["costValue"], 0),
+    currency,
+    exchangeRate: rateOf(currency),
+    allocationBase: Number.isNaN(base) ? 0 : base,
+    allocationUnit: pick(unit, c.unit) || "Year",
+    vehicleTypes: listCell(r["vehicleTypes"])
+      .map((v) => pick(v, c.vehicleType))
+      .filter((v): v is string => !!v),
+    applyUtilization: flag(r["applyUtilization"]) ?? true,
+    utilContainer: numOr(r["utilContainer"], 1),
+    utilDay: numOr(r["utilDay"], 1),
+    allocationDays: numOr(r["allocationDays"], 30),
+    status: pick(r["status"], STATUSES) || "Active",
+  };
+};
+
+/** Headers = the list's column labels (plus the form-only fields), so an export imports back. */
+export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
+  entityType: "Fixed Cost",
+  screen: "fixed-cost",
+  keyColumn: "code",
+  columns: [
+    { key: "costDetail", header: "Fare Code", required: true, example: "DEP" },
+    {
+      key: "costTypeCode",
+      header: "Cost Type Code",
+      required: true,
+      example: "DEPRECIATION",
+      aliases: ["Cost Type"],
+    },
+    { key: "code", header: "Fixed Cost Code", required: true, example: "FC_DEP_5T" },
+    { key: "name", header: "Fixed Cost Name", required: true, example: "5T truck depreciation" },
+    { key: "costValue", header: "Cost Value", required: true, example: "900000000" },
+    { key: "currency", header: "Currency", example: "VND" },
+    { key: "allocationBase", header: "Allocation Base", required: true, example: "8" },
+    { key: "allocationUnit", header: "Allocation Base Unit", example: "Year" },
+    { key: "vehicleTypes", header: "Vehicle Type", example: "5T, TRUCK" },
+    { key: "applyUtilization", header: "Apply Utilization", example: "Yes" },
+    { key: "utilContainer", header: "Utilization Rate – Container", example: "20" },
+    { key: "utilDay", header: "Utilization Rate – Day", example: "30" },
+    { key: "allocationDays", header: "Allocation Days", example: "30" },
+    { key: "status", header: "Status", example: "Active" },
+  ],
+  existingKeys: () => new Set(all().map((f) => f.code.toLowerCase())),
+  parseCheck: (r) => {
+    const c = choices();
+    const e: { field: string; error: string }[] = [];
+    if (r["costDetail"] && !fareIdOf(r["costDetail"]))
+      e.push({ field: "costDetail", error: "Fare Code not found in Fare Code Management" });
+    if (r["costTypeCode"] && pick(r["costTypeCode"], c.costType) === undefined)
+      e.push({ field: "costTypeCode", error: `Use one of: ${c.costType.join(", ")}` });
+    if (pick(r["currency"], c.currency) === undefined)
+      e.push({ field: "currency", error: `Use one of: ${c.currency.join(", ")}` });
+    const { base, unit } = baseOf(r);
+    if (r["allocationBase"] && Number.isNaN(base))
+      e.push({ field: "allocationBase", error: "Must be a number (e.g. 8)" });
+    if (unit && pick(unit, c.unit) === undefined)
+      e.push({ field: "allocationUnit", error: `Use one of: ${c.unit.join(", ")}` });
+    const badVt = listCell(r["vehicleTypes"]).filter((v) => !pick(v, c.vehicleType));
+    if (badVt.length)
+      e.push({ field: "vehicleTypes", error: `Unknown vehicle type: ${badVt.join(", ")}` });
+    if (flag(r["applyUtilization"]) === undefined)
+      e.push({ field: "applyUtilization", error: "Yes or No (empty = Yes)" });
+    for (const k of ["costValue", "utilContainer", "utilDay", "allocationDays"])
+      if (r[k] && Number.isNaN(numCell(r[k]))) e.push({ field: k, error: "Must be a number" });
+    if (pick(r["status"], STATUSES) === undefined)
+      e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
+    return e;
+  },
+  toDraft: fixedCostDraftOfRow,
+  validate: (d) => validateFixedCost(d),
+  save: (d) => fixedCostService.save(d),
+  rollback: (ids) => fixedCostCrud.removeMany(ids),
+  sampleRows: () => {
+    const plan: [string, string, string, string, string, string][] = [
+      // fare, type, value, base, unit, vehicle types
+      ["DEP", "DEPRECIATION", "900000000", "8", "Year", "5T, TRUCK"],
+      ["INU", "INSURANCE", "24000000", "1", "Year", "2T, 5T"],
+      ["FIN", "INTEREST", "12000000", "1", "Month", "40DC"],
+      ["GPS", "EQUIPMENT", "120000", "1", "Month", "TRUCK"],
+      ["IFR", "LICENSE", "150000", "1", "Trip", "HEAD"],
+    ];
+    const rows = Array.from({ length: 20 }, (_, i) => {
+      const [fare, type, value, base, unit, vts] = plan[i % plan.length]!;
+      const n = String(i + 1).padStart(2, "0");
+      return [
+        fare,
+        type,
+        `FC_IMP_${n}`,
+        `Imported fixed cost ${n}`,
+        value,
+        "VND",
+        base,
+        unit,
+        vts,
+        unit === "Trip" ? "No" : "Yes",
+        "20",
+        "30",
+        "30",
+        "Active",
+      ];
+    });
+    rows[3]![2] = "FC_IMP_01"; // duplicate in the file
+    rows[11]![0] = "NOPE"; // Fare Code not found
+    return rows;
+  },
+});
