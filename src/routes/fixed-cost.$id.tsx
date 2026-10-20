@@ -241,34 +241,36 @@ function FixedCostForm({
         onCancel={back}
         onSave={save}
         extra={
-          source && (
-            <>
-              {!readOnly && (
-                <StatusSelect
-                  value={d.status === "Active" ? "Active" : "Inactive"}
-                  onChange={(status) => patch({ status })}
-                />
-              )}
-              <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
-                <History className="h-4 w-4" />
-                History
-              </Button>
-              {readOnly && source.status === "Active" && (
-                <Button asChild size="lg">
-                  <Link to="/fixed-cost/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </Link>
+          <>
+            {!readOnly && (
+              <StatusSelect
+                value={d.status === "Active" ? "Active" : "Inactive"}
+                onChange={(status) => patch({ status })}
+              />
+            )}
+            {source && (
+              <>
+                <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
+                  <History className="h-4 w-4" />
+                  History
                 </Button>
-              )}
-            </>
-          )
+                {readOnly && source.status === "Active" && (
+                  <Button asChild size="lg">
+                    <Link to="/fixed-cost/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Link>
+                  </Button>
+                )}
+              </>
+            )}
+          </>
         }
       />
       <FormErrorBanner message={formError} errors={errors} />
 
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
-        <CollapsiblePanel title="General Information">
+        <CollapsiblePanel title="Fixed Cost Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
               label="Fare Code"
@@ -368,11 +370,7 @@ function FixedCostForm({
               readOnly={readOnly}
               error={errors["vehicleTypes"]}
             />
-          </div>
-        </CollapsiblePanel>
-
-        <CollapsiblePanel title="Utilization Rate & Allocation Value">
-          <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
+            <div className="border-t sm:col-span-6 lg:col-span-12" />
             <Field label="Apply Utilization" className={S2}>
               <label className="flex h-10 cursor-pointer items-center gap-3 group-disabled:cursor-default">
                 <Switch
@@ -455,17 +453,6 @@ function FixedCostForm({
           </div>
         </CollapsiblePanel>
       </ReadOnlyScope>
-
-      {!readOnly && (
-        <div className="sticky bottom-0 z-20 -mx-8 mt-6 flex items-center justify-end gap-2 border-t bg-card/95 px-8 py-3 backdrop-blur">
-          <Button variant="outline" size="lg" onClick={back}>
-            Cancel
-          </Button>
-          <Button size="lg" onClick={save}>
-            Save
-          </Button>
-        </div>
-      )}
 
       {source && (
         <AuditHistoryDrawer
