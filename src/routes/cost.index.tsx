@@ -51,7 +51,7 @@ function CostListPage() {
         value: (c) => c.code,
         render: (c) => <span className="font-semibold text-primary">{c.code}</span>,
       },
-      { key: "name", width: 260, label: "Fare Name", type: "text", value: (c) => c.name },
+      { key: "name", width: 260, label: "Fare Name (EN)", type: "text", value: (c) => c.name },
       {
         key: "localName",
         width: 260,
