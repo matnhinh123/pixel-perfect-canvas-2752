@@ -11,6 +11,7 @@ import {
   serviceNames,
   usedGroups,
   usedSubGroups,
+  costItemImportConfig,
 } from "@/services/costMasterService";
 import type { CostItemRecord } from "@/types";
 
@@ -82,6 +83,13 @@ function CostListPage() {
         value: (c) => c.taxTariff,
       },
       {
+        key: "unit",
+        width: 110,
+        label: "Default Unit",
+        type: "text",
+        value: (c) => c.unit ?? "",
+      },
+      {
         key: "currency",
         width: 110,
         label: "Default Currency",
@@ -149,6 +157,7 @@ function CostListPage() {
           })),
         },
       ]}
+      importConfig={costItemImportConfig}
       crud={costItemCrud}
       allowDelete={false}
       addLabel="Add Fare Code"

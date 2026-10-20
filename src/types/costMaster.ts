@@ -24,5 +24,7 @@ export interface CostItemRecord extends BaseRecord {
   currency: string;
   /** e.g. "8%"; empty when not set. */
   taxTariff: string;
+  /** Default unit the fare is charged per (Common Code Unit of Measure), e.g. Container, Trip. */
+  unit: string;
   remark: string;
 }

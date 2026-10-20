@@ -54,7 +54,7 @@ export const costGroupRepository = createCollection<CostGroupRecord>(
   "cost-groups.v2",
   seedCostGroups,
 );
-export const costItemRepository = createCollection<CostItemRecord>("cost-items.v4", seedCostItems);
+export const costItemRepository = createCollection<CostItemRecord>("cost-items.v5", seedCostItems);
 /** COGS of a trip (route × vehicle type) built on the Cost screens. */
 export const cogsRepository = createCollection<CogsRecord>("cogs.v2", seedCogs);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.

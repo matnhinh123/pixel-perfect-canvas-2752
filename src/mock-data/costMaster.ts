@@ -34,6 +34,20 @@ export const seedCostGroups = (): CostGroupRecord[] => {
   ];
 };
 
+/** Demo Default Unit from the fare name. */
+const unitOf = (name: string) =>
+  /contain|cont\b|cntr|reefer|chassis|remooc|mooc/i.test(name)
+    ? "Container"
+    : /fuel|oil|dầu|xăng/i.test(name)
+      ? "Liter"
+      : /truck|toll|ferry|road|trip|transport|border|driver/i.test(name)
+        ? "Trip"
+        : /storage|warehouse|pallet/i.test(name)
+          ? "Pallet"
+          : /weight|kg\b/i.test(name)
+            ? "Kg"
+            : "Shipment";
+
 /** Cost Details (ELSA fare list mapped to the current fields); id = "CI-" + code. */
 export const seedCostItems = (): CostItemRecord[] =>
   COST_DETAIL_SEED.map(
@@ -48,6 +62,7 @@ export const seedCostItems = (): CostItemRecord[] =>
       taxEvidence,
       currency,
       taxTariff,
+      unit: unitOf(name),
       remark: "",
       status: "Active",
       ...meta,
@@ -59,9 +74,11 @@ export const COST_TAX_EVIDENCES = ["VAT Invoice", "Sales Invoice", "Receipt", "N
 export const COST_TAX_TARIFFS = ["0%", "5%", "8%", "10%"];
 export const COST_CURRENCIES = ["VND", "USD", "EUR", "SGD", "JPY", "CNY"];
 export const COST_UOM_CATALOG: Record<string, readonly string[]> = {
-  Quantity: ["Piece", "Package", "Pallet", "Container", "Trip"],
+  Quantity: ["Shipment", "Piece", "Package", "Pallet", "Container", "Trip"],
   Weight: ["Kg", "Ton"],
   Volume: ["CBM", "Liter"],
   Distance: ["Km"],
   Time: ["Hour", "Day"],
 };
+/** Every unit of the catalog (Default Unit options). */
+export const COST_UNITS: string[] = Object.values(COST_UOM_CATALOG).flat();

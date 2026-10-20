@@ -3,7 +3,15 @@ import type { CostGroupRecord, CostItemRecord } from "@/types";
 import { costGroupRepository, costItemRepository, serviceRepository, uid } from "@/repositories";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
-import type { ImportEntityConfig } from "./importExportService";
+import { draftImportConfig, listCell, pick, type ImportEntityConfig } from "./importExportService";
+import { codeOptions } from "./commonCodeService";
+import { CC } from "@/mock-data/commonCodes";
+import {
+  COST_CURRENCIES,
+  COST_TAX_EVIDENCES,
+  COST_TAX_TARIFFS,
+  COST_UNITS,
+} from "@/mock-data/costMaster";
 
 const groups = () => costGroupRepository.all().filter((g) => !g.deleted);
 const items = () => costItemRepository.all().filter((c) => !c.deleted);
@@ -179,6 +187,7 @@ export type CostItemDraft = Pick<
   | "taxEvidence"
   | "currency"
   | "taxTariff"
+  | "unit"
   | "remark"
   | "status"
 >;
@@ -193,6 +202,7 @@ export const newCostItemDraft = (): CostItemDraft => ({
   taxEvidence: "",
   currency: "",
   taxTariff: "",
+  unit: "",
   remark: "",
   status: "Active",
 });
@@ -207,6 +217,7 @@ export const draftOfCostItem = (c: CostItemRecord): CostItemDraft => ({
   taxEvidence: c.taxEvidence,
   currency: c.currency,
   taxTariff: c.taxTariff,
+  unit: c.unit ?? "",
   remark: c.remark,
   status: c.status,
 });
@@ -267,6 +278,7 @@ export const costItemService = {
     upd("UPDATE", "Tax Evidence", existing.taxEvidence, next.taxEvidence);
     upd("UPDATE", "Default Currency", existing.currency, next.currency);
     upd("UPDATE", "Default Tax Tariff", existing.taxTariff, next.taxTariff);
+    upd("UPDATE", "Default Unit", existing.unit ?? "", next.unit);
     upd("UPDATE", "Remark", existing.remark, next.remark);
     upd(
       next.status === "Active" ? "ACTIVATE" : "DEACTIVATE",
@@ -293,3 +305,111 @@ export const usedGroups = (list: CostItemRecord[] = items()) =>
       ...list.map((c) => (c.group ?? "").trim()).filter(Boolean),
     ]),
   ].sort((a, b) => a.localeCompare(b));
+
+// ---------------------------------------------------------------- Fare Code import
+
+const STATUSES = ["Active", "Inactive"] as const;
+const liveServices = () => serviceRepository.all().filter((x) => !x.deleted);
+const serviceIdOf = (name: string) =>
+  liveServices().find((x) => x.name.toLowerCase() === name.toLowerCase())?.id;
+const choices = () => ({
+  taxEvidence: codeOptions(CC.TAX_EVIDENCE, COST_TAX_EVIDENCES),
+  taxTariff: codeOptions(CC.TAX_TARIFF, COST_TAX_TARIFFS),
+  unit: codeOptions(CC.UOM, COST_UNITS),
+  currency: COST_CURRENCIES,
+});
+
+const costItemDraftOfRow = (r: Record<string, string>): CostItemDraft => {
+  const c = choices();
+  return {
+    code: (r["code"] ?? "").trim().toUpperCase(),
+    name: (r["name"] ?? "").trim(),
+    localName: (r["localName"] ?? "").trim(),
+    group: (r["group"] ?? "").trim(),
+    subGroup: (r["subGroup"] ?? "").trim(),
+    serviceIds: listCell(r["services"])
+      .map(serviceIdOf)
+      .filter((id): id is string => !!id),
+    taxEvidence: pick(r["taxEvidence"], c.taxEvidence) || "",
+    currency: pick(r["currency"], c.currency) || "",
+    taxTariff: pick(r["taxTariff"], c.taxTariff) || "",
+    unit: pick(r["unit"], c.unit) || "",
+    remark: (r["remark"] ?? "").trim(),
+    status: pick(r["status"], STATUSES) || "Active",
+  };
+};
+
+/** Headers = the list's column labels, so an exported file imports back. */
+export const costItemImportConfig = draftImportConfig<CostItemDraft>({
+  entityType: "Cost",
+  screen: "fare-code",
+  keyColumn: "code",
+  columns: [
+    { key: "code", header: "Fare Code", required: true, example: "THC" },
+    {
+      key: "name",
+      header: "Fare Name (EN)",
+      required: true,
+      example: "TERMINAL HANDLING CHARGE",
+      aliases: ["Fare Name"],
+    },
+    { key: "localName", header: "Local Name", example: "PHÍ XẾP DỠ TẠI CẢNG" },
+    { key: "group", header: "Group Name", required: true, example: "Freight Fee" },
+    { key: "subGroup", header: "Sub Group Name", example: "Port" },
+    { key: "unit", header: "Default Unit", example: "Container" },
+    { key: "currency", header: "Default Currency", example: "VND" },
+    { key: "taxTariff", header: "Default Tax Tariff", example: "8%" },
+    { key: "taxEvidence", header: "Tax Evidence", example: "VAT Invoice" },
+    { key: "services", header: "Services", example: "" },
+    { key: "status", header: "Status", example: "Active" },
+    { key: "remark", header: "Remark", example: "" },
+  ],
+  existingKeys: () => new Set(items().map((c) => c.code.toLowerCase())),
+  parseCheck: (r) => {
+    const c = choices();
+    const e: { field: string; error: string }[] = [];
+    for (const k of ["unit", "currency", "taxTariff", "taxEvidence"] as const)
+      if (pick(r[k], c[k]) === undefined)
+        e.push({ field: k, error: `Use one of: ${c[k].join(", ")}` });
+    if (pick(r["status"], STATUSES) === undefined)
+      e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
+    const unknown = listCell(r["services"]).filter((n) => !serviceIdOf(n));
+    if (unknown.length)
+      e.push({ field: "services", error: `Service not found: ${unknown.join(", ")}` });
+    return e;
+  },
+  toDraft: costItemDraftOfRow,
+  validate: (d) => validateCostItem(d),
+  save: (d) => costItemService.save(d),
+  rollback: (ids) => costItemCrud.removeMany(ids),
+  sampleRows: () => {
+    const groups = [
+      "Freight Fee",
+      "Warehouse",
+      "Vehicle Operation",
+      "Vehicle Investment",
+      "Customs",
+    ];
+    const units = ["Container", "Trip", "Shipment", "Pallet", "Kg"];
+    const rows = Array.from({ length: 20 }, (_, i) => {
+      const n = String(i + 1).padStart(2, "0");
+      return [
+        `IMP${n}`,
+        `IMPORTED FARE ${n}`,
+        `Phí nhập mẫu ${n}`,
+        groups[i % groups.length]!,
+        "",
+        units[i % units.length]!,
+        i % 4 === 0 ? "USD" : "VND",
+        i % 3 === 0 ? "10%" : "8%",
+        "VAT Invoice",
+        "",
+        "Active",
+        "Demo import",
+      ];
+    });
+    rows[4]![0] = "IMP01"; // duplicate in the file
+    rows[9]![6] = "ABC"; // unknown currency
+    return rows;
+  },
+});

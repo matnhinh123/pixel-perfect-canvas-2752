@@ -304,7 +304,7 @@ export const seedCommonCodes = (): CommonCodeRecord[] => [
     "Unit of Measure",
     "Customizable",
     byParent(COST_UOM_CATALOG),
-    [[CO, "Fare Code", "Default UoM"]],
+    [[CO, "Fare Code", "Default Unit"]],
     "Attribute = the UoM Category the unit belongs to.",
     Object.keys(COST_UOM_CATALOG),
   ),

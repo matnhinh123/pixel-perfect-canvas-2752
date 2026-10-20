@@ -30,10 +30,17 @@ import { SuggestInput } from "@/components/movex/general/SuggestInput";
 import { cn } from "@/lib/utils";
 import { useCodeOptions, withCurrent } from "@/services/commonCodeService";
 import { CC } from "@/mock-data/commonCodes";
-import { COST_CURRENCIES, COST_TAX_EVIDENCES, COST_TAX_TARIFFS } from "@/mock-data/costMaster";
+import {
+  COST_CURRENCIES,
+  COST_UNITS,
+  COST_TAX_EVIDENCES,
+  COST_TAX_TARIFFS,
+} from "@/mock-data/costMaster";
 import type { CostItemRecord } from "@/types";
 
 const BASE = "/cost";
+/** A field of the Fare Code second row (its own 6-track grid on large screens). */
+const ROW2 = "sm:col-span-3 lg:col-span-1";
 /** Five of the 12 columns: Fare Name and Local Name side by side, same width. */
 const S5 = "sm:col-span-3 lg:col-span-5";
 
@@ -156,6 +163,7 @@ export function CostDetailForm({
   const header = useHeader(source?.code, isNew, readOnly);
   const taxEvidences = useCodeOptions(CC.TAX_EVIDENCE, COST_TAX_EVIDENCES);
   const taxTariffs = useCodeOptions(CC.TAX_TARIFF, COST_TAX_TARIFFS);
+  const units = useCodeOptions(CC.UOM, COST_UNITS);
   const itemsAll = useCollection(costItemRepository);
   const live = useMemo(() => itemsAll.filter((c) => !c.deleted), [itemsAll]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -258,54 +266,56 @@ export function CostDetailForm({
             <Field label="Local Name" error={errors["localName"]} className={S5}>
               <Input placeholder="Enter Local Name" {...text("localName")} />
             </Field>
-            <Field
-              label="Group Name"
-              required
-              error={errors["group"]}
-              className={S3}
-              info="Pick a group from the list, or type a new one: it is saved with this Fare Code."
-            >
-              <SuggestInput
-                value={d.group}
-                onChange={(v) => patch({ group: v })}
-                suggestions={groupNames}
-                placeholder="Enter Group Name"
-              />
-            </Field>
-            <Field
-              label="Sub Group Name"
-              error={errors["subGroup"]}
-              className={S3}
-              info="Pick a sub group already used, or type a new one: it is saved with this Fare Code."
-            >
-              <SuggestInput
-                value={d.subGroup}
-                onChange={(v) => patch({ subGroup: v })}
-                suggestions={subGroups}
-                placeholder="Enter Sub Group Name"
-              />
-            </Field>
-            <Field label="Tax Evidence" className={S2}>
-              <NativeSelect
-                {...select(
-                  "taxEvidence",
-                  withCurrent(taxEvidences, d.taxEvidence),
-                  "Select Tax Evidence",
-                )}
-              />
-            </Field>
-            <Field label="Default Currency" className={S2}>
-              <NativeSelect {...select("currency", COST_CURRENCIES, "Select currency")} />
-            </Field>
-            <Field label="Default Tax Tariff" className={S2}>
-              <NativeSelect
-                {...select(
-                  "taxTariff",
-                  withCurrent(taxTariffs, d.taxTariff),
-                  "Select Default Tax Tariff",
-                )}
-              />
-            </Field>
+            {/* Row 2: names wider, short pick lists narrower (3 : 2 : 2 : 2 : 1.5 : 1.5). */}
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:col-span-6 sm:grid-cols-6 lg:col-span-12 lg:grid-cols-[3fr_2fr_2fr_2fr_1.5fr_1.5fr]">
+              <Field
+                label="Group Name"
+                required
+                error={errors["group"]}
+                className={ROW2}
+                info="Pick a group from the list, or type a new one: it is saved with this Fare Code."
+              >
+                <SuggestInput
+                  value={d.group}
+                  onChange={(v) => patch({ group: v })}
+                  suggestions={groupNames}
+                  placeholder="Enter Group Name"
+                />
+              </Field>
+              <Field
+                label="Sub Group Name"
+                error={errors["subGroup"]}
+                className={ROW2}
+                info="Pick a sub group already used, or type a new one: it is saved with this Fare Code."
+              >
+                <SuggestInput
+                  value={d.subGroup}
+                  onChange={(v) => patch({ subGroup: v })}
+                  suggestions={subGroups}
+                  placeholder="Enter Sub Group Name"
+                />
+              </Field>
+              <Field label="Tax Evidence" className={ROW2}>
+                <NativeSelect
+                  {...select(
+                    "taxEvidence",
+                    withCurrent(taxEvidences, d.taxEvidence),
+                    "Select Tax Evidence",
+                  )}
+                />
+              </Field>
+              <Field label="Default Unit" className={ROW2}>
+                <NativeSelect {...select("unit", withCurrent(units, d.unit), "Select unit")} />
+              </Field>
+              <Field label="Default Currency" className={ROW2}>
+                <NativeSelect {...select("currency", COST_CURRENCIES, "Select")} />
+              </Field>
+              <Field label="Default Tax Tariff" className={ROW2}>
+                <NativeSelect
+                  {...select("taxTariff", withCurrent(taxTariffs, d.taxTariff), "Select")}
+                />
+              </Field>
+            </div>
             <Field label="Remark" className={S12}>
               <Textarea
                 rows={2}
