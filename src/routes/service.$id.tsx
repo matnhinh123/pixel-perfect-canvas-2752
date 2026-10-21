@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { CheckCircle2, History, Lock, Pencil, Plus, XCircle } from "lucide-react";
+import { CheckCircle2, History, Lock, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -160,31 +160,16 @@ function ChildServicesPanel({
   items,
   form,
   onOpen,
-  onAdd,
 }: {
   items: ServiceRecord[];
   form: TemplateType | null;
   onOpen?: (id: string) => void;
-  onAdd?: () => void;
 }) {
   const { t } = useT();
   return (
     <Panel
       title={t(`Dịch vụ con (${items.length})`, `Child Services (${items.length})`)}
       bodyClassName="p-0"
-      actions={
-        onAdd && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 border-primary/40 text-primary"
-            onClick={onAdd}
-          >
-            <Plus className="h-4 w-4" />
-            {t("Thêm dịch vụ con", "Add Child Service")}
-          </Button>
-        )
-      }
     >
       {items.length === 0 ? (
         <EmptyState title={t("Chưa có dịch vụ con", "No child services yet")} />
@@ -369,18 +354,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
             </dl>
           </Panel>
 
-          <ChildServicesPanel
-            items={children}
-            form={form}
-            onOpen={(id) => go(id)}
-            onAdd={() =>
-              void navigate({
-                to: "/service/$id",
-                params: { id: "new" },
-                search: { parent: source.id },
-              })
-            }
-          />
+          <ChildServicesPanel items={children} form={form} onOpen={(id) => go(id)} />
         </TabsContent>
 
         <TabsContent value="form" className="max-w-4xl">
