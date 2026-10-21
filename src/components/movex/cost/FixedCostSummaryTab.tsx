@@ -121,7 +121,7 @@ export function FixedCostSummaryTab() {
             "—"
           ),
       },
-      ...(["year", "month", "day"] as const).map((k): ListColumn<FixedCostSummaryRecord> => ({
+      ...(["day", "month", "year"] as const).map((k): ListColumn<FixedCostSummaryRecord> => ({
         key: k,
         width: 140,
         label: `Total / ${k[0]!.toUpperCase()}${k.slice(1)}`,
@@ -385,8 +385,8 @@ function MappingDialog({
                       </th>
                     ),
                   )}
-                  <th className={cn(thClass, "px-3 py-2 text-right")}>Per Month</th>
                   <th className={cn(thClass, "px-3 py-2 text-right")}>Per Day</th>
+                  <th className={cn(thClass, "px-3 py-2 text-right")}>Per Month</th>
                   <th className={cn(thClass, "w-12")} />
                 </tr>
               </thead>
@@ -406,8 +406,8 @@ function MappingDialog({
                     <td className="px-3 py-2 text-xs text-muted-foreground">
                       {otherOf(f.id) || "—"}
                     </td>
-                    <td className={num}>{fmtMoney(monthOf(f))}</td>
                     <td className={num}>{fmtMoney(dayOf(f))}</td>
+                    <td className={num}>{fmtMoney(monthOf(f))}</td>
                     <td className="px-2 py-2 text-center">
                       <button
                         type="button"
@@ -431,9 +431,9 @@ function MappingDialog({
             <span className="flex flex-wrap gap-x-5 gap-y-1">
               {(
                 [
-                  ["Year", total.year],
-                  ["Month", total.month],
                   ["Day", total.day],
+                  ["Month", total.month],
+                  ["Year", total.year],
                 ] as const
               ).map(([k, v]) => (
                 <span key={k} className={cn(k === "Day" && "font-semibold")}>

@@ -134,7 +134,7 @@ function FixedCostList() {
         render: (f) => money(calcFixedCost(f).allocation),
         className: "text-right",
       },
-      ...(["year", "month", "day"] as const).map((k): ListColumn<FixedCostRecord> => ({
+      ...(["day", "month", "year"] as const).map((k): ListColumn<FixedCostRecord> => ({
         key: k,
         label: k[0]!.toUpperCase() + k.slice(1),
         type: "number",
