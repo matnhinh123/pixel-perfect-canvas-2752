@@ -63,7 +63,7 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
   );
   const mapped = new Set(
     i.mappings
-      .filter((m) => !m.deleted && m.vehicleTypes.some((t) => coversCogsVehicle(t, vt)))
+      .filter((m) => !m.deleted && !!m.vehicleType && coversCogsVehicle(m.vehicleType, vt))
       .flatMap((m) => m.fixedCostIds),
   );
   const fixedLines: CogsLine[] = i.fixedCosts

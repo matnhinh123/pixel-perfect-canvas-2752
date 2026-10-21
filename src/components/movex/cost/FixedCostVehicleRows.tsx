@@ -27,17 +27,25 @@ export function FixedCostVehicleRows({
   onChange,
   readOnly,
   error,
+  single = false,
 }: {
   value: string[];
   onChange: (labels: string[]) => void;
   readOnly: boolean;
   error?: string | undefined;
+  /** Exactly one vehicle type: one row, no Add / Remove. */
+  single?: boolean;
 }) {
   const vehiclesAll = useCollection(vehicleMasterRepository);
   const opts = useMemo(() => fcVehicleOptions(vehiclesAll), [vehiclesAll]);
-  const rows = value.map((l) => ({ label: l, v: parseFcVehicle(l) }));
+  // Single: always one row (a fresh one until something is picked).
+  const labels =
+    single && !value.length
+      ? [fcVehicleLabel({ ...EMPTY, kind: opts.kinds[0] ?? EMPTY.kind })]
+      : value;
+  const rows = labels.map((l) => ({ label: l, v: parseFcVehicle(l) }));
   const setRow = (i: number, v: FcVehicle) =>
-    onChange(value.map((l, j) => (j === i ? fcVehicleLabel(v) : l)));
+    onChange(labels.map((l, j) => (j === i ? fcVehicleLabel(v) : l)));
   const remove = (i: number) => onChange(value.filter((_, j) => j !== i));
   const add = () => {
     const kind = opts.kinds[0] ?? EMPTY.kind;
@@ -57,7 +65,7 @@ export function FixedCostVehicleRows({
             . Leave Brand on “All brands” to cover every brand.
           </p>
         </div>
-        {!readOnly && (
+        {!readOnly && !single && (
           <Button type="button" variant="outline" size="sm" onClick={add}>
             <Plus className="h-4 w-4" />
             Add Vehicle Type
@@ -126,7 +134,7 @@ export function FixedCostVehicleRows({
                       ? `${count} vehicle${count > 1 ? "s" : ""}`
                       : "No active vehicle"}
                 </span>
-                {!readOnly ? <RemoveBtn onClick={() => remove(i)} /> : <span />}
+                {!readOnly && !single ? <RemoveBtn onClick={() => remove(i)} /> : <span />}
               </div>
             );
           })}

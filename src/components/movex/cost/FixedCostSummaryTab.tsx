@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -27,18 +26,19 @@ import {
 } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
-  calcFixedCost,
   fixedCostSummaryService,
+  periodsOf,
+  sumPeriods,
   type FixedCostSummaryDraft,
 } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
-import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
 
 const num = "px-3 py-2 text-right tabular-nums";
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-const dayOf = (f: FixedCostRecord | undefined) => (f ? (calcFixedCost(f).day ?? 0) : 0);
+const dayOf = (f: FixedCostRecord) => periodsOf(f).day;
+const monthOf = (f: FixedCostRecord) => periodsOf(f).month;
 
 export function FixedCostSummaryTab() {
   const confirm = useConfirm();
@@ -62,8 +62,8 @@ export function FixedCostSummaryTab() {
             s,
             fare,
             items,
-            vehicles: s.vehicleTypes ?? [],
-            total: items.reduce((t, f) => t + dayOf(f), 0),
+            vehicles: s.vehicleType ? [s.vehicleType] : [],
+            total: sumPeriods(items),
           };
         })
         .sort((a, b) => (a.fare?.code ?? "").localeCompare(b.fare?.code ?? "")),
@@ -131,9 +131,11 @@ export function FixedCostSummaryTab() {
                       {h}
                     </th>
                   ))}
-                  <th className={cn(thClass, "px-3 py-2.5 text-right")}>Total / Day</th>
-                  <th className={cn(thClass, "px-3 py-2.5")}>Remark</th>
-                  <th className={cn(thClass, "px-3 py-2.5")}>Updated</th>
+                  {["Total / Year", "Total / Month", "Total / Day"].map((h) => (
+                    <th key={h} className={cn(thClass, "whitespace-nowrap px-3 py-2.5 text-right")}>
+                      {h}
+                    </th>
+                  ))}
                   <th className={cn(thClass, "w-20")} />
                 </tr>
               </thead>
@@ -155,21 +157,23 @@ export function FixedCostSummaryTab() {
                         ))}
                       </div>
                     </td>
-                    <td className="max-w-56 px-3 py-2 text-xs text-muted-foreground">
-                      {vehicles.join(", ") || "—"}
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {vehicles.length
+                          ? vehicles.map((v) => (
+                              <span
+                                key={v}
+                                className="whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                              >
+                                {v}
+                              </span>
+                            ))
+                          : "—"}
+                      </div>
                     </td>
-                    <td className={cn(num, "font-semibold")}>{fmtMoney(total)}</td>
-                    <td
-                      className="max-w-48 truncate px-3 py-2 text-muted-foreground"
-                      title={s.remark}
-                    >
-                      {s.remark || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
-                      {formatDateTime(s.updatedAt)}
-                      <br />
-                      {s.updatedBy}
-                    </td>
+                    <td className={num}>{fmtMoney(total.year)}</td>
+                    <td className={num}>{fmtMoney(total.month)}</td>
+                    <td className={cn(num, "font-semibold")}>{fmtMoney(total.day)}</td>
                     <td className="px-2 py-2">
                       <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                         <button
@@ -237,8 +241,7 @@ function MappingDialog({
   const [d, setD] = useState<FixedCostSummaryDraft>({
     assignCostId: source?.assignCostId ?? "",
     fixedCostIds: [...(source?.fixedCostIds ?? [])],
-    vehicleTypes: [...(source?.vehicleTypes ?? [])],
-    remark: source?.remark ?? "",
+    vehicleType: source?.vehicleType ?? "",
   });
   const [fareText, setFareText] = useState({
     code: current?.code ?? "",
@@ -256,13 +259,15 @@ function MappingDialog({
   };
   const fareMiss = (text: string) =>
     text.trim() && !d.assignCostId ? "Not found in Fare Code Management." : undefined;
-  /** Fare Code another mapping already books this fixed cost to. */
-  const otherOf = (fid: string) => {
-    const s = summariesAll.find(
-      (x) => !x.deleted && x.id !== source?.id && x.fixedCostIds.includes(fid),
-    );
-    return s ? (costsAll.find((c) => c.id === s.assignCostId)?.code ?? "another Fare Code") : null;
-  };
+  /** Fare Codes of the other mappings that also use this fixed cost (shown, not a limit). */
+  const otherOf = (fid: string) =>
+    [
+      ...new Set(
+        summariesAll
+          .filter((x) => !x.deleted && x.id !== source?.id && x.fixedCostIds.includes(fid))
+          .map((x) => costsAll.find((c) => c.id === x.assignCostId)?.code ?? "?"),
+      ),
+    ].join(", ");
   const toggle = (fid: string) => {
     setD((x) => ({
       ...x,
@@ -279,7 +284,7 @@ function MappingDialog({
     return !n || fold(`${f.code} ${f.name} ${f.localName ?? ""} ${fareCodeOf(f)}`).includes(n);
   });
   const picked = fixed.filter((f) => d.fixedCostIds.includes(f.id));
-  const total = picked.reduce((t, f) => t + dayOf(f), 0);
+  const total = sumPeriods(picked);
 
   const save = () => {
     try {
@@ -296,13 +301,17 @@ function MappingDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent
+        className="flex max-h-[92vh] max-w-5xl flex-col gap-4 overflow-y-auto"
+        // No auto-focus: it would open the Fare Code suggestions over the form.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>
             {source ? `Fare Code Mapping · ${current?.code ?? ""}` : "Add Mapping"}
           </DialogTitle>
           <DialogDescription>
-            Pick the Fare Code, the vehicles it applies to, then the fixed costs booked to it.
+            Pick the Fare Code, the vehicle type it applies to, then the fixed costs booked to it.
           </DialogDescription>
         </DialogHeader>
 
@@ -328,7 +337,7 @@ function MappingDialog({
             label="Fare Name"
             required
             error={fareMiss(fareText.name)}
-            className="sm:col-span-5"
+            className="sm:col-span-9"
           >
             <SuggestInput
               value={fareText.name}
@@ -340,27 +349,20 @@ function MappingDialog({
               emptyText="No matching Fare Name"
             />
           </Field>
-          <Field label="Remark" className="sm:col-span-4">
-            <Textarea
-              rows={1}
-              maxLength={300}
-              placeholder="Enter Remark"
-              value={d.remark}
-              onChange={(e) => setD((x) => ({ ...x, remark: e.target.value }))}
-              className="min-h-10"
-            />
-          </Field>
         </div>
 
-        <FixedCostVehicleRows
-          value={d.vehicleTypes}
-          onChange={(vehicleTypes) => {
-            setD((x) => ({ ...x, vehicleTypes }));
-            setErrors((e) => ({ ...e, vehicleTypes: "" }));
-          }}
-          readOnly={false}
-          error={errors["vehicleTypes"] || undefined}
-        />
+        <div>
+          <FixedCostVehicleRows
+            single
+            value={d.vehicleType ? [d.vehicleType] : []}
+            onChange={(v) => {
+              setD((x) => ({ ...x, vehicleType: v[0] ?? "" }));
+              setErrors((e) => ({ ...e, vehicleType: "" }));
+            }}
+            readOnly={false}
+            error={errors["vehicleType"] || undefined}
+          />
+        </div>
 
         <div>
           <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
@@ -369,7 +371,7 @@ function MappingDialog({
                 Fixed Costs <span className="text-destructive">*</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                From the Fixed Cost list. A fixed cost is booked to one Fare Code only.
+                From the Fixed Cost list — pick as many as needed.
               </p>
             </div>
             <div className="relative">
@@ -395,13 +397,14 @@ function MappingDialog({
                       {h}
                     </th>
                   ))}
+                  <th className={cn(thClass, "px-3 py-2 text-right")}>Per Month</th>
                   <th className={cn(thClass, "px-3 py-2 text-right")}>Per Day</th>
                 </tr>
               </thead>
               <tbody>
                 {list.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
+                    <td colSpan={7} className="px-3 py-6 text-center text-xs text-muted-foreground">
                       No matching Fixed Cost
                     </td>
                   </tr>
@@ -413,16 +416,14 @@ function MappingDialog({
                     <tr
                       key={f.id}
                       className={cn(
-                        "border-t",
-                        other ? "opacity-50" : "cursor-pointer hover:bg-accent/40",
+                        "cursor-pointer border-t hover:bg-accent/40",
                         on && "bg-primary/5",
                       )}
-                      onClick={() => !other && toggle(f.id)}
+                      onClick={() => toggle(f.id)}
                     >
                       <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={on}
-                          disabled={!!other}
                           onCheckedChange={() => toggle(f.id)}
                           aria-label={`Map ${f.code}`}
                         />
@@ -432,7 +433,7 @@ function MappingDialog({
                         {f.name}
                         {other && (
                           <span className="ml-2 text-xs text-muted-foreground">
-                            (mapped to {other})
+                            (also in {other})
                           </span>
                         )}
                       </td>
@@ -442,6 +443,7 @@ function MappingDialog({
                       <td className="px-3 py-2 text-xs text-muted-foreground">
                         {fareCodeOf(f) || "—"}
                       </td>
+                      <td className={num}>{fmtMoney(monthOf(f))}</td>
                       <td className={num}>{fmtMoney(dayOf(f))}</td>
                     </tr>
                   );
@@ -453,8 +455,21 @@ function MappingDialog({
             <span className="text-muted-foreground">
               {picked.length} fixed cost{picked.length === 1 ? "" : "s"} picked
             </span>
-            <span className="font-semibold">
-              Total / Day: <span className="tabular-nums text-primary">{fmtMoney(total)} ₫</span>
+            <span className="flex flex-wrap gap-x-5 gap-y-1">
+              {(
+                [
+                  ["Year", total.year],
+                  ["Month", total.month],
+                  ["Day", total.day],
+                ] as const
+              ).map(([k, v]) => (
+                <span key={k} className={cn(k === "Day" && "font-semibold")}>
+                  <span className="text-muted-foreground">Total / {k}: </span>
+                  <span className={cn("tabular-nums", k === "Day" && "text-primary")}>
+                    {fmtMoney(v)} ₫
+                  </span>
+                </span>
+              ))}
             </span>
           </div>
         </div>

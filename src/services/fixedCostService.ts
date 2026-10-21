@@ -209,6 +209,30 @@ export const costDetailLabel = (id: string) => {
 
 // ---------------------------------------------------------------- Summary
 
+export interface FixedCostPeriods {
+  year: number;
+  month: number;
+  day: number;
+}
+/**
+ * A fixed cost per year, month and day, whatever unit it was entered in: units above the
+ * Allocation Base Unit are scaled up (Day × Allocation Days → Month, Month × 12 → Year).
+ */
+export const periodsOf = (f: FixedCostRecord): FixedCostPeriods => {
+  const c = calcFixedCost(f);
+  const day = c.day ?? 0;
+  const month = c.month ?? day * (f.allocationDays || 30);
+  return { day, month, year: c.year ?? month * 12 };
+};
+export const sumPeriods = (list: FixedCostRecord[]): FixedCostPeriods =>
+  list.reduce(
+    (t, f) => {
+      const p = periodsOf(f);
+      return { year: t.year + p.year, month: t.month + p.month, day: t.day + p.day };
+    },
+    { year: 0, month: 0, day: 0 },
+  );
+
 /** Fixed cost per day of a list of fixed costs. */
 export const totalFixedCost = (ids: string[]) =>
   ids.reduce((sum, id) => {
@@ -219,47 +243,33 @@ export const totalFixedCost = (ids: string[]) =>
 export const activeCostItems = () =>
   costItemRepository.all().filter((c) => !c.deleted && c.status === "Active");
 
-const liveSummaries = () => fixedCostSummaryRepository.all().filter((s) => !s.deleted);
-/** The other mapping a fixed cost already belongs to (a fixed cost is booked to one Fare Code). */
-export const mappedTo = (fixedCostId: string, exceptId?: string) =>
-  liveSummaries().find((s) => s.id !== exceptId && s.fixedCostIds.includes(fixedCostId));
-
 export interface FixedCostSummaryDraft {
   assignCostId: string;
   fixedCostIds: string[];
-  vehicleTypes: string[];
-  remark: string;
+  vehicleType: string;
 }
 
-export function validateFixedCostSummary(
-  d: FixedCostSummaryDraft,
-  id?: string,
-): Record<string, string> {
+/** No limit on how many fixed costs a Fare Code maps, nor on how many mappings use a fixed cost. */
+export function validateFixedCostSummary(d: FixedCostSummaryDraft): Record<string, string> {
   const e: Record<string, string> = {};
   if (!d.assignCostId) e["assignCost"] = "Fare Code is required.";
-  if (!d.vehicleTypes.length) e["vehicleTypes"] = "Pick at least one Vehicle Type.";
+  if (!d.vehicleType) e["vehicleType"] = "Vehicle Type is required.";
   else {
-    const vErr = fcVehicleErrors(d.vehicleTypes, vehicleMasterRepository.all());
-    if (vErr) e["vehicleTypes"] = vErr;
+    const vErr = fcVehicleErrors([d.vehicleType], vehicleMasterRepository.all());
+    if (vErr) e["vehicleType"] = vErr.replace("Vehicle Type row 1: ", "");
   }
   if (!d.fixedCostIds.length) e["lines"] = "Pick at least one Fixed Cost.";
   else if (d.fixedCostIds.some((l) => fixedCostRepository.get(l)?.status !== "Active"))
     e["lines"] = "Only active Fixed Costs can be mapped — remove the others.";
-  else {
-    const taken = d.fixedCostIds.find((l) => mappedTo(l, id));
-    if (taken)
-      e["lines"] =
-        `${fixedCostRepository.get(taken)?.code} is already mapped to ${costDetailLabel(mappedTo(taken, id)!.assignCostId)}.`;
-  }
   return e;
 }
 
 export const fixedCostSummaryService = {
   save(d: FixedCostSummaryDraft, id?: string): FixedCostSummaryRecord {
-    const errors = validateFixedCostSummary(d, id);
+    const errors = validateFixedCostSummary(d);
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please check the highlighted fields.", errors);
-    const body = { ...d, remark: d.remark.trim() };
+    const body = { ...d };
     const existing = id ? fixedCostSummaryRepository.get(id) : undefined;
     if (!existing) {
       const rec: FixedCostSummaryRecord = {
@@ -302,19 +312,12 @@ export const fixedCostSummaryService = {
         oldValue: names(existing.fixedCostIds) || "—",
         newValue: names(next.fixedCostIds) || "—",
       });
-    if ((existing.vehicleTypes ?? []).join(", ") !== next.vehicleTypes.join(", "))
+    if ((existing.vehicleType ?? "") !== next.vehicleType)
       out.push({
         ...base,
         field: "Vehicle Type",
-        oldValue: (existing.vehicleTypes ?? []).join(", ") || "—",
-        newValue: next.vehicleTypes.join(", ") || "—",
-      });
-    if ((existing.remark ?? "") !== next.remark)
-      out.push({
-        ...base,
-        field: "Remark",
-        oldValue: existing.remark || "—",
-        newValue: next.remark || "—",
+        oldValue: existing.vehicleType || "—",
+        newValue: next.vehicleType || "—",
       });
     auditService.logMany(out);
     return next;
