@@ -15,6 +15,7 @@ import {
   vehicleMasterRepository,
 } from "@/repositories";
 import { FIXED_COST_RATES } from "@/mock-data/fixedCost";
+import { tenantCountries } from "@/mock-data/offices";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
 import { CC } from "@/mock-data/commonCodes";
 import { codeOptions } from "./commonCodeService";
@@ -59,6 +60,7 @@ export type FixedCostDraft = Omit<
 
 export const newFixedCostDraft = (): FixedCostDraft => ({
   code: "",
+  country: tenantCountries()[0] ?? "",
   name: "",
   localName: "",
   costType: "Asset",
@@ -77,6 +79,7 @@ export const draftOfFixedCost = (f: FixedCostRecord): FixedCostDraft => {
   return {
     ...d,
     localName: d.localName ?? "",
+    country: d.country ?? "",
     costType: FIXED_COST_TYPES.includes(d.costType) ? d.costType : "Asset",
   };
 };
@@ -90,6 +93,7 @@ export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string
   else if (all().some((f) => f.id !== id && f.code.toUpperCase() === code))
     e["code"] = `Code ${code} already exists.`;
   if (!d.name.trim()) e["name"] = "English Name is required.";
+  if (!d.country) e["country"] = "Country is required.";
   if (!FIXED_COST_TYPES.includes(d.costType)) e["costType"] = "Fee Type is required.";
   if (!(d.costValue > 0)) e["costValue"] = "Cost Value must be greater than 0.";
   if (!(d.allocationBase > 0)) e["allocationBase"] = "Allocation Base must be greater than 0.";
@@ -132,6 +136,7 @@ export const fixedCostService = {
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
     upd("English Name", existing.name, next.name);
     upd("Local Name", existing.localName ?? "", next.localName);
+    upd("Country", existing.country ?? "", next.country);
     upd("Fee Type", existing.costType ?? "", next.costType);
     upd(
       "Cost Value",
@@ -199,6 +204,7 @@ export const activeCostItems = () =>
   costItemRepository.all().filter((c) => !c.deleted && c.status === "Active");
 
 export interface FixedCostSummaryDraft {
+  country: string;
   assignCostId: string;
   fixedCostIds: string[];
   vehicleType: string;
@@ -207,7 +213,12 @@ export interface FixedCostSummaryDraft {
 /** No limit on how many fixed costs a Fare Code maps, nor on how many mappings use a fixed cost. */
 export function validateFixedCostSummary(d: FixedCostSummaryDraft): Record<string, string> {
   const e: Record<string, string> = {};
+  if (!d.country) e["country"] = "Country is required.";
   if (!d.assignCostId) e["assignCost"] = "Fare Code is required.";
+  const other = d.fixedCostIds
+    .map((id) => fixedCostRepository.get(id))
+    .find((f) => f && d.country && f.country !== d.country);
+  if (other) e["lines"] = `${other.code} belongs to ${other.country}, not ${d.country}.`;
   if (!d.vehicleType) e["vehicleType"] = "Vehicle Type is required.";
   else {
     const vErr = fcVehicleErrors([d.vehicleType], vehicleMasterRepository.all());
@@ -275,6 +286,13 @@ export const fixedCostSummaryService = {
         oldValue: names(existing.fixedCostIds) || "—",
         newValue: names(next.fixedCostIds) || "—",
       });
+    if ((existing.country ?? "") !== next.country)
+      out.push({
+        ...base,
+        field: "Country",
+        oldValue: existing.country || "—",
+        newValue: next.country || "—",
+      });
     if ((existing.vehicleType ?? "") !== next.vehicleType)
       out.push({
         ...base,
@@ -323,6 +341,7 @@ const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => {
     code: (r["code"] ?? "").trim().toUpperCase(),
     name: (r["name"] ?? "").trim(),
     localName: (r["localName"] ?? "").trim(),
+    country: pick(r["country"], tenantCountries()) || "",
     costType: pick(r["costType"], FIXED_COST_TYPES) || "Asset",
     costValue: numOr(r["costValue"], 0),
     currency,
@@ -360,6 +379,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       aliases: ["Internal Cost Name (Local)", "Fixed Cost Name (Local)"],
       example: "Khấu hao xe 5 tấn",
     },
+    { key: "country", header: "Country", required: true, example: "Vietnam" },
     { key: "costType", header: "Fee Type", example: "Asset", aliases: ["Cost Type"] },
     { key: "costValue", header: "Cost Value", example: "900000000" },
     { key: "currency", header: "Currency", example: "VND" },
@@ -372,6 +392,11 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   parseCheck: (r) => {
     const c = choices();
     const e: { field: string; error: string }[] = [];
+    if (r["country"] && pick(r["country"], tenantCountries()) === undefined)
+      e.push({
+        field: "country",
+        error: `Use a country of a tenant office: ${tenantCountries().join(", ")}`,
+      });
     if (pick(r["costType"], FIXED_COST_TYPES) === undefined)
       e.push({ field: "costType", error: `Use one of: ${FIXED_COST_TYPES.join(", ")}` });
     if (pick(r["currency"], c.currency) === undefined)
@@ -407,6 +432,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         `FC_IMP_${n}`,
         `Imported internal cost ${n}`,
         `Chi phí cố định nhập mẫu ${n}`,
+        "Vietnam",
         fare === "DEP" ? "Asset" : "Non Asset",
         value,
         "VND",
@@ -417,7 +443,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       ];
     });
     rows[3]![0] = "FC_IMP_01"; // duplicate in the file
-    rows[11]![3] = "Lease"; // unknown Fee Type
+    rows[11]![4] = "Lease"; // unknown Fee Type
     return rows;
   },
 });

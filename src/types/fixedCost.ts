@@ -33,6 +33,8 @@ export const FIXED_COST_TYPES: readonly FixedCostType[] = ["Asset", "Non Asset"]
 /** One fixed cost (depreciation, insurance, interest, GPS…). Its Fare Code is set by the mapping (Fixed Cost Summary). */
 export interface FixedCostRecord extends BaseRecord {
   code: string;
+  /** Country of a tenant office the cost belongs to. */
+  country: string;
   /** Fixed Cost Name (EN). */
   name: string;
   /** Fixed Cost Name (Local), optional. */
@@ -51,6 +53,8 @@ export interface FixedCostRecord extends BaseRecord {
 
 /** Fixed Cost Summary: a Fare Code, the fixed costs booked to it and the vehicle type they apply to. */
 export interface FixedCostSummaryRecord extends BaseRecord {
+  /** Country of a tenant office; only internal costs of that country can be mapped. */
+  country: string;
   /** Fare Code (Fare Code Management) the fixed costs are booked to. */
   assignCostId: string;
   /** Ordered fixed-cost ids mapped to the Fare Code. */

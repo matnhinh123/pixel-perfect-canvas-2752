@@ -18,6 +18,7 @@ import { vehicleTypeChoices } from "@/services/fixedCostVehicle";
 import { calcFixedCost, fixedCostCrud, fixedCostImportConfig } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
 import { FIXED_COST_TYPES, type FixedCostRecord } from "@/types";
+import { tenantCountries } from "@/mock-data/offices";
 
 export const Route = createFileRoute("/fixed-cost/")({
   validateSearch: (s: Record<string, unknown>): { tab?: FixedCostTab } =>
@@ -88,6 +89,14 @@ function FixedCostList() {
         label: "Local Name",
         type: "text",
         value: (f) => f.localName ?? "",
+      },
+      {
+        key: "country",
+        width: 120,
+        label: "Country",
+        type: "enum",
+        options: tenantCountries(),
+        value: (f) => f.country ?? "",
       },
       {
         key: "costType",
@@ -204,7 +213,17 @@ function FixedCostList() {
       columns={columns}
       searchPlaceholder="Search internal cost code or name..."
       searchValues={(f) => [f.code, f.name]}
-      quickFilters={[statusFilter]}
+      quickFilters={[
+        {
+          key: "country",
+          allLabel: "All countries",
+          options: tenantCountries().map((c) => ({
+            label: c,
+            conditions: [{ field: "country", operator: "eq", value: c }],
+          })),
+        },
+        statusFilter,
+      ]}
       importConfig={fixedCostImportConfig}
       bordered
       crud={fixedCostCrud}

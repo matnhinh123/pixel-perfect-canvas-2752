@@ -12,12 +12,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, gridInBoxClass, StatusBadge, Tag, thClass } from "@/components/movex/common";
+import {
+  Field,
+  gridInBoxClass,
+  NativeSelect,
+  StatusBadge,
+  Tag,
+  thClass,
+} from "@/components/movex/common";
+import { withCurrent } from "@/services/commonCodeService";
 import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
 import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts";
 import { FixedCostTabs } from "@/components/movex/cost/FixedCostTabs";
 import { vehicleTypeChoices } from "@/services/fixedCostVehicle";
+import { tenantCountries } from "@/mock-data/offices";
 import { SuggestInput } from "@/components/movex/general/SuggestInput";
 import { SearchableSelect } from "@/components/movex/general/SearchableSelect";
 import { FixedCostVehicleRows } from "@/components/movex/cost/FixedCostVehicleRows";
@@ -78,6 +87,14 @@ export function FixedCostSummaryTab() {
         pinned: true,
         value: (s) => fareOf(s)?.code ?? "",
         render: (s) => <span className="font-semibold text-primary">{fareOf(s)?.code ?? "—"}</span>,
+      },
+      {
+        key: "country",
+        width: 120,
+        label: "Country",
+        type: "enum",
+        options: tenantCountries(),
+        value: (s) => s.country ?? "",
       },
       {
         key: "fareName",
@@ -170,6 +187,14 @@ export function FixedCostSummaryTab() {
         ]}
         quickFilters={[
           {
+            key: "country",
+            allLabel: "All countries",
+            options: tenantCountries().map((c) => ({
+              label: c,
+              conditions: [{ field: "country", operator: "eq", value: c }],
+            })),
+          },
+          {
             key: "vehicleType",
             allLabel: "All vehicle types",
             options: vehicleTypes.map((v) => ({
@@ -222,6 +247,7 @@ function MappingDialog({
   );
   const current = costsAll.find((c) => c.id === source?.assignCostId);
   const [d, setD] = useState<FixedCostSummaryDraft>({
+    country: source?.country ?? tenantCountries()[0] ?? "",
     assignCostId: source?.assignCostId ?? "",
     fixedCostIds: [...(source?.fixedCostIds ?? [])],
     vehicleType: source?.vehicleType ?? "",
@@ -264,7 +290,21 @@ function MappingDialog({
     .map((id) => fixed.find((f) => f.id === id))
     .filter((f): f is FixedCostRecord => !!f);
   /** Fixed costs that can still be added. */
-  const addable = fixed.filter((f) => f.status === "Active" && !d.fixedCostIds.includes(f.id));
+  const addable = fixed.filter(
+    (f) => f.status === "Active" && f.country === d.country && !d.fixedCostIds.includes(f.id),
+  );
+  /** Another country: internal costs of the old one leave the mapping. */
+  const pickCountry = (country: string) => {
+    const dropped = picked.filter((f) => f.country !== country);
+    setD((x) => ({
+      ...x,
+      country,
+      fixedCostIds: x.fixedCostIds.filter((id) => !dropped.some((f) => f.id === id)),
+    }));
+    setErrors((e) => ({ ...e, country: "", lines: "" }));
+    if (dropped.length)
+      toast.info(`Removed ${dropped.map((f) => f.code).join(", ")} (not ${country})`);
+  };
   const total = sumPeriods(picked);
 
   const save = () => {
@@ -319,7 +359,7 @@ function MappingDialog({
             label="Fare Name"
             required
             error={fareMiss(fareText.name)}
-            className="sm:col-span-9"
+            className="sm:col-span-6"
           >
             <SuggestInput
               value={fareText.name}
@@ -329,6 +369,21 @@ function MappingDialog({
               placeholder="Enter Fare Name"
               invalid={!!errors["assignCost"] || !!fareMiss(fareText.name)}
               emptyText="No matching Fare Name"
+            />
+          </Field>
+          <Field
+            label="Country"
+            required
+            error={errors["country"] || undefined}
+            className="sm:col-span-3"
+            info="Countries of the tenant's offices. Only internal costs of this country can be added."
+          >
+            <NativeSelect
+              value={d.country}
+              onChange={pickCountry}
+              options={withCurrent(tenantCountries(), d.country)}
+              invalid={!!errors["country"]}
+              className="h-10 w-full"
             />
           </Field>
         </div>

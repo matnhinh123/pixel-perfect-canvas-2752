@@ -23,6 +23,7 @@ const LOCAL_NAMES: Record<string, string> = {
   "FC-GPS": "Phí GPS & camera",
   "FC-LICENSE": "Phí giấy phép kinh doanh vận tải",
   "FC-OLD": "Bộ bạt phủ (ngưng dùng)",
+  "FC-SG-INS": "Bảo hiểm xe (Singapore)",
 };
 
 /** Financial cost of an asset: 6.8 %/year on its full value for 5 years (60 months). */
@@ -41,6 +42,7 @@ const fc = (
 ): FixedCostRecord => ({
   id,
   code,
+  country: "Vietnam",
   name,
   localName: LOCAL_NAMES[id] ?? "",
   costType: "Asset",
@@ -84,6 +86,12 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   fc("FC-OLD", "FC_TARP", "Tarpaulin set (retired)", 6_000_000, 1, "Year", {
     status: "Inactive",
   }),
+  fc("FC-SG-INS", "FC_SG_INSURANCE", "Vehicle insurance (Singapore)", 18_000, 1, "Year", {
+    country: "Singapore",
+    costType: "Non Asset",
+    currency: "USD",
+    exchangeRate: 25_400,
+  }),
 ];
 
 /** Fare Code mappings: the fixed costs booked to a Fare Code and the vehicles they apply to. */
@@ -97,6 +105,7 @@ const sm = (
   assignCostId,
   fixedCostIds,
   vehicleType,
+  country: "Vietnam",
   status: "Active",
   ...meta,
 });

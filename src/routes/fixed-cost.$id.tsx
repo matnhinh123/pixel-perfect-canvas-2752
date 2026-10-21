@@ -15,9 +15,6 @@ import {
 } from "@/components/movex/general/FormPage";
 import { CollapsiblePanel, ReadOnlyScope, S2, S3, S4 } from "@/components/movex/general/FormParts";
 
-/** Five of the 12 columns (the two Fixed Cost Names). */
-const S5 = "sm:col-span-6 lg:col-span-5";
-
 import { useCollection } from "@/hooks/use-store";
 import { fixedCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
@@ -31,6 +28,7 @@ import {
 } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
+import { tenantCountries } from "@/mock-data/offices";
 import { StatusSelect } from "@/components/movex/cost/CostForms";
 import {
   ALLOCATION_UNITS,
@@ -95,6 +93,7 @@ function FixedCostForm({
 }) {
   const navigate = useNavigate();
   const units = useCodeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS);
+  const countries = tenantCountries();
   const isNew = !source;
   const initial = useMemo<FixedCostDraft>(
     () => (source ? draftOfFixedCost(source) : newFixedCostDraft()),
@@ -270,7 +269,7 @@ function FixedCostForm({
                 onChange={(e) => patch({ code: e.target.value.toUpperCase() })}
               />
             </Field>
-            <Field label="English Name" required error={errors["name"]} className={S5}>
+            <Field label="English Name" required error={errors["name"]} className={S4}>
               <Input
                 placeholder="Enter English Name"
                 value={d.name}
@@ -278,11 +277,26 @@ function FixedCostForm({
                 onChange={(e) => patch({ name: e.target.value })}
               />
             </Field>
-            <Field label="Local Name" className={S4}>
+            <Field label="Local Name" className={S3}>
               <Input
                 placeholder="Enter Local Name"
                 value={d.localName}
                 onChange={(e) => patch({ localName: e.target.value })}
+              />
+            </Field>
+            <Field
+              label="Country"
+              required
+              error={errors["country"]}
+              className={S2}
+              info="Countries of the tenant's offices."
+            >
+              <NativeSelect
+                value={d.country}
+                onChange={(country) => patch({ country })}
+                options={withCurrent(countries, d.country)}
+                invalid={!!errors["country"]}
+                className="h-10 w-full"
               />
             </Field>
             <Field
