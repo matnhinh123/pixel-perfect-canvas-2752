@@ -111,7 +111,9 @@ export function SuggestInput({
         createPortal(
           <ul
             role="listbox"
-            style={pos}
+            data-suggest-list=""
+            // An open modal dialog turns pointer events off outside itself; the list stays clickable.
+            style={{ ...pos, pointerEvents: "auto" }}
             className="z-[100] max-h-60 overflow-y-auto rounded-md border bg-popover p-1 text-sm text-popover-foreground shadow-md"
           >
             {shown.length === 0 ? (
