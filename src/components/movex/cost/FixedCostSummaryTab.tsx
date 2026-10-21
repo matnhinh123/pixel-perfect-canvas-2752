@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmptyState, Field, Panel, Tag, thClass } from "@/components/movex/common";
+import { EmptyState, Field, gridInBoxClass, Panel, Tag, thClass } from "@/components/movex/common";
 import { SuggestInput } from "@/components/movex/general/SuggestInput";
 import { SearchableSelect } from "@/components/movex/general/SearchableSelect";
 import { FixedCostVehicleRows } from "@/components/movex/cost/FixedCostVehicleRows";
@@ -123,7 +123,7 @@ export function FixedCostSummaryTab() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className={cn("w-full text-sm", gridInBoxClass)}>
               <thead>
                 <tr className="bg-muted text-left">
                   {["Fare Code", "Fare Name", "Internal Costs", "Vehicle Type"].map((h) => (
@@ -392,7 +392,7 @@ function MappingDialog({
             <p className="mb-2 text-xs font-medium text-destructive">{errors["lines"]}</p>
           )}
           <div className="max-h-80 overflow-y-auto rounded-lg border">
-            <table className="w-full text-sm">
+            <table className={cn("w-full text-sm", gridInBoxClass)}>
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted text-left">
                   {["Internal Cost Code", "Internal Cost Name", "Fee Type", "Also Mapped To"].map(

@@ -218,6 +218,7 @@ function FixedCostList() {
       searchValues={(f) => [f.code, f.name]}
       quickFilters={[statusFilter]}
       importConfig={fixedCostImportConfig}
+      bordered
       crud={fixedCostCrud}
       allowDelete={false}
       addLabel="Add Internal Cost"

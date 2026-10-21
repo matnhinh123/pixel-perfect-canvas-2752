@@ -158,6 +158,7 @@ function CostListPage() {
         },
       ]}
       importConfig={costItemImportConfig}
+      bordered
       crud={costItemCrud}
       allowDelete={false}
       addLabel="Add Fare Code"

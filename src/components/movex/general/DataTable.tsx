@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { NativeSelect, thClass } from "@/components/movex/common";
+import { gridCellsClass, NativeSelect, thClass } from "@/components/movex/common";
 import type { SortState } from "@/types";
 import type { ListColumn } from "./types";
 import { useT } from "./listLang";
@@ -49,6 +49,7 @@ export function DataTable<T extends { id: string }>({
   loading,
   empty,
   hidePager,
+  bordered = false,
 }: {
   columns: ListColumn<T>[];
   rows: T[];
@@ -72,6 +73,8 @@ export function DataTable<T extends { id: string }>({
   empty: ReactNode;
   /** Tree view shows every row on one page: only the row count is rendered in the footer. */
   hidePager?: boolean;
+  /** Grey lines between every column and row. */
+  bordered?: boolean;
 }) {
   const { t } = useT();
   const pages = Math.max(1, Math.ceil(totalRows / pageSize));
@@ -125,8 +128,15 @@ export function DataTable<T extends { id: string }>({
     <div>
       {/* HeroUI table inside a card: grey header band, borderless rows with a hover band. */}
       <div className="overflow-x-auto rounded-[14px] bg-card p-4 shadow-hu-sm">
-        <Table className="border-separate border-spacing-0">
-          <TableHeader className="after:table-row after:h-[5px] after:content-['']">
+        <Table
+          className={cn(
+            "border-separate border-spacing-0",
+            bordered && cn(gridCellsClass, "border-l border-t border-border"),
+          )}
+        >
+          <TableHeader
+            className={cn(!bordered && "after:table-row after:h-[5px] after:content-['']")}
+          >
             <TableRow className="hover:bg-transparent">
               {selected && (
                 <TableHead className={cn(thClass, "w-10")}>

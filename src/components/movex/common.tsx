@@ -308,3 +308,9 @@ export function EmptyState({
 
 /** Table header cell (HeroUI): grey band, 12px semibold, rounded at the row ends. */
 export const thClass = "bg-muted text-xs font-semibold text-muted-foreground";
+
+/** Grid table: grey lines between columns and rows (square cells). */
+export const gridCellsClass =
+  "border-separate border-spacing-0 [&_td]:rounded-none [&_th]:rounded-none [&_td]:border-b [&_td]:border-r [&_th]:border-b [&_th]:border-r [&_td]:border-border [&_th]:border-border";
+/** Grid table inside a box that already has a border: no line on the outer edges. */
+export const gridInBoxClass = `${gridCellsClass} [&_tr>*:last-child]:border-r-0 [&_tbody_tr:last-child>*]:border-b-0`;
