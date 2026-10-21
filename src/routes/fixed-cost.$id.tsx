@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
-import { SuggestInput } from "@/components/movex/general/SuggestInput";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
@@ -20,7 +19,7 @@ import { CollapsiblePanel, ReadOnlyScope, S2, S3, S4 } from "@/components/movex/
 const S5 = "sm:col-span-6 lg:col-span-5";
 
 import { useCollection } from "@/hooks/use-store";
-import { costItemRepository, fixedCostRepository } from "@/repositories";
+import { fixedCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
   applyCostType,
@@ -100,15 +99,6 @@ function FixedCostForm({
   const navigate = useNavigate();
   const units = useCodeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS);
   const isNew = !source;
-  const detailsAll = useCollection(costItemRepository);
-  const details = useMemo(
-    () =>
-      detailsAll.filter(
-        (c) => !c.deleted && (c.status === "Active" || c.id === source?.costDetailId),
-      ),
-    [detailsAll, source],
-  );
-
   const initial = useMemo<FixedCostDraft>(
     () => (source ? draftOfFixedCost(source) : newFixedCostDraft()),
     [], // eslint-disable-line react-hooks/exhaustive-deps
@@ -130,28 +120,6 @@ function FixedCostForm({
     });
   };
 
-  // Fare Code / Fare Name: typed or picked; an exact match selects the Fare Code and fills the other.
-  const current = details.find((c) => c.id === d.costDetailId);
-  const [codeText, setCodeText] = useState(current?.code ?? "");
-  const [nameText, setNameText] = useState(current?.name ?? "");
-  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-  const typeCode = (v: string) => {
-    setCodeText(v);
-    const m = details.find((c) => same(c.code, v));
-    patch({ costDetailId: m?.id ?? "" });
-    if (m) setNameText(m.name);
-    else if (current && same(nameText, current.name)) setNameText("");
-  };
-  const typeName = (v: string) => {
-    setNameText(v);
-    const m = details.find((c) => same(c.name, v));
-    patch({ costDetailId: m?.id ?? "" });
-    if (m) setCodeText(m.code);
-    else if (current && same(codeText, current.code)) setCodeText("");
-  };
-  /** Typed text that matches no Fare Code. */
-  const fareMiss = (text: string) =>
-    text.trim() && !d.costDetailId ? "Not found in Fare Code Management." : undefined;
   // Cost Type: Allocation (value ÷ base ÷ days), Loan Interest (total interest ÷ term ÷ days) or
   // Other (an amount per day).
   const loan = useMemo(() => (d.loan ? loanSchedule(d.loan) : EMPTY_SCHEDULE), [d.loan]);
@@ -365,35 +333,6 @@ function FixedCostForm({
                 placeholder="Enter Fixed Cost Name (Local)"
                 value={d.localName}
                 onChange={(e) => patch({ localName: e.target.value })}
-              />
-            </Field>
-            <Field
-              label="Fare Code"
-              required
-              error={errors["costDetailId"] ?? fareMiss(codeText)}
-              className={S3}
-              info="Type or pick a Fare Code or a Fare Name (Fare Code Management): the other one follows."
-            >
-              <SuggestInput
-                value={codeText}
-                onChange={typeCode}
-                suggestions={details.map((c) => c.code)}
-                hint={(code) => details.find((c) => c.code === code)?.name ?? ""}
-                placeholder="Enter Fare Code"
-                invalid={!!errors["costDetailId"] || !!fareMiss(codeText)}
-                upper
-                emptyText="No matching Fare Code"
-              />
-            </Field>
-            <Field label="Fare Name" required error={fareMiss(nameText)} className={S5}>
-              <SuggestInput
-                value={nameText}
-                onChange={typeName}
-                suggestions={details.map((c) => c.name)}
-                hint={(name) => details.find((c) => c.name === name)?.code ?? ""}
-                placeholder="Enter Fare Name"
-                invalid={!!errors["costDetailId"] || !!fareMiss(nameText)}
-                emptyText="No matching Fare Name"
               />
             </Field>
             <Field

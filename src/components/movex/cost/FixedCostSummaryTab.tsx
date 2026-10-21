@@ -259,7 +259,7 @@ function MappingDialog({
   };
   const fareMiss = (text: string) =>
     text.trim() && !d.assignCostId ? "Not found in Fare Code Management." : undefined;
-  /** Fare Codes of the other mappings that also use this fixed cost (shown, not a limit). */
+  /** Fare Codes of the other mappings using this fixed cost ("Mapped To"; shown, not a limit). */
   const otherOf = (fid: string) =>
     [
       ...new Set(
@@ -277,11 +277,9 @@ function MappingDialog({
     }));
     setErrors((e) => ({ ...e, lines: "" }));
   };
-  const fareCodeOf = (f: FixedCostRecord) =>
-    costsAll.find((c) => c.id === f.costDetailId)?.code ?? "";
   const list = fixed.filter((f) => {
     const n = fold(q.trim());
-    return !n || fold(`${f.code} ${f.name} ${f.localName ?? ""} ${fareCodeOf(f)}`).includes(n);
+    return !n || fold(`${f.code} ${f.name} ${f.localName ?? ""} ${otherOf(f.id)}`).includes(n);
   });
   const picked = fixed.filter((f) => d.fixedCostIds.includes(f.id));
   const total = sumPeriods(picked);
@@ -392,11 +390,13 @@ function MappingDialog({
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted text-left">
                   <th className={cn(thClass, "w-10 px-3 py-2")} />
-                  {["Fixed Cost Code", "Fixed Cost Name", "Cost Type", "Fare Code"].map((h) => (
-                    <th key={h} className={cn(thClass, "px-3 py-2")}>
-                      {h}
-                    </th>
-                  ))}
+                  {["Fixed Cost Code", "Fixed Cost Name", "Cost Type", "Also Mapped To"].map(
+                    (h) => (
+                      <th key={h} className={cn(thClass, "px-3 py-2")}>
+                        {h}
+                      </th>
+                    ),
+                  )}
                   <th className={cn(thClass, "px-3 py-2 text-right")}>Per Month</th>
                   <th className={cn(thClass, "px-3 py-2 text-right")}>Per Day</th>
                 </tr>
@@ -410,7 +410,6 @@ function MappingDialog({
                   </tr>
                 )}
                 {list.map((f) => {
-                  const other = otherOf(f.id);
                   const on = d.fixedCostIds.includes(f.id);
                   return (
                     <tr
@@ -429,19 +428,12 @@ function MappingDialog({
                         />
                       </td>
                       <td className="px-3 py-2 font-semibold text-primary">{f.code}</td>
-                      <td className="px-3 py-2">
-                        {f.name}
-                        {other && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            (also in {other})
-                          </span>
-                        )}
-                      </td>
+                      <td className="px-3 py-2">{f.name}</td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {f.costType ?? "Allocation"}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {fareCodeOf(f) || "—"}
+                        {otherOf(f.id) || "—"}
                       </td>
                       <td className={num}>{fmtMoney(monthOf(f))}</td>
                       <td className={num}>{fmtMoney(dayOf(f))}</td>

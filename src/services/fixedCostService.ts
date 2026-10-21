@@ -59,7 +59,6 @@ export type FixedCostDraft = Omit<
 >;
 
 export const newFixedCostDraft = (): FixedCostDraft => ({
-  costDetailId: "",
   code: "",
   name: "",
   localName: "",
@@ -110,7 +109,6 @@ export const loanLabel = (l: LoanTerms | null | undefined) =>
 export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
   const code = d.code.trim().toUpperCase();
-  if (!d.costDetailId) e["costDetailId"] = "Fare Code is required.";
   if (!code) e["code"] = "Fixed Cost Code is required.";
   else if (!/^[A-Z0-9_-]{2,30}$/.test(code))
     e["code"] = "Use 2–30 characters: letters, digits, - or _.";
@@ -178,7 +176,6 @@ export const fixedCostService = {
     upd("Fixed Cost Name (Local)", existing.localName ?? "", next.localName);
     upd("Cost Type", existing.costType ?? "Allocation", next.costType);
     upd("Loan", loanLabel(existing.loan), loanLabel(next.loan));
-    upd("Fare Code", existing.costDetailId, next.costDetailId);
     upd(
       "Cost Value",
       `${existing.costValue} ${existing.currency}`,
@@ -343,13 +340,6 @@ const choices = () => ({
   unit: codeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS) as AllocationUnit[],
   currency: COST_CURRENCIES,
 });
-/** "DEP" or "DEP · Asset depreciation" (as exported) → the Fare Code record id. */
-const fareIdOf = (cell: string | undefined) => {
-  const code = (cell ?? "").split("·")[0]!.trim().toLowerCase();
-  return code
-    ? costItemRepository.all().find((c) => !c.deleted && c.code.toLowerCase() === code)?.id
-    : undefined;
-};
 /** "8" (+ unit column) or "8 Year" (as exported). */
 const baseOf = (r: Record<string, string>) => {
   const m = /^\s*([\d.,]+)\s*([A-Za-z]*)\s*$/.exec(r["allocationBase"] ?? "");
@@ -381,7 +371,6 @@ const rowDraft = (r: Record<string, string>): FixedCostDraft => {
   const { base, unit } = baseOf(r);
   const currency = pick(r["currency"], c.currency) || "VND";
   return {
-    costDetailId: fareIdOf(r["costDetail"]) ?? "",
     code: (r["code"] ?? "").trim().toUpperCase(),
     name: (r["name"] ?? "").trim(),
     localName: (r["localName"] ?? "").trim(),
@@ -403,7 +392,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   screen: "fixed-cost",
   keyColumn: "code",
   columns: [
-    { key: "costDetail", header: "Fare Code", required: true, example: "DEP" },
     { key: "code", header: "Fixed Cost Code", required: true, example: "FC_DEP_5T" },
     {
       key: "name",
@@ -429,8 +417,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   parseCheck: (r) => {
     const c = choices();
     const e: { field: string; error: string }[] = [];
-    if (r["costDetail"] && !fareIdOf(r["costDetail"]))
-      e.push({ field: "costDetail", error: "Fare Code not found in Fare Code Management" });
     if (pick(r["costType"], FIXED_COST_TYPES) === undefined)
       e.push({ field: "costType", error: `Use one of: ${FIXED_COST_TYPES.join(", ")}` });
     if (pick(r["currency"], c.currency) === undefined)
@@ -465,7 +451,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       const [fare, value, base, unit] = plan[i % plan.length]!;
       const n = String(i + 1).padStart(2, "0");
       return [
-        fare,
         `FC_IMP_${n}`,
         `Imported fixed cost ${n}`,
         `Chi phí cố định nhập mẫu ${n}`,
@@ -479,8 +464,8 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         "Active",
       ];
     });
-    rows[3]![1] = "FC_IMP_01"; // duplicate in the file
-    rows[11]![0] = "NOPE"; // Fare Code not found
+    rows[3]![0] = "FC_IMP_01"; // duplicate in the file
+    rows[11]![3] = "Lease"; // unknown Cost Type
     return rows;
   },
 });

@@ -9,7 +9,12 @@ import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts
 import { FixedCostTabs, type FixedCostTab } from "@/components/movex/cost/FixedCostTabs";
 import { FixedCostSummaryTab } from "@/components/movex/cost/FixedCostSummaryTab";
 import { useCollection } from "@/hooks/use-store";
-import { costItemRepository, fixedCostRepository, vehicleMasterRepository } from "@/repositories";
+import {
+  costItemRepository,
+  fixedCostRepository,
+  fixedCostSummaryRepository,
+  vehicleMasterRepository,
+} from "@/repositories";
 import { vehicleTypeChoices } from "@/services/fixedCostVehicle";
 import {
   calcFixedCost,
@@ -58,7 +63,15 @@ function FixedCostList() {
   const details = useCollection(costItemRepository);
   const rowsAll = useCollection(fixedCostRepository);
   const rows = useMemo(() => rowsAll.filter((f) => !f.deleted), [rowsAll]);
-  const detailOf = (id: string) => details.find((x) => x.id === id);
+  const mappings = useCollection(fixedCostSummaryRepository);
+  /** Fare Codes whose mappings use the fixed cost (Fixed Cost Summary). */
+  const mappedTo = (id: string) => [
+    ...new Set(
+      mappings
+        .filter((m) => !m.deleted && m.fixedCostIds.includes(id))
+        .map((m) => details.find((c) => c.id === m.assignCostId)?.code ?? "?"),
+    ),
+  ];
   const open = (f: FixedCostRecord, mode: "view" | "edit") => {
     if (mode === "edit" && f.status !== "Active") {
       toast.error("Activate this Fixed Cost before editing it.");
@@ -161,18 +174,18 @@ function FixedCostList() {
         render: (f) => <StatusBadge status={f.status} />,
       },
       {
-        key: "costDetail",
-        label: "Fare Code",
+        key: "mappedTo",
+        label: "Mapped To",
         type: "text",
-        value: (f) => detailOf(f.costDetailId)?.code ?? "",
-        defaultHidden: true,
-      },
-      {
-        key: "fareName",
-        label: "Fare Name",
-        type: "text",
-        value: (f) => detailOf(f.costDetailId)?.name ?? "",
-        defaultHidden: true,
+        value: (f) => mappedTo(f.id).join(", "),
+        render: (f) => {
+          const codes = mappedTo(f.id);
+          return codes.length ? (
+            <span className="whitespace-nowrap">{codes.join(", ")}</span>
+          ) : (
+            <span className="text-muted-foreground">Not mapped</span>
+          );
+        },
       },
       {
         key: "createdBy",

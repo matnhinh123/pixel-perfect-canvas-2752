@@ -33,10 +33,8 @@ export interface LoanTerms {
 export type FixedCostType = "Allocation" | "Loan Interest" | "Other";
 export const FIXED_COST_TYPES: readonly FixedCostType[] = ["Allocation", "Loan Interest", "Other"];
 
-/** One fixed-cost line (depreciation, insurance, interest, GPS…) with its allocation settings. */
+/** One fixed cost (depreciation, insurance, interest, GPS…). Its Fare Code is set by the mapping (Fixed Cost Summary). */
 export interface FixedCostRecord extends BaseRecord {
-  /** Cost Detail (Master Data > Cost) this fixed cost is booked to. */
-  costDetailId: string;
   code: string;
   /** Fixed Cost Name (EN). */
   name: string;

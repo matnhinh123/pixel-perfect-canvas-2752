@@ -39,7 +39,6 @@ const TRAILER = 280_000_000;
 
 const fc = (
   id: string,
-  costDetailId: string,
   code: string,
   name: string,
   costValue: number,
@@ -48,7 +47,6 @@ const fc = (
   extra: Partial<FixedCostRecord> = {},
 ): FixedCostRecord => ({
   id,
-  costDetailId,
   code,
   name,
   localName: LOCAL_NAMES[id] ?? "",
@@ -66,14 +64,13 @@ const fc = (
 });
 
 export const seedFixedCosts = (): FixedCostRecord[] => [
-  fc("FC-DEP-TRK", "CI-DEP", "FC_DEPRECIATION", "Truck depreciation", 1_200_000_000, 8, "Year"),
+  fc("FC-DEP-TRK", "FC_DEPRECIATION", "Truck depreciation", 1_200_000_000, 8, "Year"),
   // Operating cost of a header + 40 ft trailer per day: depreciation 60 months over 26 days a month,
   // financial cost 6.8 %/year over 360 days a year (30 a month), management 200,000 a day.
-  fc("FC-DEP-HEAD", "CI-DEP", "FC_DEP_HEAD", "Header depreciation", HEAD, 60, "Month"),
-  fc("FC-DEP-TRL", "CI-ADP", "FC_DEP_TRAILER", "Trailer depreciation", TRAILER, 60, "Month"),
+  fc("FC-DEP-HEAD", "FC_DEP_HEAD", "Header depreciation", HEAD, 60, "Month"),
+  fc("FC-DEP-TRL", "FC_DEP_TRAILER", "Trailer depreciation", TRAILER, 60, "Month"),
   fc(
     "FC-FIN-HEAD",
-    "CI-FIN",
     "FC_FIN_HEAD",
     "Header financial cost",
     interestOf(financing(HEAD)),
@@ -83,7 +80,6 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   ),
   fc(
     "FC-FIN-TRL",
-    "CI-FIN",
     "FC_FIN_TRAILER",
     "Trailer financial cost",
     interestOf(financing(TRAILER)),
@@ -91,13 +87,13 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     "Month",
     { costType: "Loan Interest", loan: financing(TRAILER), allocationDays: 30 },
   ),
-  fc("FC-MGMT", "CI-MGT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", {
+  fc("FC-MGMT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", {
     costType: "Other",
   }),
-  fc("FC-INS", "CI-INU", "FC_INSURANCE", "Vehicle insurance", 36_000_000, 1, "Year"),
-  fc("FC-GPS", "CI-GPS", "FC_GPS", "GPS & camera subscription", 150_000, 1, "Month"),
-  fc("FC-LICENSE", "CI-IFR", "FC_LICENSE", "Operating license fee", 450_000, 1, "Day"),
-  fc("FC-OLD", "CI-DEP", "FC_TARP", "Tarpaulin set (retired)", 6_000_000, 1, "Year", {
+  fc("FC-INS", "FC_INSURANCE", "Vehicle insurance", 36_000_000, 1, "Year"),
+  fc("FC-GPS", "FC_GPS", "GPS & camera subscription", 150_000, 1, "Month"),
+  fc("FC-LICENSE", "FC_LICENSE", "Operating license fee", 450_000, 1, "Day"),
+  fc("FC-OLD", "FC_TARP", "Tarpaulin set (retired)", 6_000_000, 1, "Year", {
     status: "Inactive",
   }),
 ];
