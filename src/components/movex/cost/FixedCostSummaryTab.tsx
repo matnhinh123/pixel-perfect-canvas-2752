@@ -1,10 +1,9 @@
 // Fixed Cost Summary = Fare Code mapping: each row is a Fare Code and the fixed costs booked to it.
 // Add / Edit opens the mapping: pick the Fare Code, then the fixed costs from the Fixed Cost list.
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -13,19 +12,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmptyState, Field, gridInBoxClass, Panel, Tag, thClass } from "@/components/movex/common";
+import { Field, gridInBoxClass, StatusBadge, Tag, thClass } from "@/components/movex/common";
+import { EntityListPage } from "@/components/movex/general/EntityListPage";
+import type { ListColumn } from "@/components/movex/general/types";
+import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts";
+import { FixedCostTabs } from "@/components/movex/cost/FixedCostTabs";
+import { vehicleTypeChoices } from "@/services/fixedCostVehicle";
 import { SuggestInput } from "@/components/movex/general/SuggestInput";
 import { SearchableSelect } from "@/components/movex/general/SearchableSelect";
 import { FixedCostVehicleRows } from "@/components/movex/cost/FixedCostVehicleRows";
-import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { useCollection } from "@/hooks/use-store";
 import {
   costItemRepository,
   fixedCostRepository,
+  vehicleMasterRepository,
   fixedCostSummaryRepository,
 } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
+  fixedCostSummaryCrud,
   fixedCostSummaryService,
   periodsOf,
   sumPeriods,
@@ -36,174 +41,152 @@ import { cn } from "@/lib/utils";
 import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
 
 const num = "px-3 py-2 text-right tabular-nums";
-const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const dayOf = (f: FixedCostRecord) => periodsOf(f).day;
 const monthOf = (f: FixedCostRecord) => periodsOf(f).month;
 
 export function FixedCostSummaryTab() {
-  const confirm = useConfirm();
   const summariesAll = useCollection(fixedCostSummaryRepository);
   const fixedAll = useCollection(fixedCostRepository);
   const costsAll = useCollection(costItemRepository);
-  const [q, setQ] = useState("");
+  const vehiclesAll = useCollection(vehicleMasterRepository);
+  const vehicleTypes = useMemo(() => vehicleTypeChoices(vehiclesAll), [vehiclesAll]);
   /** Open mapping: null = closed, "new" = add. */
   const [open, setOpen] = useState<FixedCostSummaryRecord | "new" | null>(null);
 
+  const fareOf = (s: FixedCostSummaryRecord) => costsAll.find((c) => c.id === s.assignCostId);
+  const itemsOf = (s: FixedCostSummaryRecord) =>
+    s.fixedCostIds
+      .map((id) => fixedAll.find((f) => f.id === id && !f.deleted))
+      .filter((f): f is FixedCostRecord => !!f);
+  const totalOf = (s: FixedCostSummaryRecord) => sumPeriods(itemsOf(s));
   const rows = useMemo(
     () =>
       summariesAll
         .filter((s) => !s.deleted)
-        .map((s) => {
-          const fare = costsAll.find((c) => c.id === s.assignCostId);
-          const items = s.fixedCostIds
-            .map((id) => fixedAll.find((f) => f.id === id && !f.deleted))
-            .filter((f): f is FixedCostRecord => !!f);
-          return {
-            s,
-            fare,
-            items,
-            vehicles: s.vehicleType ? [s.vehicleType] : [],
-            total: sumPeriods(items),
-          };
-        })
-        .sort((a, b) => (a.fare?.code ?? "").localeCompare(b.fare?.code ?? "")),
-    [summariesAll, fixedAll, costsAll],
+        .sort((a, b) => (fareOf(a)?.code ?? "").localeCompare(fareOf(b)?.code ?? "")),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [summariesAll, costsAll],
   );
-  const shown = rows.filter((r) => {
-    const n = fold(q.trim());
-    return (
-      !n ||
-      fold(
-        [r.fare?.code, r.fare?.name, ...r.items.map((f) => `${f.code} ${f.name}`)].join(" "),
-      ).includes(n)
-    );
-  });
 
-  const remove = async (s: FixedCostSummaryRecord, label: string) => {
-    const ok = await confirm({
-      title: "Delete this mapping?",
-      description: `The internal costs stay; they are no longer mapped to ${label}.`,
-      confirmLabel: "Delete",
-      tone: "danger",
-    });
-    if (ok !== "confirm") return;
-    fixedCostSummaryService.remove(s.id);
-    toast.success(`Mapping of ${label} deleted`);
-  };
+  const columns = useMemo<ListColumn<FixedCostSummaryRecord>[]>(
+    () => [
+      {
+        key: "fareCode",
+        width: 120,
+        label: "Fare Code",
+        type: "text",
+        pinned: true,
+        value: (s) => fareOf(s)?.code ?? "",
+        render: (s) => <span className="font-semibold text-primary">{fareOf(s)?.code ?? "—"}</span>,
+      },
+      {
+        key: "fareName",
+        width: 230,
+        label: "Fare Name",
+        type: "text",
+        value: (s) => fareOf(s)?.name ?? "",
+      },
+      {
+        key: "internalCosts",
+        width: 230,
+        label: "Internal Costs",
+        type: "text",
+        value: (s) =>
+          itemsOf(s)
+            .map((f) => f.code)
+            .join(", "),
+        render: (s) => (
+          <div className="flex flex-wrap gap-1">
+            {itemsOf(s).map((f) => (
+              <span key={f.id} title={f.name}>
+                <Tag>{f.code}</Tag>
+              </span>
+            ))}
+          </div>
+        ),
+      },
+      {
+        key: "vehicleType",
+        width: 170,
+        label: "Vehicle Type",
+        type: "enum",
+        options: vehicleTypes,
+        value: (s) => s.vehicleType ?? "",
+        render: (s) =>
+          s.vehicleType ? (
+            <span className="whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+              {s.vehicleType}
+            </span>
+          ) : (
+            "—"
+          ),
+      },
+      ...(["year", "month", "day"] as const).map((k): ListColumn<FixedCostSummaryRecord> => ({
+        key: k,
+        width: 140,
+        label: `Total / ${k[0]!.toUpperCase()}${k.slice(1)}`,
+        type: "number",
+        value: (s) => totalOf(s)[k],
+        render: (s) => (
+          <span className={cn("tabular-nums", k === "day" && "font-semibold")}>
+            {fmtMoney(totalOf(s)[k])}
+          </span>
+        ),
+        className: "text-right",
+      })),
+      {
+        key: "status",
+        width: 110,
+        label: "Status",
+        type: "enum",
+        options: ["Active", "Inactive"],
+        value: (s) => s.status,
+        render: (s) => <StatusBadge status={s.status} />,
+      },
+      updatedAtColumn<FixedCostSummaryRecord>(),
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [costsAll, fixedAll, vehicleTypes],
+  );
 
   return (
-    <div className="space-y-4">
-      <Panel
-        title="Fare Code Mapping"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search fare code, internal cost..."
-                className="h-9 w-72 pl-8"
-              />
-            </div>
-            <Button size="sm" onClick={() => setOpen("new")}>
-              <Plus className="h-4 w-4" />
-              Add Mapping
-            </Button>
-          </div>
-        }
-        bodyClassName="p-0"
-      >
-        {shown.length === 0 ? (
-          <EmptyState
-            title={rows.length ? "No matching mapping" : "No Fare Code mapped yet"}
-            description={
-              rows.length ? undefined : "Add a mapping to book internal costs to a Fare Code."
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className={cn("w-full text-sm", gridInBoxClass)}>
-              <thead>
-                <tr className="bg-muted text-left">
-                  {["Fare Code", "Fare Name", "Internal Costs", "Vehicle Type"].map((h) => (
-                    <th key={h} className={cn(thClass, "px-3 py-2.5")}>
-                      {h}
-                    </th>
-                  ))}
-                  {["Total / Year", "Total / Month", "Total / Day"].map((h) => (
-                    <th key={h} className={cn(thClass, "whitespace-nowrap px-3 py-2.5 text-right")}>
-                      {h}
-                    </th>
-                  ))}
-                  <th className={cn(thClass, "w-20")} />
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map(({ s, fare, items, vehicles, total }) => (
-                  <tr
-                    key={s.id}
-                    className="cursor-pointer border-t hover:bg-accent/40"
-                    onClick={() => setOpen(s)}
-                  >
-                    <td className="px-3 py-2 font-semibold text-primary">{fare?.code ?? "—"}</td>
-                    <td className="px-3 py-2">{fare?.name ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {items.map((f) => (
-                          <span key={f.id} title={f.name}>
-                            <Tag>{f.code}</Tag>
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {vehicles.length
-                          ? vehicles.map((v) => (
-                              <span
-                                key={v}
-                                className="whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-                              >
-                                {v}
-                              </span>
-                            ))
-                          : "—"}
-                      </div>
-                    </td>
-                    <td className={num}>{fmtMoney(total.year)}</td>
-                    <td className={num}>{fmtMoney(total.month)}</td>
-                    <td className={cn(num, "font-semibold")}>{fmtMoney(total.day)}</td>
-                    <td className="px-2 py-2">
-                      <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          aria-label="Edit mapping"
-                          title="Edit"
-                          className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                          onClick={() => setOpen(s)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Delete mapping"
-                          title="Delete"
-                          className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => void remove(s, fare?.code ?? "this Fare Code")}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-
+    <>
+      <EntityListPage<FixedCostSummaryRecord>
+        lang="en"
+        screen="fixed-cost-mapping"
+        entityType="Fixed Cost Summary"
+        entityLabel="Mapping"
+        title="Fixed Cost"
+        subtitle="Fare Code mapping: the internal costs booked to each Fare Code"
+        above={<FixedCostTabs active="summary" />}
+        rows={rows}
+        columns={columns}
+        searchPlaceholder="Search fare code, internal cost..."
+        searchValues={(s) => [
+          fareOf(s)?.code ?? "",
+          fareOf(s)?.name ?? "",
+          s.vehicleType ?? "",
+          ...itemsOf(s).flatMap((f) => [f.code, f.name]),
+        ]}
+        quickFilters={[
+          {
+            key: "vehicleType",
+            allLabel: "All vehicle types",
+            options: vehicleTypes.map((v) => ({
+              label: v,
+              conditions: [{ field: "vehicleType", operator: "eq", value: v }],
+            })),
+          },
+          statusFilter,
+        ]}
+        crud={fixedCostSummaryCrud}
+        readOnlyReason="Import is not available for mappings yet"
+        bordered
+        addLabel="Add Mapping"
+        onAdd={() => setOpen("new")}
+        onView={(s) => setOpen(s)}
+        onEdit={(s) => setOpen(s)}
+      />
       {open && (
         <MappingDialog
           key={open === "new" ? "new" : open.id}
@@ -211,7 +194,7 @@ export function FixedCostSummaryTab() {
           onClose={() => setOpen(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 

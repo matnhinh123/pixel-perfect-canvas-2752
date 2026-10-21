@@ -219,6 +219,14 @@ export function validateFixedCostSummary(d: FixedCostSummaryDraft): Record<strin
   return e;
 }
 
+/** List actions of the mappings (delete / status / history), as on the other lists. */
+export const fixedCostSummaryCrud = makeCrud<FixedCostSummaryRecord>({
+  entityType: "Fixed Cost Summary",
+  repo: fixedCostSummaryRepository,
+  labelOf: (s) => `${costDetailLabel(s.assignCostId) || s.assignCostId} · ${s.vehicleType}`,
+  references: () => null,
+});
+
 export const fixedCostSummaryService = {
   save(d: FixedCostSummaryDraft, id?: string): FixedCostSummaryRecord {
     const errors = validateFixedCostSummary(d);

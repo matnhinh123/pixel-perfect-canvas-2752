@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { StatusBadge, Tag } from "@/components/movex/common";
-import { PageHeader } from "@/components/movex/common";
 import { EntityListPage } from "@/components/movex/general/EntityListPage";
 import type { ListColumn } from "@/components/movex/general/types";
 import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts";
@@ -34,18 +33,7 @@ export const Route = createFileRoute("/fixed-cost/")({
 
 function FixedCostPage() {
   const { tab } = Route.useSearch();
-  if (tab === "summary")
-    return (
-      <div>
-        <PageHeader
-          crumbs={[{ label: "Cost" }, { label: "Fixed Cost" }]}
-          title="Fixed Cost"
-          subtitle="Fare Code mapping: the internal costs booked to each Fare Code"
-        />
-        <FixedCostTabs active="summary" />
-        <FixedCostSummaryTab />
-      </div>
-    );
+  if (tab === "summary") return <FixedCostSummaryTab />;
   return <FixedCostList />;
 }
 
