@@ -230,7 +230,7 @@ export const fixedCostSummaryService = {
   save(vehicleType: string, assignCostId: string, lines: string[]): FixedCostSummaryRecord {
     const errors: Record<string, string> = {};
     if (!vehicleType) errors["vehicleType"] = "Vehicle Type is required.";
-    if (!assignCostId) errors["assignCost"] = "Assign Cost Code is required.";
+    if (!assignCostId) errors["assignCost"] = "Fare Code is required.";
     if (lines.some((l) => !l))
       errors["lines"] = "Every line needs a Fixed Cost — fill or remove it.";
     else if (new Set(lines).size !== lines.length)

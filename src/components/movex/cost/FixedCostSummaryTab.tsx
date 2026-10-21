@@ -4,6 +4,8 @@ import { Download, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Field, NativeSelect, Panel, thClass } from "@/components/movex/common";
+import { Input } from "@/components/ui/input";
+import { SuggestInput } from "@/components/movex/general/SuggestInput";
 import { useCollection } from "@/hooks/use-store";
 import {
   costItemRepository,
@@ -40,6 +42,21 @@ export function FixedCostSummaryTab() {
   const [editing, setEditing] = useState(false);
   const [assign, setAssign] = useState("");
   const [lines, setLines] = useState<string[]>([]);
+  // Fare Code / Fare Name: typed or picked; an exact match selects the Fare Code, the other follows.
+  const [fareText, setFareText] = useState({ code: "", name: "" });
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const typeFare = (field: "code" | "name", v: string) => {
+    const m = costs.find((c) => same(c[field], v));
+    setAssign(m?.id ?? "");
+    setFareText(m ? { code: m.code, name: m.name } : { code: "", name: "", [field]: v });
+    setErrors((e) => {
+      const n = { ...e };
+      delete n["assignCost"];
+      return n;
+    });
+  };
+  const fareMiss = (text: string) =>
+    editing && text.trim() && !assign ? "Not found in Fare Code Management." : undefined;
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Shown values: draft while editing, saved otherwise.
@@ -53,6 +70,7 @@ export function FixedCostSummaryTab() {
   };
   const startEdit = () => {
     setAssign(saved?.assignCostId ?? "");
+    setFareText(costLabel(saved?.assignCostId ?? ""));
     setLines(saved?.fixedCostIds ?? []);
     setErrors({});
     setEditing(true);
@@ -98,7 +116,8 @@ export function FixedCostSummaryTab() {
       toCsv(
         [
           "Vehicle Type",
-          "Assign Cost Code",
+          "Fare Code",
+          "Fare Name",
           "Fixed Cost Code",
           "Fixed Cost Name",
           "Allocation Value",
@@ -110,13 +129,14 @@ export function FixedCostSummaryTab() {
           ...rows.map((r) => [
             vehicleType,
             costLabel(shownAssign).code,
+            costLabel(shownAssign).name,
             r.f?.code ?? "",
             r.f?.name ?? "",
             ...[r.c?.allocation, r.c?.year, r.c?.month, r.c?.day].map((n) =>
               n == null ? "" : Math.round(n),
             ),
           ]),
-          ["", "", "", "Total Fixed Cost", "", "", "", Math.round(total)],
+          ["", "", "", "", "Total Fixed Cost", "", "", "", Math.round(total)],
         ],
       ),
     );
@@ -133,32 +153,41 @@ export function FixedCostSummaryTab() {
               options={withCurrent(vehicleTypes, vehicleType)}
             />
           </Field>
-          <Field label="Assign Cost Code" required error={errors["assignCost"]}>
-            <NativeSelect
-              className="h-10 w-full"
-              disabled={!editing}
-              value={shownAssign}
-              onChange={setAssign}
-              options={["", ...costs.map((c) => c.id)]}
-              labels={{
-                "": editing ? "Select Cost Code" : "—",
-                ...Object.fromEntries(costs.map((c) => [c.id, c.code])),
-              }}
-              invalid={!!errors["assignCost"]}
-            />
+          <Field
+            label="Fare Code"
+            required
+            error={errors["assignCost"] ?? fareMiss(fareText.code)}
+            info="The Fare Code (Fare Code Management) the Total Fixed Cost of this vehicle type is booked to. Type or pick a code or a name: the other one follows."
+          >
+            {editing ? (
+              <SuggestInput
+                value={fareText.code}
+                onChange={(v) => typeFare("code", v)}
+                suggestions={costs.map((c) => c.code)}
+                hint={(code) => costs.find((c) => c.code === code)?.name ?? ""}
+                placeholder="Enter Fare Code"
+                invalid={!!errors["assignCost"] || !!fareMiss(fareText.code)}
+                upper
+                emptyText="No matching Fare Code"
+              />
+            ) : (
+              <Input value={costLabel(shownAssign).code || "—"} disabled />
+            )}
           </Field>
-          <Field label="Assign Cost Name">
-            <NativeSelect
-              className="h-10 w-full"
-              disabled={!editing}
-              value={shownAssign}
-              onChange={setAssign}
-              options={["", ...costs.map((c) => c.id)]}
-              labels={{
-                "": editing ? "Select Cost Name" : "—",
-                ...Object.fromEntries(costs.map((c) => [c.id, c.name])),
-              }}
-            />
+          <Field label="Fare Name" required error={fareMiss(fareText.name)}>
+            {editing ? (
+              <SuggestInput
+                value={fareText.name}
+                onChange={(v) => typeFare("name", v)}
+                suggestions={costs.map((c) => c.name)}
+                hint={(name) => costs.find((c) => c.name === name)?.code ?? ""}
+                placeholder="Enter Fare Name"
+                invalid={!!errors["assignCost"] || !!fareMiss(fareText.name)}
+                emptyText="No matching Fare Name"
+              />
+            ) : (
+              <Input value={costLabel(shownAssign).name || "—"} disabled />
+            )}
           </Field>
         </div>
       </Panel>

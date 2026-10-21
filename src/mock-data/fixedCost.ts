@@ -124,7 +124,7 @@ export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [
   {
     id: "FS-8T",
     vehicleType: "TRUCK · 8 tấn",
-    assignCostId: "CI-TOL",
+    assignCostId: "CI-DEP",
     fixedCostIds: ["FC-DEP-TRK", "FC-INS", "FC-GPS"],
     status: "Active",
     ...meta,
@@ -132,7 +132,7 @@ export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [
   {
     id: "FS-40DC",
     vehicleType: "HEADER",
-    assignCostId: "CI-FUE",
+    assignCostId: "CI-DEP",
     fixedCostIds: ["FC-DEP-HEAD", "FC-FIN-HEAD", "FC-MGMT"],
     status: "Active",
     ...meta,
