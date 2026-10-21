@@ -82,7 +82,7 @@ export function FixedCostSummaryTab() {
   const remove = async (s: FixedCostSummaryRecord, label: string) => {
     const ok = await confirm({
       title: "Delete this mapping?",
-      description: `The fixed costs stay; they are no longer mapped to ${label}.`,
+      description: `The internal costs stay; they are no longer mapped to ${label}.`,
       confirmLabel: "Delete",
       tone: "danger",
     });
@@ -102,7 +102,7 @@ export function FixedCostSummaryTab() {
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Search fare code, fixed cost..."
+                placeholder="Search fare code, internal cost..."
                 className="h-9 w-64 pl-8"
               />
             </div>
@@ -118,7 +118,7 @@ export function FixedCostSummaryTab() {
           <EmptyState
             title={rows.length ? "No matching mapping" : "No Fare Code mapped yet"}
             description={
-              rows.length ? undefined : "Add a mapping to book fixed costs to a Fare Code."
+              rows.length ? undefined : "Add a mapping to book internal costs to a Fare Code."
             }
           />
         ) : (
@@ -126,7 +126,7 @@ export function FixedCostSummaryTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted text-left">
-                  {["Fare Code", "Fare Name", "Fixed Costs", "Vehicle Type"].map((h) => (
+                  {["Fare Code", "Fare Name", "Internal Costs", "Vehicle Type"].map((h) => (
                     <th key={h} className={cn(thClass, "px-3 py-2.5")}>
                       {h}
                     </th>
@@ -309,7 +309,8 @@ function MappingDialog({
             {source ? `Fare Code Mapping · ${current?.code ?? ""}` : "Add Mapping"}
           </DialogTitle>
           <DialogDescription>
-            Pick the Fare Code, the vehicle type it applies to, then the fixed costs booked to it.
+            Pick the Fare Code, the vehicle type it applies to, then the internal costs booked to
+            it.
           </DialogDescription>
         </DialogHeader>
 
@@ -366,10 +367,10 @@ function MappingDialog({
           <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
             <div>
               <div className="text-sm font-semibold">
-                Fixed Costs <span className="text-destructive">*</span>
+                Internal Costs <span className="text-destructive">*</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Add them from the Fixed Cost list — as many as needed.
+                Add them from the Internal Cost List — as many as needed.
               </p>
             </div>
             <div className="w-80">
@@ -378,12 +379,12 @@ function MappingDialog({
                 onChange={(id) => id && toggle(id)}
                 options={["", ...addable.map((f) => f.id)]}
                 labels={{
-                  "": addable.length ? "+ Add Fixed Cost" : "All fixed costs added",
+                  "": addable.length ? "+ Add Internal Cost" : "All internal costs added",
                   ...Object.fromEntries(addable.map((f) => [f.id, `${f.code} · ${f.name}`])),
                 }}
                 disabled={!addable.length}
-                searchPlaceholder="Search fixed cost code or name…"
-                emptyText="No matching Fixed Cost"
+                searchPlaceholder="Search internal cost code or name…"
+                emptyText="No matching Internal Cost"
               />
             </div>
           </div>
@@ -394,7 +395,7 @@ function MappingDialog({
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted text-left">
-                  {["Fixed Cost Code", "Fixed Cost Name", "Cost Type", "Also Mapped To"].map(
+                  {["Internal Cost Code", "Internal Cost Name", "Cost Type", "Also Mapped To"].map(
                     (h) => (
                       <th key={h} className={cn(thClass, "px-3 py-2")}>
                         {h}
@@ -410,7 +411,7 @@ function MappingDialog({
                 {picked.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-3 py-6 text-center text-xs text-muted-foreground">
-                      No fixed cost yet — add one with “+ Add Fixed Cost”.
+                      No internal cost yet — add one with “+ Add Internal Cost”.
                     </td>
                   </tr>
                 )}
@@ -444,7 +445,7 @@ function MappingDialog({
           </div>
           <div className="mt-2 flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2 text-sm">
             <span className="text-muted-foreground">
-              {picked.length} fixed cost{picked.length === 1 ? "" : "s"} picked
+              {picked.length} internal cost{picked.length === 1 ? "" : "s"} picked
             </span>
             <span className="flex flex-wrap gap-x-5 gap-y-1">
               {(

@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils";
 
 export type FixedCostTab = "list" | "summary";
 const TABS: { key: FixedCostTab; label: string }[] = [
-  { key: "list", label: "Fixed Cost List" },
-  { key: "summary", label: "Fixed Cost Summary" },
+  { key: "list", label: "Internal Cost List" },
+  { key: "summary", label: "Fixed Cost Mapping" },
 ];
 
 /** The two tabs of the Fixed Cost screen (same route, `?tab=`). */
@@ -22,7 +22,7 @@ export function FixedCostTabs({ active }: { active: FixedCostTab }) {
             "-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors",
             active === t.key
               ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground",
+              : "border-transparent text-muted-foreground opacity-50 hover:text-foreground hover:opacity-100",
           )}
         >
           {t.label}

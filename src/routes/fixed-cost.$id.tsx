@@ -53,7 +53,10 @@ export const Route = createFileRoute("/fixed-cost/$id")({
     s["mode"] === "view" || s["mode"] === "edit" ? { mode: s["mode"] } : {},
   head: ({ params }) => ({
     meta: [
-      { title: params.id === "new" ? "Create Fixed Cost — MoveX" : "Fixed Cost Detail — MoveX" },
+      {
+        title:
+          params.id === "new" ? "Create Internal Cost — MoveX" : "Internal Cost Detail — MoveX",
+      },
     ],
   }),
   component: FixedCostPage,
@@ -69,7 +72,7 @@ function FixedCostPage() {
       <Panel>
         <EmptyState
           icon={<XCircle className="h-8 w-8" />}
-          title="Fixed Cost not found"
+          title="Internal Cost not found"
           action={
             <Button asChild size="sm">
               <Link to="/fixed-cost">Back to list</Link>
@@ -226,7 +229,9 @@ function FixedCostForm({
     try {
       const saved = fixedCostService.save(d, source?.id);
       guard.allowNext();
-      toast.success(isNew ? `Fixed Cost ${saved.code} added` : `Fixed Cost ${saved.code} saved`);
+      toast.success(
+        isNew ? `Internal Cost ${saved.code} added` : `Internal Cost ${saved.code} saved`,
+      );
       void navigate({ to: "/fixed-cost" });
     } catch (err) {
       if (err instanceof BusinessRuleError) {
@@ -261,10 +266,10 @@ function FixedCostForm({
         ]}
         title={
           isNew
-            ? "Create Fixed Cost"
+            ? "Create Internal Cost"
             : readOnly
-              ? `Fixed Cost Detail #${source.code}`
-              : `Edit Fixed Cost #${source.code}`
+              ? `Internal Cost Detail #${source.code}`
+              : `Edit Internal Cost #${source.code}`
         }
         subtitle={source?.name}
         badge={source ? <StatusBadge status={source.status} /> : undefined}
@@ -303,10 +308,10 @@ function FixedCostForm({
       <FormErrorBanner message={formError} errors={errors} />
 
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
-        <CollapsiblePanel title="Fixed Cost Detail">
+        <CollapsiblePanel title="Internal Cost Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
-              label="Fixed Cost Code"
+              label="Internal Cost Code"
               required
               error={errors["code"]}
               className={S3}
@@ -320,17 +325,17 @@ function FixedCostForm({
                 onChange={(e) => patch({ code: e.target.value.toUpperCase() })}
               />
             </Field>
-            <Field label="Fixed Cost Name (EN)" required error={errors["name"]} className={S5}>
+            <Field label="Internal Cost Name (EN)" required error={errors["name"]} className={S5}>
               <Input
-                placeholder="Enter Fixed Cost Name (EN)"
+                placeholder="Enter Internal Cost Name (EN)"
                 value={d.name}
                 aria-invalid={!!errors["name"] || undefined}
                 onChange={(e) => patch({ name: e.target.value })}
               />
             </Field>
-            <Field label="Fixed Cost Name (Local)" className={S4}>
+            <Field label="Internal Cost Name (Local)" className={S4}>
               <Input
-                placeholder="Enter Fixed Cost Name (Local)"
+                placeholder="Enter Internal Cost Name (Local)"
                 value={d.localName}
                 onChange={(e) => patch({ localName: e.target.value })}
               />

@@ -109,12 +109,12 @@ export const loanLabel = (l: LoanTerms | null | undefined) =>
 export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
   const code = d.code.trim().toUpperCase();
-  if (!code) e["code"] = "Fixed Cost Code is required.";
+  if (!code) e["code"] = "Internal Cost Code is required.";
   else if (!/^[A-Z0-9_-]{2,30}$/.test(code))
     e["code"] = "Use 2–30 characters: letters, digits, - or _.";
   else if (all().some((f) => f.id !== id && f.code.toUpperCase() === code))
-    e["code"] = `Fixed Cost Code ${code} already exists.`;
-  if (!d.name.trim()) e["name"] = "Fixed Cost Name is required.";
+    e["code"] = `Internal Cost Code ${code} already exists.`;
+  if (!d.name.trim()) e["name"] = "Internal Cost Name is required.";
   if (d.costType === "Loan Interest") {
     if (!(d.loan && d.loan.amount > 0)) e["loanAmount"] = "Loan Amount must be greater than 0.";
   }
@@ -172,8 +172,8 @@ export const fixedCostService = {
     const upd = (field: string, a: string, b: string) =>
       a !== b &&
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
-    upd("Fixed Cost Name (EN)", existing.name, next.name);
-    upd("Fixed Cost Name (Local)", existing.localName ?? "", next.localName);
+    upd("Internal Cost Name (EN)", existing.name, next.name);
+    upd("Internal Cost Name (Local)", existing.localName ?? "", next.localName);
     upd("Cost Type", existing.costType ?? "Allocation", next.costType);
     upd("Loan", loanLabel(existing.loan), loanLabel(next.loan));
     upd(
@@ -256,9 +256,9 @@ export function validateFixedCostSummary(d: FixedCostSummaryDraft): Record<strin
     const vErr = fcVehicleErrors([d.vehicleType], vehicleMasterRepository.all());
     if (vErr) e["vehicleType"] = vErr.replace("Vehicle Type row 1: ", "");
   }
-  if (!d.fixedCostIds.length) e["lines"] = "Pick at least one Fixed Cost.";
+  if (!d.fixedCostIds.length) e["lines"] = "Pick at least one Internal Cost.";
   else if (d.fixedCostIds.some((l) => fixedCostRepository.get(l)?.status !== "Active"))
-    e["lines"] = "Only active Fixed Costs can be mapped — remove the others.";
+    e["lines"] = "Only active Internal Costs can be mapped — remove the others.";
   return e;
 }
 
@@ -306,7 +306,7 @@ export const fixedCostSummaryService = {
     if (names(existing.fixedCostIds) !== names(next.fixedCostIds))
       out.push({
         ...base,
-        field: "Fixed Costs",
+        field: "Internal Costs",
         oldValue: names(existing.fixedCostIds) || "—",
         newValue: names(next.fixedCostIds) || "—",
       });
@@ -392,15 +392,26 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   screen: "fixed-cost",
   keyColumn: "code",
   columns: [
-    { key: "code", header: "Fixed Cost Code", required: true, example: "FC_DEP_5T" },
+    {
+      key: "code",
+      header: "Internal Cost Code",
+      required: true,
+      aliases: ["Fixed Cost Code"],
+      example: "FC_DEP_5T",
+    },
     {
       key: "name",
-      header: "Fixed Cost Name (EN)",
+      header: "Internal Cost Name (EN)",
       required: true,
       example: "5T truck depreciation",
-      aliases: ["Fixed Cost Name"],
+      aliases: ["Fixed Cost Name (EN)", "Fixed Cost Name"],
     },
-    { key: "localName", header: "Fixed Cost Name (Local)", example: "Khấu hao xe 5 tấn" },
+    {
+      key: "localName",
+      header: "Internal Cost Name (Local)",
+      aliases: ["Fixed Cost Name (Local)"],
+      example: "Khấu hao xe 5 tấn",
+    },
     { key: "costType", header: "Cost Type", example: "Allocation" },
     { key: "costValue", header: "Cost Value", example: "900000000" },
     { key: "currency", header: "Currency", example: "VND" },
@@ -452,7 +463,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       const n = String(i + 1).padStart(2, "0");
       return [
         `FC_IMP_${n}`,
-        `Imported fixed cost ${n}`,
+        `Imported internal cost ${n}`,
         `Chi phí cố định nhập mẫu ${n}`,
         fare === "FIN" ? "Loan Interest" : "Allocation",
         value,

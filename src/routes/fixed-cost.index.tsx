@@ -45,7 +45,7 @@ function FixedCostPage() {
         <PageHeader
           crumbs={[{ label: "Cost" }, { label: "Fixed Cost" }]}
           title="Fixed Cost"
-          subtitle="Fare Code mapping: the fixed costs booked to each Fare Code"
+          subtitle="Fare Code mapping: the internal costs booked to each Fare Code"
         />
         <FixedCostTabs active="summary" />
         <FixedCostSummaryTab />
@@ -74,7 +74,7 @@ function FixedCostList() {
   ];
   const open = (f: FixedCostRecord, mode: "view" | "edit") => {
     if (mode === "edit" && f.status !== "Active") {
-      toast.error("Activate this Fixed Cost before editing it.");
+      toast.error("Activate this Internal Cost before editing it.");
       return;
     }
     void navigate({ to: "/fixed-cost/$id", params: { id: f.id }, search: { mode } });
@@ -84,7 +84,7 @@ function FixedCostList() {
     () => [
       {
         key: "code",
-        label: "Fixed Cost Code",
+        label: "Internal Cost Code",
         type: "text",
         pinned: true,
         value: (f) => f.code,
@@ -92,14 +92,14 @@ function FixedCostList() {
       },
       {
         key: "name",
-        label: "Fixed Cost Name (EN)",
+        label: "Internal Cost Name (EN)",
         type: "text",
         pinned: true,
         value: (f) => f.name,
       },
       {
         key: "localName",
-        label: "Fixed Cost Name (Local)",
+        label: "Internal Cost Name (Local)",
         type: "text",
         value: (f) => f.localName ?? "",
       },
@@ -219,19 +219,19 @@ function FixedCostList() {
       lang="en"
       screen="fixed-cost"
       entityType="Fixed Cost"
-      entityLabel="Fixed Cost"
+      entityLabel="Internal Cost"
       title="Fixed Cost"
-      subtitle="Fixed costs converted to Year / Month / Day / Trip"
+      subtitle="Internal costs converted to Year / Month / Day"
       above={<FixedCostTabs active="list" />}
       rows={rows}
       columns={columns}
-      searchPlaceholder="Search fixed cost code or name..."
+      searchPlaceholder="Search internal cost code or name..."
       searchValues={(f) => [f.code, f.name]}
       quickFilters={[statusFilter]}
       importConfig={fixedCostImportConfig}
       crud={fixedCostCrud}
       allowDelete={false}
-      addLabel="Add Fixed Cost"
+      addLabel="Add Internal Cost"
       onAdd={() => void navigate({ to: "/fixed-cost/$id", params: { id: "new" }, search: {} })}
       onView={(f) => open(f, "view")}
       onEdit={(f) => open(f, "edit")}
