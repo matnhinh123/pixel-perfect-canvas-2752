@@ -94,7 +94,7 @@ export function FixedCostVehicleRows({
             return (
               <div
                 key={i}
-                className="grid grid-cols-1 items-center gap-2 px-3 py-2 sm:grid-cols-[160px_160px_180px_1fr_auto]"
+                className="grid grid-cols-1 items-center gap-2 px-3 py-2 sm:grid-cols-[150px_200px_190px_1fr_auto]"
               >
                 <NativeSelect
                   value={v.kind}

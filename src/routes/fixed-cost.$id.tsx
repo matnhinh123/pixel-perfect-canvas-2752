@@ -216,7 +216,7 @@ function FixedCostForm({
     <Field
       label="Allocation Days"
       error={errors["allocationDays"]}
-      className={cn(S2, loan && "lg:col-start-1")}
+      className={S2}
       info={
         loan
           ? "Days per month for Month → Day: 30 counts interest on a 360-day year."
@@ -340,7 +340,7 @@ function FixedCostForm({
               label="Fixed Cost Code"
               required
               error={errors["code"]}
-              className={S2}
+              className={S3}
               info="Unique, upper-case. 2–30 characters: letters, digits, - or _."
             >
               <Input
@@ -359,7 +359,7 @@ function FixedCostForm({
                 onChange={(e) => patch({ name: e.target.value })}
               />
             </Field>
-            <Field label="Fixed Cost Name (Local)" className={S5}>
+            <Field label="Fixed Cost Name (Local)" className={S4}>
               <Input
                 placeholder="Enter Fixed Cost Name (Local)"
                 value={d.localName}
@@ -370,7 +370,7 @@ function FixedCostForm({
               label="Fare Code"
               required
               error={errors["costDetailId"] ?? fareMiss(codeText)}
-              className={S2}
+              className={S3}
               info="Type or pick a Fare Code or a Fare Name (Fare Code Management): the other one follows."
             >
               <SuggestInput
@@ -398,7 +398,7 @@ function FixedCostForm({
             <Field
               label="Cost Type"
               required
-              className={cn(S2, "lg:col-start-1")}
+              className={cn(S3, "lg:col-start-1")}
               info="Allocation: a value spread over a period (depreciation, insurance…). Loan Interest: the interest of a loan taken to buy the asset. Other: an amount per day, entered as is."
             >
               <NativeSelect
@@ -413,14 +413,14 @@ function FixedCostForm({
                 label={d.costType === "Other" ? "Value / Day" : "Cost Value"}
                 required
                 error={errors["costValue"]}
-                className={S3}
+                className={S4}
                 hint={
                   d.currency !== "VND"
                     ? `1 ${d.currency} = ${fmtMoney(rate)} ₫ (exchange rate)`
                     : undefined
                 }
               >
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                   <MoneyInput
                     value={d.costValue}
                     decimals={d.currency === "VND" ? 0 : 2}
@@ -429,7 +429,7 @@ function FixedCostForm({
                   />
                   <NativeSelect
                     {...select("currency", COST_CURRENCIES, "")}
-                    className="h-10 w-24"
+                    className="h-10 w-[84px] shrink-0 pl-2.5 pr-7"
                   />
                 </div>
               </Field>
@@ -440,7 +440,7 @@ function FixedCostForm({
                   label="Allocation Base"
                   required
                   error={errors["allocationBase"] ?? errors["allocationUnit"]}
-                  className={S2}
+                  className={S3}
                   info={unitNote}
                 >
                   <div className="flex gap-2">
@@ -460,8 +460,8 @@ function FixedCostForm({
             )}
             {d.costType === "Loan Interest" && d.loan && (
               <>
-                <Field label="Loan Amount" required error={errors["loanAmount"]} className={S3}>
-                  <div className="flex gap-2">
+                <Field label="Loan Amount" required error={errors["loanAmount"]} className={S4}>
+                  <div className="flex gap-1.5">
                     <MoneyInput
                       value={d.loan.amount}
                       decimals={d.currency === "VND" ? 0 : 2}
@@ -470,11 +470,11 @@ function FixedCostForm({
                     />
                     <NativeSelect
                       {...select("currency", COST_CURRENCIES, "")}
-                      className="h-10 w-24"
+                      className="h-10 w-[84px] shrink-0 pl-2.5 pr-7"
                     />
                   </div>
                 </Field>
-                <Field label="Interest Rate" required error={errors["loanRate"]} className={S2}>
+                <Field label="Interest Rate" required error={errors["loanRate"]} className={S3}>
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"

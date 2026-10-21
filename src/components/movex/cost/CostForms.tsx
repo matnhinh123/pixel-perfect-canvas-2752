@@ -94,7 +94,7 @@ export function StatusSelect({
         aria-label="Status"
         value={value}
         onChange={(e) => onChange(e.target.value as "Active" | "Inactive")}
-        className="h-11 appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm font-medium outline-none focus:ring-2 focus:ring-ring"
+        className="h-11 min-w-36 appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm font-medium outline-none focus:ring-2 focus:ring-ring"
       >
         <option value="Active">Active</option>
         <option value="Inactive">Inactive</option>
@@ -267,7 +267,7 @@ export function CostDetailForm({
               <Input placeholder="Enter Local Name" {...text("localName")} />
             </Field>
             {/* Row 2: names wider, short pick lists narrower (3 : 2 : 2 : 2 : 1.5 : 1.5). */}
-            <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:col-span-6 sm:grid-cols-6 lg:col-span-12 lg:grid-cols-[3fr_2fr_2fr_2fr_1.5fr_1.5fr]">
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:col-span-6 sm:grid-cols-6 lg:col-span-12 lg:grid-cols-[2.5fr_2fr_2fr_2fr_1.75fr_1.75fr]">
               <Field
                 label="Group Name"
                 required
@@ -279,7 +279,7 @@ export function CostDetailForm({
                   value={d.group}
                   onChange={(v) => patch({ group: v })}
                   suggestions={groupNames}
-                  placeholder="Enter Group Name"
+                  placeholder="Group"
                 />
               </Field>
               <Field
@@ -292,16 +292,12 @@ export function CostDetailForm({
                   value={d.subGroup}
                   onChange={(v) => patch({ subGroup: v })}
                   suggestions={subGroups}
-                  placeholder="Enter Sub Group Name"
+                  placeholder="Sub group"
                 />
               </Field>
               <Field label="Tax Evidence" className={ROW2}>
                 <NativeSelect
-                  {...select(
-                    "taxEvidence",
-                    withCurrent(taxEvidences, d.taxEvidence),
-                    "Select Tax Evidence",
-                  )}
+                  {...select("taxEvidence", withCurrent(taxEvidences, d.taxEvidence), "Select")}
                 />
               </Field>
               <Field label="Default Unit" className={ROW2}>
