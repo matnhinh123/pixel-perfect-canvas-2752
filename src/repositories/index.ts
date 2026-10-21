@@ -63,7 +63,7 @@ export const fixedCostRepository = createCollection<FixedCostRecord>(
   seedFixedCosts,
 );
 export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
-  "fixed-cost-summaries.v6",
+  "fixed-cost-summaries.v7",
   seedFixedCostSummaries,
 );
 /** Location master; Routing stop pickers read active locations from it. */

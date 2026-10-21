@@ -40,7 +40,7 @@ function FixedCostPage() {
         <PageHeader
           crumbs={[{ label: "Cost" }, { label: "Fixed Cost" }]}
           title="Fixed Cost"
-          subtitle="Fixed cost summary per vehicle type — feeds the Pricing List"
+          subtitle="Fare Code mapping: the fixed costs booked to each Fare Code"
         />
         <FixedCostTabs active="summary" />
         <FixedCostSummaryTab />

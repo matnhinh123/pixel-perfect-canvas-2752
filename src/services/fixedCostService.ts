@@ -213,9 +213,7 @@ export const costDetailLabel = (id: string) => {
 
 // ---------------------------------------------------------------- Summary
 
-export const summaryOf = (vehicleType: string) =>
-  fixedCostSummaryRepository.all().find((s) => s.vehicleType === vehicleType && !s.deleted);
-
+/** Fixed cost per day of a list of fixed costs. */
 export const totalFixedCost = (ids: string[]) =>
   ids.reduce((sum, id) => {
     const f = fixedCostRepository.get(id);
@@ -225,28 +223,48 @@ export const totalFixedCost = (ids: string[]) =>
 export const activeCostItems = () =>
   costItemRepository.all().filter((c) => !c.deleted && c.status === "Active");
 
+const liveSummaries = () => fixedCostSummaryRepository.all().filter((s) => !s.deleted);
+/** The other mapping a fixed cost already belongs to (a fixed cost is booked to one Fare Code). */
+export const mappedTo = (fixedCostId: string, exceptId?: string) =>
+  liveSummaries().find((s) => s.id !== exceptId && s.fixedCostIds.includes(fixedCostId));
+
+export interface FixedCostSummaryDraft {
+  assignCostId: string;
+  fixedCostIds: string[];
+  remark: string;
+}
+
+export function validateFixedCostSummary(
+  d: FixedCostSummaryDraft,
+  id?: string,
+): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (!d.assignCostId) e["assignCost"] = "Fare Code is required.";
+  else if (liveSummaries().some((s) => s.id !== id && s.assignCostId === d.assignCostId))
+    e["assignCost"] = `${costDetailLabel(d.assignCostId)} is already mapped — open that mapping.`;
+  if (!d.fixedCostIds.length) e["lines"] = "Pick at least one Fixed Cost.";
+  else if (d.fixedCostIds.some((l) => fixedCostRepository.get(l)?.status !== "Active"))
+    e["lines"] = "Only active Fixed Costs can be mapped — remove the others.";
+  else {
+    const taken = d.fixedCostIds.find((l) => mappedTo(l, id));
+    if (taken)
+      e["lines"] =
+        `${fixedCostRepository.get(taken)?.code} is already mapped to ${costDetailLabel(mappedTo(taken, id)!.assignCostId)}.`;
+  }
+  return e;
+}
+
 export const fixedCostSummaryService = {
-  /** `lines` holds fixed-cost ids; blank = an empty line the user has not filled in. */
-  save(vehicleType: string, assignCostId: string, lines: string[]): FixedCostSummaryRecord {
-    const errors: Record<string, string> = {};
-    if (!vehicleType) errors["vehicleType"] = "Vehicle Type is required.";
-    if (!assignCostId) errors["assignCost"] = "Fare Code is required.";
-    if (lines.some((l) => !l))
-      errors["lines"] = "Every line needs a Fixed Cost — fill or remove it.";
-    else if (new Set(lines).size !== lines.length)
-      errors["lines"] = "The same Fixed Cost cannot be added twice.";
-    else if (lines.some((l) => fixedCostRepository.get(l)?.status === "Inactive"))
-      errors["lines"] = "Inactive Fixed Costs cannot be used — remove them.";
+  save(d: FixedCostSummaryDraft, id?: string): FixedCostSummaryRecord {
+    const errors = validateFixedCostSummary(d, id);
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please check the highlighted fields.", errors);
-
-    const existing = summaryOf(vehicleType);
+    const body = { ...d, remark: d.remark.trim() };
+    const existing = id ? fixedCostSummaryRepository.get(id) : undefined;
     if (!existing) {
       const rec: FixedCostSummaryRecord = {
         id: uid("FS-"),
-        vehicleType,
-        assignCostId,
-        fixedCostIds: lines,
+        ...body,
         status: "Active",
         ...stampCreate(),
       };
@@ -255,24 +273,55 @@ export const fixedCostSummaryService = {
         action: "CREATE",
         entityType: "Fixed Cost Summary",
         entityId: rec.id,
-        entityLabel: vehicleType,
+        entityLabel: costDetailLabel(rec.assignCostId),
       });
       return rec;
     }
-    const next = stampUpdate({ ...existing, assignCostId, fixedCostIds: lines });
+    const next = stampUpdate({ ...existing, ...body });
     fixedCostSummaryRepository.update(existing.id, () => next);
     const names = (ids: string[]) =>
       ids.map((i) => fixedCostRepository.get(i)?.code ?? i).join(", ");
-    auditService.log({
-      action: "UPDATE",
-      entityType: "Fixed Cost Summary",
+    const base = {
+      action: "UPDATE" as const,
+      entityType: "Fixed Cost Summary" as const,
       entityId: next.id,
-      entityLabel: vehicleType,
-      field: "Lines",
-      oldValue: names(existing.fixedCostIds) || "—",
-      newValue: names(lines) || "—",
-    });
+      entityLabel: costDetailLabel(next.assignCostId),
+    };
+    const out: AuditInput[] = [];
+    if (existing.assignCostId !== next.assignCostId)
+      out.push({
+        ...base,
+        field: "Fare Code",
+        oldValue: costDetailLabel(existing.assignCostId) || "—",
+        newValue: costDetailLabel(next.assignCostId) || "—",
+      });
+    if (names(existing.fixedCostIds) !== names(next.fixedCostIds))
+      out.push({
+        ...base,
+        field: "Fixed Costs",
+        oldValue: names(existing.fixedCostIds) || "—",
+        newValue: names(next.fixedCostIds) || "—",
+      });
+    if ((existing.remark ?? "") !== next.remark)
+      out.push({
+        ...base,
+        field: "Remark",
+        oldValue: existing.remark || "—",
+        newValue: next.remark || "—",
+      });
+    auditService.logMany(out);
     return next;
+  },
+  remove(id: string) {
+    const s = fixedCostSummaryRepository.get(id);
+    if (!s) return;
+    fixedCostSummaryRepository.update(id, (x) => ({ ...x, deleted: true }));
+    auditService.log({
+      action: "DELETE",
+      entityType: "Fixed Cost Summary",
+      entityId: id,
+      entityLabel: costDetailLabel(s.assignCostId),
+    });
   },
 };
 

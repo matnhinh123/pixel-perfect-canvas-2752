@@ -120,21 +120,25 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   }),
 ];
 
+/** Fare Code mappings: which fixed costs are booked to which Fare Code. */
+const sm = (
+  id: string,
+  assignCostId: string,
+  fixedCostIds: string[],
+  remark = "",
+): FixedCostSummaryRecord => ({
+  id,
+  assignCostId,
+  fixedCostIds,
+  remark,
+  status: "Active",
+  ...meta,
+});
+
 export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [
-  {
-    id: "FS-8T",
-    vehicleType: "TRUCK · 8 tấn",
-    assignCostId: "CI-DEP",
-    fixedCostIds: ["FC-DEP-TRK", "FC-INS", "FC-GPS"],
-    status: "Active",
-    ...meta,
-  },
-  {
-    id: "FS-40DC",
-    vehicleType: "HEADER",
-    assignCostId: "CI-DEP",
-    fixedCostIds: ["FC-DEP-HEAD", "FC-FIN-HEAD", "FC-MGMT"],
-    status: "Active",
-    ...meta,
-  },
+  sm("FS-DEP", "CI-DEP", ["FC-DEP-TRK", "FC-DEP-HEAD"], "Vehicle depreciation"),
+  sm("FS-ADP", "CI-ADP", ["FC-DEP-TRL"], "Trailer depreciation"),
+  sm("FS-FIN", "CI-FIN", ["FC-FIN-HEAD", "FC-FIN-TRL"], "Financial cost of the header and trailer"),
+  sm("FS-MGT", "CI-MGT", ["FC-MGMT"]),
+  sm("FS-INU", "CI-INU", ["FC-INS"]),
 ];

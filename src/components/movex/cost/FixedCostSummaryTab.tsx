@@ -1,334 +1,462 @@
-import { withCurrent } from "@/services/commonCodeService";
+// Fixed Cost Summary = Fare Code mapping: each row is a Fare Code and the fixed costs booked to it.
+// Add / Edit opens the mapping: pick the Fare Code, then the fixed costs from the Fixed Cost list.
 import { useMemo, useState } from "react";
-import { Download, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { EmptyState, Field, NativeSelect, Panel, thClass } from "@/components/movex/common";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { EmptyState, Field, Panel, Tag, thClass } from "@/components/movex/common";
 import { SuggestInput } from "@/components/movex/general/SuggestInput";
+import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { useCollection } from "@/hooks/use-store";
 import {
   costItemRepository,
   fixedCostRepository,
   fixedCostSummaryRepository,
-  vehicleMasterRepository,
 } from "@/repositories";
-import { coversChoice, vehicleTypeChoices } from "@/services/fixedCostVehicle";
 import { BusinessRuleError } from "@/services/crudService";
-import { calcFixedCost, fixedCostSummaryService, summaryOf } from "@/services/fixedCostService";
+import {
+  calcFixedCost,
+  fixedCostSummaryService,
+  type FixedCostSummaryDraft,
+} from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
-import { downloadFile, toCsv } from "@/services/importExportService";
+import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
 
 const num = "px-3 py-2 text-right tabular-nums";
+const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const dayOf = (f: FixedCostRecord | undefined) => (f ? (calcFixedCost(f).day ?? 0) : 0);
+const unionVehicles = (list: FixedCostRecord[]) => [
+  ...new Set(list.flatMap((f) => f.vehicleTypes)),
+];
 
-/** SFC.03 — fixed costs picked per vehicle type, with the Total Fixed Cost fed to Pricing List. */
 export function FixedCostSummaryTab() {
-  const vehiclesAll = useCollection(vehicleMasterRepository);
-  const vehicleTypes = useMemo(() => vehicleTypeChoices(vehiclesAll), [vehiclesAll]);
+  const confirm = useConfirm();
+  const summariesAll = useCollection(fixedCostSummaryRepository);
   const fixedAll = useCollection(fixedCostRepository);
-  const summaries = useCollection(fixedCostSummaryRepository);
   const costsAll = useCollection(costItemRepository);
+  const [q, setQ] = useState("");
+  /** Open mapping: null = closed, "new" = add. */
+  const [open, setOpen] = useState<FixedCostSummaryRecord | "new" | null>(null);
+
+  const rows = useMemo(
+    () =>
+      summariesAll
+        .filter((s) => !s.deleted)
+        .map((s) => {
+          const fare = costsAll.find((c) => c.id === s.assignCostId);
+          const items = s.fixedCostIds
+            .map((id) => fixedAll.find((f) => f.id === id && !f.deleted))
+            .filter((f): f is FixedCostRecord => !!f);
+          return {
+            s,
+            fare,
+            items,
+            vehicles: unionVehicles(items),
+            total: items.reduce((t, f) => t + dayOf(f), 0),
+          };
+        })
+        .sort((a, b) => (a.fare?.code ?? "").localeCompare(b.fare?.code ?? "")),
+    [summariesAll, fixedAll, costsAll],
+  );
+  const shown = rows.filter((r) => {
+    const n = fold(q.trim());
+    return (
+      !n ||
+      fold(
+        [r.fare?.code, r.fare?.name, ...r.items.map((f) => `${f.code} ${f.name}`)].join(" "),
+      ).includes(n)
+    );
+  });
+
+  const remove = async (s: FixedCostSummaryRecord, label: string) => {
+    const ok = await confirm({
+      title: "Delete this mapping?",
+      description: `The fixed costs stay; they are no longer mapped to ${label}.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (ok !== "confirm") return;
+    fixedCostSummaryService.remove(s.id);
+    toast.success(`Mapping of ${label} deleted`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Panel
+        title="Fare Code Mapping"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search fare code, fixed cost..."
+                className="h-9 w-64 pl-8"
+              />
+            </div>
+            <Button size="sm" onClick={() => setOpen("new")}>
+              <Plus className="h-4 w-4" />
+              Add Mapping
+            </Button>
+          </div>
+        }
+        bodyClassName="p-0"
+      >
+        {shown.length === 0 ? (
+          <EmptyState
+            title={rows.length ? "No matching mapping" : "No Fare Code mapped yet"}
+            description={
+              rows.length ? undefined : "Add a mapping to book fixed costs to a Fare Code."
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted text-left">
+                  {["Fare Code", "Fare Name", "Fixed Costs", "Vehicle Type"].map((h) => (
+                    <th key={h} className={cn(thClass, "px-3 py-2.5")}>
+                      {h}
+                    </th>
+                  ))}
+                  <th className={cn(thClass, "px-3 py-2.5 text-right")}>Total / Day</th>
+                  <th className={cn(thClass, "px-3 py-2.5")}>Remark</th>
+                  <th className={cn(thClass, "px-3 py-2.5")}>Updated</th>
+                  <th className={cn(thClass, "w-20")} />
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map(({ s, fare, items, vehicles, total }) => (
+                  <tr
+                    key={s.id}
+                    className="cursor-pointer border-t hover:bg-accent/40"
+                    onClick={() => setOpen(s)}
+                  >
+                    <td className="px-3 py-2 font-semibold text-primary">{fare?.code ?? "—"}</td>
+                    <td className="px-3 py-2">{fare?.name ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {items.map((f) => (
+                          <span key={f.id} title={f.name}>
+                            <Tag>{f.code}</Tag>
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="max-w-56 px-3 py-2 text-xs text-muted-foreground">
+                      {vehicles.join(", ") || "—"}
+                    </td>
+                    <td className={cn(num, "font-semibold")}>{fmtMoney(total)}</td>
+                    <td
+                      className="max-w-48 truncate px-3 py-2 text-muted-foreground"
+                      title={s.remark}
+                    >
+                      {s.remark || "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
+                      {formatDateTime(s.updatedAt)}
+                      <br />
+                      {s.updatedBy}
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          aria-label="Edit mapping"
+                          title="Edit"
+                          className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                          onClick={() => setOpen(s)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Delete mapping"
+                          title="Delete"
+                          className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => void remove(s, fare?.code ?? "this Fare Code")}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      {open && (
+        <MappingDialog
+          key={open === "new" ? "new" : open.id}
+          source={open === "new" ? null : open}
+          onClose={() => setOpen(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Add / edit one mapping: the Fare Code, then the fixed costs picked from the Fixed Cost list. */
+function MappingDialog({
+  source,
+  onClose,
+}: {
+  source: FixedCostSummaryRecord | null;
+  onClose: () => void;
+}) {
+  const fixedAll = useCollection(fixedCostRepository);
+  const costsAll = useCollection(costItemRepository);
+  const summariesAll = useCollection(fixedCostSummaryRepository);
   const costs = useMemo(
     () => costsAll.filter((c) => !c.deleted && c.status === "Active"),
     [costsAll],
   );
-  const fixed = useMemo(() => fixedAll.filter((f) => !f.deleted), [fixedAll]);
-
-  const [vehicleType, setVehicleType] = useState(
-    () => vehicleTypes.find((v) => summaryOf(v)) ?? vehicleTypes[0] ?? "",
+  const fixed = useMemo(
+    () =>
+      fixedAll
+        .filter((f) => !f.deleted && (f.status === "Active" || source?.fixedCostIds.includes(f.id)))
+        .sort((a, b) => a.code.localeCompare(b.code)),
+    [fixedAll, source],
   );
-  const saved = summaries.find((s) => s.vehicleType === vehicleType && !s.deleted);
-  const [editing, setEditing] = useState(false);
-  const [assign, setAssign] = useState("");
-  const [lines, setLines] = useState<string[]>([]);
-  // Fare Code / Fare Name: typed or picked; an exact match selects the Fare Code, the other follows.
-  const [fareText, setFareText] = useState({ code: "", name: "" });
+  const current = costsAll.find((c) => c.id === source?.assignCostId);
+  const [d, setD] = useState<FixedCostSummaryDraft>({
+    assignCostId: source?.assignCostId ?? "",
+    fixedCostIds: [...(source?.fixedCostIds ?? [])],
+    remark: source?.remark ?? "",
+  });
+  const [fareText, setFareText] = useState({
+    code: current?.code ?? "",
+    name: current?.name ?? "",
+  });
+  const [q, setQ] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
   const typeFare = (field: "code" | "name", v: string) => {
     const m = costs.find((c) => same(c[field], v));
-    setAssign(m?.id ?? "");
+    setD((x) => ({ ...x, assignCostId: m?.id ?? "" }));
     setFareText(m ? { code: m.code, name: m.name } : { code: "", name: "", [field]: v });
-    setErrors((e) => {
-      const n = { ...e };
-      delete n["assignCost"];
-      return n;
-    });
+    setErrors((e) => ({ ...e, assignCost: "" }));
   };
   const fareMiss = (text: string) =>
-    editing && text.trim() && !assign ? "Not found in Fare Code Management." : undefined;
-  const [errors, setErrors] = useState<Record<string, string>>({});
+    text.trim() && !d.assignCostId ? "Not found in Fare Code Management." : undefined;
+  /** Fare Code another mapping already books this fixed cost to. */
+  const otherOf = (fid: string) => {
+    const s = summariesAll.find(
+      (x) => !x.deleted && x.id !== source?.id && x.fixedCostIds.includes(fid),
+    );
+    return s ? (costsAll.find((c) => c.id === s.assignCostId)?.code ?? "another Fare Code") : null;
+  };
+  const toggle = (fid: string) => {
+    setD((x) => ({
+      ...x,
+      fixedCostIds: x.fixedCostIds.includes(fid)
+        ? x.fixedCostIds.filter((i) => i !== fid)
+        : [...x.fixedCostIds, fid],
+    }));
+    setErrors((e) => ({ ...e, lines: "" }));
+  };
+  const list = fixed.filter((f) => {
+    const n = fold(q.trim());
+    return (
+      !n || fold(`${f.code} ${f.name} ${f.localName ?? ""} ${f.vehicleTypes.join(" ")}`).includes(n)
+    );
+  });
+  const picked = fixed.filter((f) => d.fixedCostIds.includes(f.id));
+  const total = picked.reduce((t, f) => t + dayOf(f), 0);
 
-  // Shown values: draft while editing, saved otherwise.
-  const shownAssign = editing ? assign : (saved?.assignCostId ?? "");
-  const shownLines = editing ? lines : (saved?.fixedCostIds ?? []);
-
-  const pickVehicle = (v: string) => {
-    setVehicleType(v);
-    setEditing(false);
-    setErrors({});
-  };
-  const startEdit = () => {
-    setAssign(saved?.assignCostId ?? "");
-    setFareText(costLabel(saved?.assignCostId ?? ""));
-    setLines(saved?.fixedCostIds ?? []);
-    setErrors({});
-    setEditing(true);
-  };
-  const cancel = () => {
-    setEditing(false);
-    setErrors({});
-  };
   const save = () => {
     try {
-      fixedCostSummaryService.save(vehicleType, assign, lines);
-      toast.success(`Fixed Cost Summary of ${vehicleType} saved`);
-      setEditing(false);
-      setErrors({});
-    } catch (e) {
-      if (e instanceof BusinessRuleError) setErrors(e.fieldErrors);
-      toast.error(e instanceof Error ? e.message : "Save failed");
+      const rec = fixedCostSummaryService.save(d, source?.id);
+      toast.success(
+        `${costsAll.find((c) => c.id === rec.assignCostId)?.code ?? "Mapping"} ${source ? "saved" : "added"}`,
+      );
+      onClose();
+    } catch (err) {
+      if (err instanceof BusinessRuleError) setErrors(err.fieldErrors);
+      toast.error(err instanceof Error ? err.message : "Save failed");
     }
   };
 
-  // Only Active fixed costs assigned to this vehicle type, and not already used on another line.
-  const optionsFor = (index: number) =>
-    fixed.filter(
-      (f) =>
-        f.status === "Active" &&
-        f.vehicleTypes.some((l) => coversChoice(l, vehicleType)) &&
-        !lines.some((l, i) => i !== index && l === f.id),
-    );
-
-  const rows = shownLines.map((id) => {
-    const f = fixed.find((x) => x.id === id);
-    return { id, f, c: f ? calcFixedCost(f) : null };
-  });
-  const total = rows.reduce((s, r) => s + (r.c?.day ?? 0), 0);
-  const costLabel = (id: string) => {
-    const c = costs.find((x) => x.id === id) ?? costsAll.find((x) => x.id === id);
-    return c ? { code: c.code, name: c.name } : { code: "", name: "" };
-  };
-
-  const exportCsv = () =>
-    downloadFile(
-      `fixed-cost-summary-${vehicleType}.csv`,
-      toCsv(
-        [
-          "Vehicle Type",
-          "Fare Code",
-          "Fare Name",
-          "Fixed Cost Code",
-          "Fixed Cost Name",
-          "Allocation Value",
-          "Year",
-          "Month",
-          "Day",
-        ],
-        [
-          ...rows.map((r) => [
-            vehicleType,
-            costLabel(shownAssign).code,
-            costLabel(shownAssign).name,
-            r.f?.code ?? "",
-            r.f?.name ?? "",
-            ...[r.c?.allocation, r.c?.year, r.c?.month, r.c?.day].map((n) =>
-              n == null ? "" : Math.round(n),
-            ),
-          ]),
-          ["", "", "", "", "Total Fixed Cost", "", "", "", Math.round(total)],
-        ],
-      ),
-    );
-
   return (
-    <div className="space-y-4">
-      <Panel>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-3">
-          <Field label="Vehicle Type" required error={errors["vehicleType"]}>
-            <NativeSelect
-              className="h-10 w-full"
-              value={vehicleType}
-              onChange={pickVehicle}
-              options={withCurrent(vehicleTypes, vehicleType)}
-            />
-          </Field>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>
+            {source ? `Fare Code Mapping · ${current?.code ?? ""}` : "Add Mapping"}
+          </DialogTitle>
+          <DialogDescription>
+            Pick the Fare Code, then the fixed costs booked to it.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
           <Field
             label="Fare Code"
             required
-            error={errors["assignCost"] ?? fareMiss(fareText.code)}
-            info="The Fare Code (Fare Code Management) the Total Fixed Cost of this vehicle type is booked to. Type or pick a code or a name: the other one follows."
+            error={errors["assignCost"] || fareMiss(fareText.code)}
+            className="sm:col-span-3"
           >
-            {editing ? (
-              <SuggestInput
-                value={fareText.code}
-                onChange={(v) => typeFare("code", v)}
-                suggestions={costs.map((c) => c.code)}
-                hint={(code) => costs.find((c) => c.code === code)?.name ?? ""}
-                placeholder="Enter Fare Code"
-                invalid={!!errors["assignCost"] || !!fareMiss(fareText.code)}
-                upper
-                emptyText="No matching Fare Code"
-              />
-            ) : (
-              <Input value={costLabel(shownAssign).code || "—"} disabled />
-            )}
+            <SuggestInput
+              value={fareText.code}
+              onChange={(v) => typeFare("code", v)}
+              suggestions={costs.map((c) => c.code)}
+              hint={(code) => costs.find((c) => c.code === code)?.name ?? ""}
+              placeholder="Enter Fare Code"
+              invalid={!!errors["assignCost"] || !!fareMiss(fareText.code)}
+              upper
+              emptyText="No matching Fare Code"
+            />
           </Field>
-          <Field label="Fare Name" required error={fareMiss(fareText.name)}>
-            {editing ? (
-              <SuggestInput
-                value={fareText.name}
-                onChange={(v) => typeFare("name", v)}
-                suggestions={costs.map((c) => c.name)}
-                hint={(name) => costs.find((c) => c.name === name)?.code ?? ""}
-                placeholder="Enter Fare Name"
-                invalid={!!errors["assignCost"] || !!fareMiss(fareText.name)}
-                emptyText="No matching Fare Name"
-              />
-            ) : (
-              <Input value={costLabel(shownAssign).name || "—"} disabled />
-            )}
+          <Field
+            label="Fare Name"
+            required
+            error={fareMiss(fareText.name)}
+            className="sm:col-span-5"
+          >
+            <SuggestInput
+              value={fareText.name}
+              onChange={(v) => typeFare("name", v)}
+              suggestions={costs.map((c) => c.name)}
+              hint={(name) => costs.find((c) => c.name === name)?.code ?? ""}
+              placeholder="Enter Fare Name"
+              invalid={!!errors["assignCost"] || !!fareMiss(fareText.name)}
+              emptyText="No matching Fare Name"
+            />
+          </Field>
+          <Field label="Remark" className="sm:col-span-4">
+            <Textarea
+              rows={1}
+              maxLength={300}
+              placeholder="Enter Remark"
+              value={d.remark}
+              onChange={(e) => setD((x) => ({ ...x, remark: e.target.value }))}
+              className="min-h-10"
+            />
           </Field>
         </div>
-      </Panel>
 
-      <Panel
-        title="Fixed Cost Lines"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportCsv} disabled={!rows.length}>
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-            {editing ? (
-              <>
-                <Button variant="outline" size="sm" onClick={() => setLines((l) => [...l, ""])}>
-                  <Plus className="h-4 w-4" />
-                  Add Line
-                </Button>
-                <Button variant="outline" size="sm" onClick={cancel}>
-                  <X className="h-4 w-4" />
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={save}>
-                  <Save className="h-4 w-4" />
-                  Save Summary
-                </Button>
-              </>
-            ) : (
-              <Button size="sm" onClick={startEdit}>
-                <Pencil className="h-4 w-4" />
-                Edit
-              </Button>
-            )}
+        <div>
+          <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold">
+                Fixed Costs <span className="text-destructive">*</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                From the Fixed Cost list. A fixed cost is booked to one Fare Code only.
+              </p>
+            </div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search fixed cost..."
+                className="h-9 w-56 pl-8"
+              />
+            </div>
           </div>
-        }
-      >
-        {errors["lines"] && (
-          <p className="mb-3 text-sm font-medium text-destructive">{errors["lines"]}</p>
-        )}
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted text-left">
-                {["Fixed Cost Code", "Fixed Cost Name"].map((h) => (
-                  <th key={h} className={cn(thClass, "min-w-48 px-3 py-2.5")}>
-                    {h}
-                  </th>
-                ))}
-                {["Allocation Value", "Year", "Month", "Day"].map((h) => (
-                  <th key={h} className={cn(thClass, "px-3 py-2.5 text-right")}>
-                    {h}
-                  </th>
-                ))}
-                {editing && <th className={cn(thClass, "w-12")} />}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={editing ? 7 : 6}>
-                    <EmptyState
-                      title={`No fixed cost for ${vehicleType}`}
-                      description={
-                        editing
-                          ? "Use Add Line to pick the fixed costs assigned to this vehicle type."
-                          : "Press Edit, then Add Line to build this summary."
-                      }
-                    />
-                  </td>
+          {errors["lines"] && (
+            <p className="mb-2 text-xs font-medium text-destructive">{errors["lines"]}</p>
+          )}
+          <div className="max-h-80 overflow-y-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-muted text-left">
+                  <th className={cn(thClass, "w-10 px-3 py-2")} />
+                  {["Fixed Cost Code", "Fixed Cost Name", "Cost Type", "Vehicle Type"].map((h) => (
+                    <th key={h} className={cn(thClass, "px-3 py-2")}>
+                      {h}
+                    </th>
+                  ))}
+                  <th className={cn(thClass, "px-3 py-2 text-right")}>Per Day</th>
                 </tr>
-              )}
-              {rows.map((r, i) => {
-                const opts = editing ? optionsFor(i) : [];
-                const ids = ["", ...opts.map((f) => f.id)];
-                const pick = (v: string) => setLines((l) => l.map((x, j) => (j === i ? v : x)));
-                return (
-                  <tr key={`${i}-${r.id}`} className="border-t">
-                    <td className="px-3 py-2">
-                      {editing ? (
-                        <NativeSelect
-                          className="w-full"
-                          value={r.id}
-                          onChange={pick}
-                          options={r.id && !ids.includes(r.id) ? [...ids, r.id] : ids}
-                          labels={{
-                            "": "Select code",
-                            ...Object.fromEntries(fixed.map((f) => [f.id, f.code])),
-                          }}
-                        />
-                      ) : (
-                        <span className="font-semibold text-primary">{r.f?.code ?? "—"}</span>
-                      )}
+              </thead>
+              <tbody>
+                {list.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
+                      No matching Fixed Cost
                     </td>
-                    <td className="px-3 py-2">
-                      {editing ? (
-                        <NativeSelect
-                          className="w-full"
-                          value={r.id}
-                          onChange={pick}
-                          options={r.id && !ids.includes(r.id) ? [...ids, r.id] : ids}
-                          labels={{
-                            "": "Select name",
-                            ...Object.fromEntries(fixed.map((f) => [f.id, f.name])),
-                          }}
-                        />
-                      ) : (
-                        (r.f?.name ?? "—")
-                      )}
-                    </td>
-                    <td className={num}>{fmtMoney(r.c?.allocation)}</td>
-                    <td className={num}>{fmtMoney(r.c?.year)}</td>
-                    <td className={num}>{fmtMoney(r.c?.month)}</td>
-                    <td className={cn(num, "font-semibold")}>{fmtMoney(r.c?.day)}</td>
-                    {editing && (
-                      <td className="px-2 text-center">
-                        <button
-                          type="button"
-                          aria-label="Remove line"
-                          className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => setLines((l) => l.filter((_, j) => j !== i))}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    )}
                   </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t bg-muted/40 font-semibold">
-                <td colSpan={5} className="px-3 py-3 text-right">
-                  Total Fixed Cost (Day)
-                </td>
-                <td className={cn(num, "py-3 text-base text-primary")}>{fmtMoney(total)} ₫</td>
-                {editing && <td />}
-              </tr>
-            </tfoot>
-          </table>
+                )}
+                {list.map((f) => {
+                  const other = otherOf(f.id);
+                  const on = d.fixedCostIds.includes(f.id);
+                  return (
+                    <tr
+                      key={f.id}
+                      className={cn(
+                        "border-t",
+                        other ? "opacity-50" : "cursor-pointer hover:bg-accent/40",
+                        on && "bg-primary/5",
+                      )}
+                      onClick={() => !other && toggle(f.id)}
+                    >
+                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={on}
+                          disabled={!!other}
+                          onCheckedChange={() => toggle(f.id)}
+                          aria-label={`Map ${f.code}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2 font-semibold text-primary">{f.code}</td>
+                      <td className="px-3 py-2">
+                        {f.name}
+                        {other && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            (mapped to {other})
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {f.costType ?? "Allocation"}
+                      </td>
+                      <td className="max-w-48 px-3 py-2 text-xs text-muted-foreground">
+                        {f.vehicleTypes.join(", ") || "—"}
+                      </td>
+                      <td className={num}>{fmtMoney(dayOf(f))}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-2 flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">
+              {picked.length} fixed cost{picked.length === 1 ? "" : "s"} picked
+            </span>
+            <span className="font-semibold">
+              Total / Day: <span className="tabular-nums text-primary">{fmtMoney(total)} ₫</span>
+            </span>
+          </div>
         </div>
-      </Panel>
-    </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={save}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

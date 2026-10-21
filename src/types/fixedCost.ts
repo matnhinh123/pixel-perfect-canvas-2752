@@ -61,11 +61,11 @@ export interface FixedCostRecord extends BaseRecord {
   loan: LoanTerms | null;
 }
 
-/** Fixed Cost Summary of one vehicle type (id = vehicle type). */
+/** Fixed Cost Summary: a Fare Code and the fixed costs mapped to it (one mapping per Fare Code). */
 export interface FixedCostSummaryRecord extends BaseRecord {
-  vehicleType: string;
-  /** Cost master item this summary is assigned to. */
+  /** Fare Code (Fare Code Management) the fixed costs are booked to. */
   assignCostId: string;
-  /** Ordered fixed-cost ids picked for the vehicle type. */
+  /** Ordered fixed-cost ids mapped to the Fare Code. */
   fixedCostIds: string[];
+  remark: string;
 }
