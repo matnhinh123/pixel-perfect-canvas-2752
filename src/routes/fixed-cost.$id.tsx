@@ -216,7 +216,7 @@ function FixedCostForm({
     <Field
       label="Allocation Days"
       error={errors["allocationDays"]}
-      className={S2}
+      className={cn(S2, loan && "lg:col-start-1")}
       info={
         loan
           ? "Days per month for Month → Day: 30 counts interest on a 360-day year."
@@ -384,7 +384,7 @@ function FixedCostForm({
                 emptyText="No matching Fare Code"
               />
             </Field>
-            <Field label="Fare Name" required error={fareMiss(nameText)} className={S4}>
+            <Field label="Fare Name" required error={fareMiss(nameText)} className={S5}>
               <SuggestInput
                 value={nameText}
                 onChange={typeName}
@@ -398,7 +398,7 @@ function FixedCostForm({
             <Field
               label="Cost Type"
               required
-              className={cn(S3, "lg:col-start-1")}
+              className={cn(S2, "lg:col-start-1")}
               info="Allocation: a value spread over a period (depreciation, insurance…). Loan Interest: the interest of a loan taken to buy the asset. Other: an amount per day, entered as is."
             >
               <NativeSelect
@@ -440,7 +440,7 @@ function FixedCostForm({
                   label="Allocation Base"
                   required
                   error={errors["allocationBase"] ?? errors["allocationUnit"]}
-                  className={S3}
+                  className={S2}
                   info={unitNote}
                 >
                   <div className="flex gap-2">
@@ -508,7 +508,7 @@ function FixedCostForm({
                 </Field>
                 <Field
                   label="Repayment Method"
-                  className={S2}
+                  className={S3}
                   info="Annuity: the same payment every month. Equal Principal: the same principal every month plus interest on the balance, so payments go down. Interest Only: interest on the full amount every month, the principal at the end."
                 >
                   <NativeSelect
@@ -640,12 +640,14 @@ function LoanSummary({ schedule: s, currency }: { schedule: LoanSchedule; curren
   ];
   return (
     <div className="sm:col-span-6 lg:col-span-12">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {cards.map(([label, v, main]) => (
+      {/* Same 4-column grid as the Allocation Value / Year / Month / Day cards below. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map(([label, v, main], i) => (
           <div
             key={label}
             className={cn(
               "rounded-lg border px-3.5 py-2.5",
+              i === 0 && "sm:col-span-2",
               main && "border-primary/40 bg-primary/5",
             )}
           >
