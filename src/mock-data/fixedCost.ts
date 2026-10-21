@@ -45,7 +45,6 @@ const fc = (
   costValue: number,
   allocationBase: number,
   allocationUnit: FixedCostRecord["allocationUnit"],
-  vehicleTypes: string[],
   extra: Partial<FixedCostRecord> = {},
 ): FixedCostRecord => ({
   id,
@@ -59,7 +58,6 @@ const fc = (
   exchangeRate: 1,
   allocationBase,
   allocationUnit,
-  vehicleTypes,
   allocationDays: 26,
   loan: null,
   status: "Active",
@@ -68,16 +66,11 @@ const fc = (
 });
 
 export const seedFixedCosts = (): FixedCostRecord[] => [
-  fc("FC-DEP-TRK", "CI-DEP", "FC_DEPRECIATION", "Truck depreciation", 1_200_000_000, 8, "Year", [
-    "TRUCK · 5 tấn",
-    "TRUCK · 8 tấn",
-  ]),
+  fc("FC-DEP-TRK", "CI-DEP", "FC_DEPRECIATION", "Truck depreciation", 1_200_000_000, 8, "Year"),
   // Operating cost of a header + 40 ft trailer per day: depreciation 60 months over 26 days a month,
   // financial cost 6.8 %/year over 360 days a year (30 a month), management 200,000 a day.
-  fc("FC-DEP-HEAD", "CI-DEP", "FC_DEP_HEAD", "Header depreciation", HEAD, 60, "Month", ["HEADER"]),
-  fc("FC-DEP-TRL", "CI-ADP", "FC_DEP_TRAILER", "Trailer depreciation", TRAILER, 60, "Month", [
-    "TRAILER · 40 ft",
-  ]),
+  fc("FC-DEP-HEAD", "CI-DEP", "FC_DEP_HEAD", "Header depreciation", HEAD, 60, "Month"),
+  fc("FC-DEP-TRL", "CI-ADP", "FC_DEP_TRAILER", "Trailer depreciation", TRAILER, 60, "Month"),
   fc(
     "FC-FIN-HEAD",
     "CI-FIN",
@@ -86,7 +79,6 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     interestOf(financing(HEAD)),
     60,
     "Month",
-    ["HEADER"],
     { costType: "Loan Interest", loan: financing(HEAD), allocationDays: 30 },
   ),
   fc(
@@ -97,48 +89,49 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     interestOf(financing(TRAILER)),
     60,
     "Month",
-    ["TRAILER · 40 ft"],
     { costType: "Loan Interest", loan: financing(TRAILER), allocationDays: 30 },
   ),
-  fc("FC-MGMT", "CI-MGT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", ["HEADER"], {
+  fc("FC-MGMT", "CI-MGT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", {
     costType: "Other",
   }),
-  fc("FC-INS", "CI-INU", "FC_INSURANCE", "Vehicle insurance", 36_000_000, 1, "Year", [
-    "TRUCK · 2 tấn",
-    "TRUCK · 5 tấn",
-    "TRUCK · 8 tấn",
-  ]),
-  fc("FC-GPS", "CI-GPS", "FC_GPS", "GPS & camera subscription", 150_000, 1, "Month", [
-    "TRUCK · 5 tấn",
-    "TRUCK · 8 tấn",
-  ]),
-  fc("FC-LICENSE", "CI-IFR", "FC_LICENSE", "Operating license fee", 450_000, 1, "Day", [
-    "TRUCK · 8 tấn · HINO",
-  ]),
-  fc("FC-OLD", "CI-DEP", "FC_TARP", "Tarpaulin set (retired)", 6_000_000, 1, "Year", [], {
+  fc("FC-INS", "CI-INU", "FC_INSURANCE", "Vehicle insurance", 36_000_000, 1, "Year"),
+  fc("FC-GPS", "CI-GPS", "FC_GPS", "GPS & camera subscription", 150_000, 1, "Month"),
+  fc("FC-LICENSE", "CI-IFR", "FC_LICENSE", "Operating license fee", 450_000, 1, "Day"),
+  fc("FC-OLD", "CI-DEP", "FC_TARP", "Tarpaulin set (retired)", 6_000_000, 1, "Year", {
     status: "Inactive",
   }),
 ];
 
-/** Fare Code mappings: which fixed costs are booked to which Fare Code. */
+/** Fare Code mappings: the fixed costs booked to a Fare Code and the vehicles they apply to. */
 const sm = (
   id: string,
   assignCostId: string,
   fixedCostIds: string[],
+  vehicleTypes: string[],
   remark = "",
 ): FixedCostSummaryRecord => ({
   id,
   assignCostId,
   fixedCostIds,
+  vehicleTypes,
   remark,
   status: "Active",
   ...meta,
 });
 
 export const seedFixedCostSummaries = (): FixedCostSummaryRecord[] => [
-  sm("FS-DEP", "CI-DEP", ["FC-DEP-TRK", "FC-DEP-HEAD"], "Vehicle depreciation"),
-  sm("FS-ADP", "CI-ADP", ["FC-DEP-TRL"], "Trailer depreciation"),
-  sm("FS-FIN", "CI-FIN", ["FC-FIN-HEAD", "FC-FIN-TRL"], "Financial cost of the header and trailer"),
-  sm("FS-MGT", "CI-MGT", ["FC-MGMT"]),
-  sm("FS-INU", "CI-INU", ["FC-INS"]),
+  sm(
+    "FS-DEP-TRK",
+    "CI-DEP",
+    ["FC-DEP-TRK"],
+    ["TRUCK · 5 tấn", "TRUCK · 8 tấn"],
+    "Truck depreciation",
+  ),
+  sm("FS-DEP-HEAD", "CI-DEP", ["FC-DEP-HEAD"], ["HEADER"], "Header depreciation"),
+  sm("FS-ADP", "CI-ADP", ["FC-DEP-TRL"], ["TRAILER · 40 ft"]),
+  sm("FS-FIN", "CI-FIN", ["FC-FIN-HEAD", "FC-FIN-TRL"], ["HEADER", "TRAILER · 40 ft"]),
+  sm("FS-MGT", "CI-MGT", ["FC-MGMT"], ["HEADER"]),
+  sm("FS-INU", "CI-INU", ["FC-INS"], ["TRUCK · 2 tấn", "TRUCK · 5 tấn", "TRUCK · 8 tấn"]),
+  sm("FS-GPS", "CI-GPS", ["FC-GPS"], ["TRUCK · 5 tấn", "TRUCK · 8 tấn"]),
+  sm("FS-IFR", "CI-IFR", ["FC-LICENSE"], ["TRUCK · 8 tấn · HINO"]),
 ];

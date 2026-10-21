@@ -59,11 +59,11 @@ export const costItemRepository = createCollection<CostItemRecord>("cost-items.v
 export const cogsRepository = createCollection<CogsRecord>("cogs.v2", seedCogs);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
 export const fixedCostRepository = createCollection<FixedCostRecord>(
-  "fixed-costs.v9",
+  "fixed-costs.v10",
   seedFixedCosts,
 );
 export const fixedCostSummaryRepository = createCollection<FixedCostSummaryRecord>(
-  "fixed-cost-summaries.v7",
+  "fixed-cost-summaries.v8",
   seedFixedCostSummaries,
 );
 /** Location master; Routing stop pickers read active locations from it. */

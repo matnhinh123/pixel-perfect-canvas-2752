@@ -34,7 +34,6 @@ import {
 import { fmtMoney } from "@/services/fixedCostMath";
 import { EMPTY_SCHEDULE, loanSchedule, type LoanSchedule } from "@/services/loanMath";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
-import { FixedCostVehicleRows } from "@/components/movex/cost/FixedCostVehicleRows";
 import { StatusSelect } from "@/components/movex/cost/CostForms";
 import {
   ALLOCATION_UNITS,
@@ -396,12 +395,6 @@ function FixedCostForm({
                 emptyText="No matching Fare Name"
               />
             </Field>
-            <FixedCostVehicleRows
-              value={d.vehicleTypes}
-              onChange={(vehicleTypes) => patch({ vehicleTypes })}
-              readOnly={readOnly}
-              error={errors["vehicleTypes"]}
-            />
             <Field
               label="Cost Type"
               required

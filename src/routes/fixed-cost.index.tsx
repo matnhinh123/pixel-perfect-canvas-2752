@@ -98,25 +98,6 @@ function FixedCostList() {
         value: (f) => f.costType ?? "Allocation",
       },
       {
-        key: "vehicleTypes",
-        label: "Vehicle Type",
-        type: "text",
-        value: (f) => f.vehicleTypes.join(", "),
-        render: (f) =>
-          f.vehicleTypes.length ? (
-            <span className="whitespace-nowrap" title={f.vehicleTypes.join(", ")}>
-              <Tag>{f.vehicleTypes[0]}</Tag>
-              {f.vehicleTypes.length > 1 && (
-                <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                  +{f.vehicleTypes.length - 1}
-                </span>
-              )}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          ),
-      },
-      {
         key: "costValue",
         label: "Cost Value",
         type: "number",
@@ -233,17 +214,7 @@ function FixedCostList() {
       columns={columns}
       searchPlaceholder="Search fixed cost code or name..."
       searchValues={(f) => [f.code, f.name]}
-      quickFilters={[
-        {
-          key: "vehicleType",
-          allLabel: "All vehicle types",
-          options: vehicleTypes.map((v) => ({
-            label: v,
-            conditions: [{ field: "vehicleTypes", operator: "contains", value: v }],
-          })),
-        },
-        statusFilter,
-      ]}
+      quickFilters={[statusFilter]}
       importConfig={fixedCostImportConfig}
       crud={fixedCostCrud}
       allowDelete={false}

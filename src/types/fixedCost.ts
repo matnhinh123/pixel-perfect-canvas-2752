@@ -50,8 +50,6 @@ export interface FixedCostRecord extends BaseRecord {
   exchangeRate: number;
   allocationBase: number;
   allocationUnit: AllocationUnit;
-  /** Optional; empty = not yet assigned, so it appears in no Summary. */
-  vehicleTypes: string[];
   /** Days per month for Month → Day. */
   allocationDays: number;
   /**
@@ -61,11 +59,13 @@ export interface FixedCostRecord extends BaseRecord {
   loan: LoanTerms | null;
 }
 
-/** Fixed Cost Summary: a Fare Code and the fixed costs mapped to it (one mapping per Fare Code). */
+/** Fixed Cost Summary: a Fare Code, the fixed costs booked to it and the vehicles they apply to. */
 export interface FixedCostSummaryRecord extends BaseRecord {
   /** Fare Code (Fare Code Management) the fixed costs are booked to. */
   assignCostId: string;
   /** Ordered fixed-cost ids mapped to the Fare Code. */
   fixedCostIds: string[];
+  /** Vehicles the mapping applies to ("TRUCK · 5 tấn", "HEADER · HINO"…), from the Vehicle master. */
+  vehicleTypes: string[];
   remark: string;
 }

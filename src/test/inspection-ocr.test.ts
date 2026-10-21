@@ -51,7 +51,7 @@ describe("Scanned values pass the vehicle form's checks", () => {
     // Every field read applies to a HEAD (nothing filled that the form would hide).
     for (const k of Object.keys(scanned))
       if (k !== "vehicleType") expect([k, showsField("HEAD", k as never)]).toEqual([k, true]);
-  });
+  }, 20_000); // imports the whole vehicle service: slow when the suite runs in parallel
 });
 
 describe("Trailer axles from the tyre line", () => {

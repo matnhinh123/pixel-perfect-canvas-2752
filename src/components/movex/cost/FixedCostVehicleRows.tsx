@@ -54,8 +54,7 @@ export function FixedCostVehicleRows({
             <Link to="/vehicle" className="text-primary hover:underline">
               Vehicle
             </Link>
-            . Leave Brand on “All brands” to cover every brand. Optional: with no row the cost is
-            listed but used nowhere.
+            . Leave Brand on “All brands” to cover every brand.
           </p>
         </div>
         {!readOnly && (

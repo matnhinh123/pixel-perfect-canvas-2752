@@ -5,6 +5,7 @@ import type {
   CogsOtherCost,
   CostItemRecord,
   FixedCostRecord,
+  FixedCostSummaryRecord,
   RouteRecord,
 } from "@/types";
 import { allocate } from "@/services/fixedCostMath";
@@ -35,6 +36,8 @@ export interface CogsBuildInput {
   fuel: Pick<FuelSetup, "price" | "norms">;
   tollMasters: TollMaster[];
   fixedCosts: FixedCostRecord[];
+  /** Fare Code mappings: a fixed cost applies when its mapping covers the vehicle. */
+  mappings: FixedCostSummaryRecord[];
   costs: CostItemRecord[];
   excluded: readonly string[];
   overrides: Readonly<Record<string, number>>;
@@ -58,11 +61,13 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
     { tables: i.tables, fuel: i.fuel, masters: i.tollMasters, others: {} },
     { group: vt.group, fuelNorm: vt.fuelNorm },
   );
+  const mapped = new Set(
+    i.mappings
+      .filter((m) => !m.deleted && m.vehicleTypes.some((t) => coversCogsVehicle(t, vt)))
+      .flatMap((m) => m.fixedCostIds),
+  );
   const fixedLines: CogsLine[] = i.fixedCosts
-    .filter(
-      (f) =>
-        !f.deleted && f.status === "Active" && f.vehicleTypes.some((t) => coversCogsVehicle(t, vt)),
-    )
+    .filter((f) => !f.deleted && f.status === "Active" && mapped.has(f.id))
     .map((f) => ({
       key: `F:${f.id}`,
       group: "Fixed Cost",

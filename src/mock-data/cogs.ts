@@ -5,7 +5,7 @@ import { seedFuelSetup, seedSalaryRanges } from "@/services/cost/salaryRange";
 import { routeTotals } from "@/services/cost/costMath";
 import { cogsVehicleTypes } from "@/services/cost/cogsVehicle";
 import { seedCostItems } from "./costMaster";
-import { seedFixedCosts } from "./fixedCost";
+import { seedFixedCostSummaries, seedFixedCosts } from "./fixedCost";
 import { seedTollStations } from "./tollCatalog";
 import { seedRoutes } from "./seed";
 import { seedFiveTonTrucks, seedVehicleMasters } from "./vehicleMaster";
@@ -39,6 +39,7 @@ export function seedCogs(): CogsRecord[] {
         fuel: seedFuelSetup(),
         tollMasters: seedTollStations(),
         fixedCosts,
+        mappings: seedFixedCostSummaries(),
         costs,
         excluded: [],
         overrides: {},

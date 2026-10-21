@@ -35,6 +35,7 @@ import { useCollection } from "@/hooks/use-store";
 import {
   costItemRepository,
   fixedCostRepository,
+  fixedCostSummaryRepository,
   routeRepository,
   tollStationRepository,
   vehicleMasterRepository,
@@ -64,6 +65,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   const isNew = !source;
   const routesAll = useCollection(routeRepository);
   const fixedAll = useCollection(fixedCostRepository);
+  const mappings = useCollection(fixedCostSummaryRepository);
   const costsAll = useCollection(costItemRepository);
   const vehiclesAll = useCollection(vehicleMasterRepository);
   const salary = useSalaryRanges();
@@ -109,6 +111,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
           fuel,
           tollMasters,
           fixedCosts: fixedAll,
+          mappings,
           costs,
           excluded: d.excluded,
           overrides: d.overrides,

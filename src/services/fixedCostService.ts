@@ -18,8 +18,8 @@ import { FIXED_COST_RATES } from "@/mock-data/fixedCost";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
 import { CC } from "@/mock-data/commonCodes";
 import { codeOptions } from "./commonCodeService";
-import { fcVehicleErrors, parseFcVehicle, fcVehicleLabel } from "./fixedCostVehicle";
-import { draftImportConfig, listCell, numCell, pick } from "./importExportService";
+import { fcVehicleErrors } from "./fixedCostVehicle";
+import { draftImportConfig, numCell, pick } from "./importExportService";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { allocate, type AllocationResult } from "./fixedCostMath";
@@ -69,7 +69,6 @@ export const newFixedCostDraft = (): FixedCostDraft => ({
   exchangeRate: 1,
   allocationBase: 1,
   allocationUnit: "Year",
-  vehicleTypes: [],
   allocationDays: 30,
   loan: null,
   status: "Active",
@@ -117,8 +116,6 @@ export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string
   else if (all().some((f) => f.id !== id && f.code.toUpperCase() === code))
     e["code"] = `Fixed Cost Code ${code} already exists.`;
   if (!d.name.trim()) e["name"] = "Fixed Cost Name is required.";
-  const vErr = fcVehicleErrors(d.vehicleTypes, vehicleMasterRepository.all());
-  if (vErr) e["vehicleTypes"] = vErr;
   if (d.costType === "Loan Interest") {
     if (!(d.loan && d.loan.amount > 0)) e["loanAmount"] = "Loan Amount must be greater than 0.";
   }
@@ -191,7 +188,6 @@ export const fixedCostService = {
       `${existing.allocationBase} ${existing.allocationUnit}`,
       `${next.allocationBase} ${next.allocationUnit}`,
     );
-    upd("Vehicle Types", existing.vehicleTypes.join(", "), next.vehicleTypes.join(", "));
     upd("Allocation Days", String(existing.allocationDays), String(next.allocationDays));
     if (existing.status !== next.status)
       out.push({
@@ -231,6 +227,7 @@ export const mappedTo = (fixedCostId: string, exceptId?: string) =>
 export interface FixedCostSummaryDraft {
   assignCostId: string;
   fixedCostIds: string[];
+  vehicleTypes: string[];
   remark: string;
 }
 
@@ -240,8 +237,11 @@ export function validateFixedCostSummary(
 ): Record<string, string> {
   const e: Record<string, string> = {};
   if (!d.assignCostId) e["assignCost"] = "Fare Code is required.";
-  else if (liveSummaries().some((s) => s.id !== id && s.assignCostId === d.assignCostId))
-    e["assignCost"] = `${costDetailLabel(d.assignCostId)} is already mapped — open that mapping.`;
+  if (!d.vehicleTypes.length) e["vehicleTypes"] = "Pick at least one Vehicle Type.";
+  else {
+    const vErr = fcVehicleErrors(d.vehicleTypes, vehicleMasterRepository.all());
+    if (vErr) e["vehicleTypes"] = vErr;
+  }
   if (!d.fixedCostIds.length) e["lines"] = "Pick at least one Fixed Cost.";
   else if (d.fixedCostIds.some((l) => fixedCostRepository.get(l)?.status !== "Active"))
     e["lines"] = "Only active Fixed Costs can be mapped — remove the others.";
@@ -301,6 +301,13 @@ export const fixedCostSummaryService = {
         field: "Fixed Costs",
         oldValue: names(existing.fixedCostIds) || "—",
         newValue: names(next.fixedCostIds) || "—",
+      });
+    if ((existing.vehicleTypes ?? []).join(", ") !== next.vehicleTypes.join(", "))
+      out.push({
+        ...base,
+        field: "Vehicle Type",
+        oldValue: (existing.vehicleTypes ?? []).join(", ") || "—",
+        newValue: next.vehicleTypes.join(", ") || "—",
       });
     if ((existing.remark ?? "") !== next.remark)
       out.push({
@@ -380,10 +387,6 @@ const rowDraft = (r: Record<string, string>): FixedCostDraft => {
     exchangeRate: rateOf(currency),
     allocationBase: Number.isNaN(base) ? 0 : base,
     allocationUnit: pick(unit, c.unit) || "Year",
-    vehicleTypes: listCell(r["vehicleTypes"]).map((v) => {
-      const x = parseFcVehicle(v);
-      return x ? fcVehicleLabel(x) : v;
-    }),
     allocationDays: numOr(r["allocationDays"], 30),
     loan: costTypeOfRow(r) === "Loan Interest" ? loanOfRow(r) : null,
     status: pick(r["status"], STATUSES) || "Active",
@@ -411,11 +414,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
     { key: "currency", header: "Currency", example: "VND" },
     { key: "allocationBase", header: "Allocation Base", required: true, example: "8" },
     { key: "allocationUnit", header: "Allocation Base Unit", example: "Year" },
-    {
-      key: "vehicleTypes",
-      header: "Vehicle Type",
-      example: "TRUCK · 5 tấn; HEADER · HINO",
-    },
     { key: "allocationDays", header: "Allocation Days", example: "30" },
     { key: "loanAmount", header: "Loan Amount", example: "" },
     { key: "loanRate", header: "Interest Rate (%/year)", example: "" },
@@ -451,16 +449,16 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   save: (d) => fixedCostService.save(d),
   rollback: (ids) => fixedCostCrud.removeMany(ids),
   sampleRows: () => {
-    const plan: [string, string, string, string, string][] = [
-      // fare, value, base, unit, vehicle types
-      ["DEP", "900000000", "8", "Year", "TRUCK · 5 tấn"],
-      ["INU", "24000000", "1", "Year", "TRUCK · 2 tấn; TRUCK · 5 tấn · HINO"],
-      ["FIN", "12000000", "1", "Month", "HEADER; TRAILER · 40 ft"],
-      ["GPS", "120000", "1", "Month", "TRUCK · 8 tấn"],
-      ["IFR", "450000", "1", "Day", "HEADER · HYUNDAI"],
+    const plan: [string, string, string, string][] = [
+      // fare, value, base, unit
+      ["DEP", "900000000", "8", "Year"],
+      ["INU", "24000000", "1", "Year"],
+      ["FIN", "12000000", "1", "Month"],
+      ["GPS", "120000", "1", "Month"],
+      ["IFR", "450000", "1", "Day"],
     ];
     const rows = Array.from({ length: 20 }, (_, i) => {
-      const [fare, value, base, unit, vts] = plan[i % plan.length]!;
+      const [fare, value, base, unit] = plan[i % plan.length]!;
       const n = String(i + 1).padStart(2, "0");
       return [
         fare,
@@ -472,7 +470,6 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         "VND",
         base,
         unit,
-        vts,
         "26",
         ...(fare === "FIN" ? ["1680000000", "10.5", "60", "Annuity"] : ["", "", "", ""]),
         "Active",

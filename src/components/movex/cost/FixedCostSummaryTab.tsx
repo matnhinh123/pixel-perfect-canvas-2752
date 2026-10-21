@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState, Field, Panel, Tag, thClass } from "@/components/movex/common";
 import { SuggestInput } from "@/components/movex/general/SuggestInput";
+import { FixedCostVehicleRows } from "@/components/movex/cost/FixedCostVehicleRows";
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import { useCollection } from "@/hooks/use-store";
 import {
@@ -38,9 +39,6 @@ import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
 const num = "px-3 py-2 text-right tabular-nums";
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const dayOf = (f: FixedCostRecord | undefined) => (f ? (calcFixedCost(f).day ?? 0) : 0);
-const unionVehicles = (list: FixedCostRecord[]) => [
-  ...new Set(list.flatMap((f) => f.vehicleTypes)),
-];
 
 export function FixedCostSummaryTab() {
   const confirm = useConfirm();
@@ -64,7 +62,7 @@ export function FixedCostSummaryTab() {
             s,
             fare,
             items,
-            vehicles: unionVehicles(items),
+            vehicles: s.vehicleTypes ?? [],
             total: items.reduce((t, f) => t + dayOf(f), 0),
           };
         })
@@ -239,6 +237,7 @@ function MappingDialog({
   const [d, setD] = useState<FixedCostSummaryDraft>({
     assignCostId: source?.assignCostId ?? "",
     fixedCostIds: [...(source?.fixedCostIds ?? [])],
+    vehicleTypes: [...(source?.vehicleTypes ?? [])],
     remark: source?.remark ?? "",
   });
   const [fareText, setFareText] = useState({
@@ -273,11 +272,11 @@ function MappingDialog({
     }));
     setErrors((e) => ({ ...e, lines: "" }));
   };
+  const fareCodeOf = (f: FixedCostRecord) =>
+    costsAll.find((c) => c.id === f.costDetailId)?.code ?? "";
   const list = fixed.filter((f) => {
     const n = fold(q.trim());
-    return (
-      !n || fold(`${f.code} ${f.name} ${f.localName ?? ""} ${f.vehicleTypes.join(" ")}`).includes(n)
-    );
+    return !n || fold(`${f.code} ${f.name} ${f.localName ?? ""} ${fareCodeOf(f)}`).includes(n);
   });
   const picked = fixed.filter((f) => d.fixedCostIds.includes(f.id));
   const total = picked.reduce((t, f) => t + dayOf(f), 0);
@@ -303,7 +302,7 @@ function MappingDialog({
             {source ? `Fare Code Mapping · ${current?.code ?? ""}` : "Add Mapping"}
           </DialogTitle>
           <DialogDescription>
-            Pick the Fare Code, then the fixed costs booked to it.
+            Pick the Fare Code, the vehicles it applies to, then the fixed costs booked to it.
           </DialogDescription>
         </DialogHeader>
 
@@ -353,6 +352,16 @@ function MappingDialog({
           </Field>
         </div>
 
+        <FixedCostVehicleRows
+          value={d.vehicleTypes}
+          onChange={(vehicleTypes) => {
+            setD((x) => ({ ...x, vehicleTypes }));
+            setErrors((e) => ({ ...e, vehicleTypes: "" }));
+          }}
+          readOnly={false}
+          error={errors["vehicleTypes"] || undefined}
+        />
+
         <div>
           <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -381,7 +390,7 @@ function MappingDialog({
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted text-left">
                   <th className={cn(thClass, "w-10 px-3 py-2")} />
-                  {["Fixed Cost Code", "Fixed Cost Name", "Cost Type", "Vehicle Type"].map((h) => (
+                  {["Fixed Cost Code", "Fixed Cost Name", "Cost Type", "Fare Code"].map((h) => (
                     <th key={h} className={cn(thClass, "px-3 py-2")}>
                       {h}
                     </th>
@@ -430,8 +439,8 @@ function MappingDialog({
                       <td className="px-3 py-2 text-muted-foreground">
                         {f.costType ?? "Allocation"}
                       </td>
-                      <td className="max-w-48 px-3 py-2 text-xs text-muted-foreground">
-                        {f.vehicleTypes.join(", ") || "—"}
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {fareCodeOf(f) || "—"}
                       </td>
                       <td className={num}>{fmtMoney(dayOf(f))}</td>
                     </tr>
