@@ -395,7 +395,7 @@ function MappingDialog({
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted text-left">
-                  {["Internal Cost Code", "Internal Cost Name", "Cost Type", "Also Mapped To"].map(
+                  {["Internal Cost Code", "Internal Cost Name", "Fee Type", "Also Mapped To"].map(
                     (h) => (
                       <th key={h} className={cn(thClass, "px-3 py-2")}>
                         {h}

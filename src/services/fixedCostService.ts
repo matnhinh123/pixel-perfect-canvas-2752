@@ -85,7 +85,7 @@ export const draftOfFixedCost = (f: FixedCostRecord): FixedCostDraft => {
 };
 
 /**
- * Fields that follow the Cost Type. Loan Interest: Cost Value = total interest of the loan, spread
+ * Fields that follow the Fee Type. Loan Interest: Cost Value = total interest of the loan, spread
  * over its term in months. Other: the value is an amount per day. Allocation: no loan.
  */
 export const applyCostType = <T extends FixedCostDraft>(d: T): T =>
@@ -174,7 +174,7 @@ export const fixedCostService = {
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
     upd("Internal Cost Name (EN)", existing.name, next.name);
     upd("Internal Cost Name (Local)", existing.localName ?? "", next.localName);
-    upd("Cost Type", existing.costType ?? "Allocation", next.costType);
+    upd("Fee Type", existing.costType ?? "Allocation", next.costType);
     upd("Loan", loanLabel(existing.loan), loanLabel(next.loan));
     upd(
       "Cost Value",
@@ -360,7 +360,7 @@ const loanOfRow = (r: Record<string, string>): LoanTerms | null =>
       }
     : null;
 
-/** Cost Type column, or Loan Interest when a loan amount is given, else Allocation. */
+/** Fee Type column, or Loan Interest when a loan amount is given, else Allocation. */
 const costTypeOfRow = (r: Record<string, string>): FixedCostType =>
   pick(r["costType"], FIXED_COST_TYPES) ||
   ((r["loanAmount"] ?? "").trim() ? "Loan Interest" : "Allocation");
@@ -412,7 +412,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       aliases: ["Fixed Cost Name (Local)"],
       example: "Khấu hao xe 5 tấn",
     },
-    { key: "costType", header: "Cost Type", example: "Allocation" },
+    { key: "costType", header: "Fee Type", example: "Allocation", aliases: ["Cost Type"] },
     { key: "costValue", header: "Cost Value", example: "900000000" },
     { key: "currency", header: "Currency", example: "VND" },
     { key: "allocationBase", header: "Allocation Base", required: true, example: "8" },
@@ -476,7 +476,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       ];
     });
     rows[3]![0] = "FC_IMP_01"; // duplicate in the file
-    rows[11]![3] = "Lease"; // unknown Cost Type
+    rows[11]![3] = "Lease"; // unknown Fee Type
     return rows;
   },
 });

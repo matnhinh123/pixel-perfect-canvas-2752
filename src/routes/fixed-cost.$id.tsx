@@ -123,7 +123,7 @@ function FixedCostForm({
     });
   };
 
-  // Cost Type: Allocation (value ÷ base ÷ days), Loan Interest (total interest ÷ term ÷ days) or
+  // Fee Type: Allocation (value ÷ base ÷ days), Loan Interest (total interest ÷ term ÷ days) or
   // Other (an amount per day).
   const loan = useMemo(() => (d.loan ? loanSchedule(d.loan) : EMPTY_SCHEDULE), [d.loan]);
   const clearPriceErrors = () =>
@@ -140,7 +140,7 @@ function FixedCostForm({
         delete n[k];
       return n;
     });
-  /** Applies a Cost Type / loan change and the fields that follow it. */
+  /** Applies a Fee Type / loan change and the fields that follow it. */
   const reprice = (p: Partial<FixedCostDraft>) => {
     const next = applyCostType({ ...d, ...p });
     patch({
@@ -341,7 +341,7 @@ function FixedCostForm({
               />
             </Field>
             <Field
-              label="Cost Type"
+              label="Fee Type"
               required
               className={cn(S3, "lg:col-start-1")}
               info="Allocation: a value spread over a period (depreciation, insurance…). Loan Interest: the interest of a loan taken to buy the asset. Other: an amount per day, entered as is."

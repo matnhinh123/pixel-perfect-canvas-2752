@@ -105,7 +105,7 @@ function FixedCostList() {
       },
       {
         key: "costType",
-        label: "Cost Type",
+        label: "Fee Type",
         type: "enum",
         options: ["Allocation", "Loan Interest", "Other"],
         value: (f) => f.costType ?? "Allocation",
