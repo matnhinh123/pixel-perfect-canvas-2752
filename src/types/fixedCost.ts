@@ -26,6 +26,13 @@ export interface LoanTerms {
   method: RepaymentMethod;
 }
 
+/**
+ * How a fixed cost is priced. Allocation: a value spread over a period (depreciation, insurance…).
+ * Loan Interest: the interest of a loan. Other: an amount per day entered as is.
+ */
+export type FixedCostType = "Allocation" | "Loan Interest" | "Other";
+export const FIXED_COST_TYPES: readonly FixedCostType[] = ["Allocation", "Loan Interest", "Other"];
+
 /** One fixed-cost line (depreciation, insurance, interest, GPS…) with its allocation settings. */
 export interface FixedCostRecord extends BaseRecord {
   /** Cost Detail (Master Data > Cost) this fixed cost is booked to. */
@@ -35,6 +42,8 @@ export interface FixedCostRecord extends BaseRecord {
   name: string;
   /** Fixed Cost Name (Local), optional. */
   localName: string;
+  costType: FixedCostType;
+  /** Allocation: the value to spread. Loan Interest: total interest. Other: amount per day. */
   costValue: number;
   currency: string;
   /** Rate to VND on the day it was saved (1 for VND). */
@@ -46,7 +55,7 @@ export interface FixedCostRecord extends BaseRecord {
   /** Days per month for Month → Day. */
   allocationDays: number;
   /**
-   * Loan interest: when set, Cost Value = total interest of the loan, spread over its term
+   * Loan Interest only: Cost Value = total interest of the loan, spread over its term
    * (Allocation Base = term, unit Month).
    */
   loan: LoanTerms | null;

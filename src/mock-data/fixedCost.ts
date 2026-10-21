@@ -53,6 +53,7 @@ const fc = (
   code,
   name,
   localName: LOCAL_NAMES[id] ?? "",
+  costType: "Allocation",
   costValue,
   currency: "VND",
   exchangeRate: 1,
@@ -86,7 +87,7 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     60,
     "Month",
     ["HEADER"],
-    { loan: financing(HEAD), allocationDays: 30 },
+    { costType: "Loan Interest", loan: financing(HEAD), allocationDays: 30 },
   ),
   fc(
     "FC-FIN-TRL",
@@ -97,9 +98,11 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
     60,
     "Month",
     ["TRAILER · 40 ft"],
-    { loan: financing(TRAILER), allocationDays: 30 },
+    { costType: "Loan Interest", loan: financing(TRAILER), allocationDays: 30 },
   ),
-  fc("FC-MGMT", "CI-MGT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", ["HEADER"]),
+  fc("FC-MGMT", "CI-MGT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", ["HEADER"], {
+    costType: "Other",
+  }),
   fc("FC-INS", "CI-INU", "FC_INSURANCE", "Vehicle insurance", 36_000_000, 1, "Year", [
     "TRUCK · 2 tấn",
     "TRUCK · 5 tấn",

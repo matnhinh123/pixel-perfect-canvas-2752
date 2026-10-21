@@ -91,6 +91,13 @@ function FixedCostList() {
         value: (f) => f.localName ?? "",
       },
       {
+        key: "costType",
+        label: "Cost Type",
+        type: "enum",
+        options: ["Allocation", "Loan Interest", "Other"],
+        value: (f) => f.costType ?? "Allocation",
+      },
+      {
         key: "vehicleTypes",
         label: "Vehicle Type",
         type: "text",

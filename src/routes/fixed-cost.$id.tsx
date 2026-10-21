@@ -6,7 +6,6 @@ import { History, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
 import { SuggestInput } from "@/components/movex/general/SuggestInput";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
@@ -24,7 +23,7 @@ import { useCollection } from "@/hooks/use-store";
 import { costItemRepository, fixedCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
-  applyLoan,
+  applyCostType,
   calcFixedCost,
   draftOfFixedCost,
   fixedCostService,
@@ -39,8 +38,10 @@ import { FixedCostVehicleRows } from "@/components/movex/cost/FixedCostVehicleRo
 import { StatusSelect } from "@/components/movex/cost/CostForms";
 import {
   ALLOCATION_UNITS,
+  FIXED_COST_TYPES,
   REPAYMENT_METHODS,
   type FixedCostRecord,
+  type FixedCostType,
   type LoanTerms,
   type RepaymentMethod,
 } from "@/types";
@@ -151,29 +152,51 @@ function FixedCostForm({
   /** Typed text that matches no Fare Code. */
   const fareMiss = (text: string) =>
     text.trim() && !d.costDetailId ? "Not found in Fare Code Management." : undefined;
-  // Loan interest: Cost Value = total interest, Allocation Base = term (months).
-  const loanOn = !!d.loan;
+  // Cost Type: Allocation (value ÷ base ÷ days), Loan Interest (total interest ÷ term ÷ days) or
+  // Other (an amount per day).
   const loan = useMemo(() => (d.loan ? loanSchedule(d.loan) : EMPTY_SCHEDULE), [d.loan]);
-  const clearLoanErrors = () =>
+  const clearPriceErrors = () =>
     setErrors((e) => {
       const n = { ...e };
-      for (const k of ["loanAmount", "loanRate", "loanTerm", "costValue", "allocationBase"])
+      for (const k of [
+        "loanAmount",
+        "loanRate",
+        "loanTerm",
+        "costValue",
+        "allocationBase",
+        "allocationDays",
+      ])
         delete n[k];
       return n;
     });
-  const withLoan = (l: LoanTerms | null) => {
-    const next = applyLoan({ ...d, loan: l });
+  /** Applies a Cost Type / loan change and the fields that follow it. */
+  const reprice = (p: Partial<FixedCostDraft>) => {
+    const next = applyCostType({ ...d, ...p });
     patch({
-      loan: l,
+      costType: next.costType,
+      loan: next.loan,
       costValue: next.costValue,
       allocationBase: next.allocationBase,
       allocationUnit: next.allocationUnit,
     });
-    clearLoanErrors();
+    clearPriceErrors();
   };
-  const toggleLoan = (on: boolean) =>
-    withLoan(on ? { amount: 0, ratePct: 0, termMonths: 60, method: "Annuity" } : null);
-  const setLoan = (p: Partial<LoanTerms>) => d.loan && withLoan({ ...d.loan, ...p });
+  const setCostType = (t: FixedCostType) =>
+    t === d.costType
+      ? undefined
+      : reprice({
+          costType: t,
+          // Start the value fresh: a loan's interest or a daily amount means something else.
+          costValue: 0,
+          allocationBase: 1,
+          allocationUnit: t === "Other" ? "Day" : "Year",
+          allocationDays: t === "Loan Interest" ? 30 : d.allocationDays || 26,
+          loan:
+            t === "Loan Interest"
+              ? (d.loan ?? { amount: 0, ratePct: 0, termMonths: 60, method: "Interest Only" })
+              : null,
+        });
+  const setLoan = (p: Partial<LoanTerms>) => d.loan && reprice({ loan: { ...d.loan, ...p } });
   const calc = calcFixedCost({ ...d, exchangeRate: rateOf(d.currency) });
 
   /** Number input kept as text-friendly: empty string → 0 so validation flags it. */
@@ -190,6 +213,23 @@ function FixedCostForm({
     "aria-invalid": !!errors[k] || undefined,
     ...extra,
   });
+  const daysField = (disabled: boolean, loan = false) => (
+    <Field
+      label="Allocation Days"
+      error={errors["allocationDays"]}
+      className={S2}
+      info={
+        loan
+          ? "Days per month for Month → Day: 30 counts interest on a 360-day year."
+          : "Days per month for Month → Day (e.g. 26 working days)."
+      }
+    >
+      <div className="flex items-center gap-2">
+        <Input className={cn("w-16", NUM)} {...numInput("allocationDays", { disabled })} />
+        <span className="text-sm text-muted-foreground">days</span>
+      </div>
+    </Field>
+  );
   const select = (
     k: "currency" | "allocationUnit",
     options: readonly string[],
@@ -363,85 +403,82 @@ function FixedCostForm({
               error={errors["vehicleTypes"]}
             />
             <Field
-              label="Cost Value"
+              label="Cost Type"
               required
-              error={errors["costValue"]}
               className={cn(S3, "lg:col-start-1")}
-              hint={
-                loanOn
-                  ? "= total interest of the loan"
-                  : d.currency !== "VND"
+              info="Allocation: a value spread over a period (depreciation, insurance…). Loan Interest: the interest of a loan taken to buy the asset. Other: an amount per day, entered as is."
+            >
+              <NativeSelect
+                value={d.costType}
+                onChange={(v) => setCostType(v as FixedCostType)}
+                options={FIXED_COST_TYPES}
+                className="h-10 w-full"
+              />
+            </Field>
+            {d.costType !== "Loan Interest" && (
+              <Field
+                label={d.costType === "Other" ? "Value / Day" : "Cost Value"}
+                required
+                error={errors["costValue"]}
+                className={S3}
+                hint={
+                  d.currency !== "VND"
                     ? `1 ${d.currency} = ${fmtMoney(rate)} ₫ (exchange rate)`
                     : undefined
-              }
-            >
-              <div className="flex gap-2">
-                <MoneyInput
-                  value={d.costValue}
-                  decimals={d.currency === "VND" ? 0 : 2}
-                  onChange={(costValue) => patch({ costValue })}
-                  invalid={!!errors["costValue"]}
-                  disabled={loanOn}
-                />
-                <NativeSelect {...select("currency", COST_CURRENCIES, "")} className="h-10 w-24" />
-              </div>
-            </Field>
-            <Field
-              label="Allocation Base"
-              required
-              error={errors["allocationBase"] ?? errors["allocationUnit"]}
-              className={S3}
-              info={unitNote}
-              hint={loanOn ? "= loan term" : undefined}
-            >
-              <div className="flex gap-2">
-                <Input
-                  placeholder="8"
-                  className={cn("w-16", NUM)}
-                  {...numInput("allocationBase", { disabled: loanOn })}
-                />
-                <NativeSelect
-                  {...select("allocationUnit", withCurrent(units, d.allocationUnit), "Unit")}
-                  disabled={loanOn}
-                  className="h-10 flex-1"
-                />
-              </div>
-            </Field>
-            <Field
-              label="Allocation Days"
-              error={errors["allocationDays"]}
-              className={S2}
-              info="Days per month used for Month → Day (e.g. 26 working days; 30 for a 360-day year)."
-            >
-              <div className="flex items-center gap-2">
-                <Input
-                  className={cn("w-16", NUM)}
-                  {...numInput("allocationDays", { disabled: d.allocationUnit === "Day" })}
-                />
-                <span className="text-sm text-muted-foreground">days</span>
-              </div>
-            </Field>
-            <Field
-              label="Loan Interest"
-              className={cn(S2, "lg:col-start-1")}
-              info="ON when the asset is bought on credit: the interest of the loan is the fixed cost (the principal is covered by depreciation)."
-            >
-              <label className="flex h-10 cursor-pointer items-center gap-3 group-disabled:cursor-default">
-                <Switch checked={loanOn} onCheckedChange={toggleLoan} />
-                <span className="text-sm">{loanOn ? "ON" : "OFF"}</span>
-              </label>
-            </Field>
-            {d.loan && (
+                }
+              >
+                <div className="flex gap-2">
+                  <MoneyInput
+                    value={d.costValue}
+                    decimals={d.currency === "VND" ? 0 : 2}
+                    onChange={(costValue) => patch({ costValue })}
+                    invalid={!!errors["costValue"]}
+                  />
+                  <NativeSelect
+                    {...select("currency", COST_CURRENCIES, "")}
+                    className="h-10 w-24"
+                  />
+                </div>
+              </Field>
+            )}
+            {d.costType === "Allocation" && (
+              <>
+                <Field
+                  label="Allocation Base"
+                  required
+                  error={errors["allocationBase"] ?? errors["allocationUnit"]}
+                  className={S3}
+                  info={unitNote}
+                >
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="8"
+                      className={cn("w-16", NUM)}
+                      {...numInput("allocationBase")}
+                    />
+                    <NativeSelect
+                      {...select("allocationUnit", withCurrent(units, d.allocationUnit), "Unit")}
+                      className="h-10 flex-1"
+                    />
+                  </div>
+                </Field>
+                {daysField(d.allocationUnit === "Day")}
+              </>
+            )}
+            {d.costType === "Loan Interest" && d.loan && (
               <>
                 <Field label="Loan Amount" required error={errors["loanAmount"]} className={S3}>
-                  <div className="flex items-center gap-2">
+                  <div className="flex gap-2">
                     <MoneyInput
                       value={d.loan.amount}
                       decimals={d.currency === "VND" ? 0 : 2}
                       onChange={(amount) => setLoan({ amount })}
                       invalid={!!errors["loanAmount"]}
                     />
-                    <span className="text-sm text-muted-foreground">{d.currency}</span>
+                    <NativeSelect
+                      {...select("currency", COST_CURRENCIES, "")}
+                      className="h-10 w-24"
+                    />
                   </div>
                 </Field>
                 <Field label="Interest Rate" required error={errors["loanRate"]} className={S2}>
@@ -451,7 +488,7 @@ function FixedCostForm({
                       inputMode="decimal"
                       min={0}
                       step="any"
-                      placeholder="10.5"
+                      placeholder="6.8"
                       value={d.loan.ratePct || ""}
                       aria-invalid={!!errors["loanRate"] || undefined}
                       onChange={(e) => setLoan({ ratePct: Number(e.target.value) || 0 })}
@@ -478,8 +515,8 @@ function FixedCostForm({
                 </Field>
                 <Field
                   label="Repayment Method"
-                  className={S3}
-                  info="Annuity: the same payment every month. Equal Principal: the same principal every month plus interest on the balance still owed, so payments go down."
+                  className={S2}
+                  info="Annuity: the same payment every month. Equal Principal: the same principal every month plus interest on the balance, so payments go down. Interest Only: interest on the full amount every month, the principal at the end."
                 >
                   <NativeSelect
                     value={d.loan.method}
@@ -488,6 +525,7 @@ function FixedCostForm({
                     className="h-10 w-full"
                   />
                 </Field>
+                {daysField(false, true)}
                 <LoanSummary schedule={loan} currency={d.currency} />
               </>
             )}

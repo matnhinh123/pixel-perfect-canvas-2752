@@ -1,7 +1,9 @@
 // Master Data > Cost > Fixed Cost: fixed-cost lines + the per-vehicle-type Summary.
 import {
   ALLOCATION_UNITS,
+  FIXED_COST_TYPES,
   type AllocationUnit,
+  type FixedCostType,
   type FixedCostRecord,
   type FixedCostSummaryRecord,
 } from "@/types";
@@ -61,6 +63,7 @@ export const newFixedCostDraft = (): FixedCostDraft => ({
   code: "",
   name: "",
   localName: "",
+  costType: "Allocation",
   costValue: 0,
   currency: "VND",
   exchangeRate: 1,
@@ -75,19 +78,29 @@ export const newFixedCostDraft = (): FixedCostDraft => ({
 export const draftOfFixedCost = (f: FixedCostRecord): FixedCostDraft => {
   const { id, deleted, createdAt, createdBy, updatedAt, updatedBy, ...d } = f;
   void [id, deleted, createdAt, createdBy, updatedAt, updatedBy];
-  return { ...d, localName: d.localName ?? "", loan: d.loan ? { ...d.loan } : null };
+  return {
+    ...d,
+    localName: d.localName ?? "",
+    costType: d.costType ?? (d.loan ? "Loan Interest" : "Allocation"),
+    loan: d.loan ? { ...d.loan } : null,
+  };
 };
 
-/** A loan's cost is its total interest, spread over its term in months. */
-export const applyLoan = <T extends FixedCostDraft>(d: T): T =>
-  d.loan
+/**
+ * Fields that follow the Cost Type. Loan Interest: Cost Value = total interest of the loan, spread
+ * over its term in months. Other: the value is an amount per day. Allocation: no loan.
+ */
+export const applyCostType = <T extends FixedCostDraft>(d: T): T =>
+  d.costType === "Loan Interest" && d.loan
     ? {
         ...d,
         costValue: Math.round(loanSchedule(d.loan).totalInterest),
         allocationBase: d.loan.termMonths,
         allocationUnit: "Month",
       }
-    : d;
+    : d.costType === "Other"
+      ? { ...d, loan: null, allocationBase: 1, allocationUnit: "Day" }
+      : { ...d, loan: null };
 
 export const loanLabel = (l: LoanTerms | null | undefined) =>
   l
@@ -106,8 +119,10 @@ export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string
   if (!d.name.trim()) e["name"] = "Fixed Cost Name is required.";
   const vErr = fcVehicleErrors(d.vehicleTypes, vehicleMasterRepository.all());
   if (vErr) e["vehicleTypes"] = vErr;
-  if (d.loan) {
-    if (!(d.loan.amount > 0)) e["loanAmount"] = "Loan Amount must be greater than 0.";
+  if (d.costType === "Loan Interest") {
+    if (!(d.loan && d.loan.amount > 0)) e["loanAmount"] = "Loan Amount must be greater than 0.";
+  }
+  if (d.costType === "Loan Interest" && d.loan) {
     if (!(d.loan.ratePct > 0 && d.loan.ratePct <= 100))
       e["loanRate"] = "Interest Rate must be above 0 and at most 100 %/year.";
     if (!(
@@ -116,9 +131,15 @@ export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string
       d.loan.termMonths <= 360
     ))
       e["loanTerm"] = "Loan Term must be 1 – 360 months.";
-  } else if (!(d.costValue > 0)) e["costValue"] = "Cost Value must be greater than 0.";
-  if (!(d.allocationBase > 0)) e["allocationBase"] = "Allocation Base must be greater than 0.";
-  if (!d.allocationUnit) e["allocationUnit"] = "Allocation Base Unit is required.";
+  } else if (d.costType !== "Loan Interest" && !(d.costValue > 0))
+    e["costValue"] =
+      d.costType === "Other"
+        ? "Value must be greater than 0."
+        : "Cost Value must be greater than 0.";
+  if (d.costType === "Allocation") {
+    if (!(d.allocationBase > 0)) e["allocationBase"] = "Allocation Base must be greater than 0.";
+    if (!d.allocationUnit) e["allocationUnit"] = "Allocation Base Unit is required.";
+  }
   if (d.allocationUnit !== "Day" && !(d.allocationDays > 0))
     e["allocationDays"] = "Allocation Days must be greater than 0.";
   return e;
@@ -130,7 +151,7 @@ export const fixedCostService = {
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please check the highlighted fields.", errors);
     const clean: FixedCostDraft = {
-      ...applyLoan(d),
+      ...applyCostType(d),
       code: d.code.trim().toUpperCase(),
       name: d.name.trim(),
       localName: d.localName.trim(),
@@ -157,6 +178,7 @@ export const fixedCostService = {
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
     upd("Fixed Cost Name (EN)", existing.name, next.name);
     upd("Fixed Cost Name (Local)", existing.localName ?? "", next.localName);
+    upd("Cost Type", existing.costType ?? "Allocation", next.costType);
     upd("Loan", loanLabel(existing.loan), loanLabel(next.loan));
     upd("Fare Code", existing.costDetailId, next.costDetailId);
     upd(
@@ -288,7 +310,12 @@ const loanOfRow = (r: Record<string, string>): LoanTerms | null =>
       }
     : null;
 
-const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => applyLoan(rowDraft(r));
+/** Cost Type column, or Loan Interest when a loan amount is given, else Allocation. */
+const costTypeOfRow = (r: Record<string, string>): FixedCostType =>
+  pick(r["costType"], FIXED_COST_TYPES) ||
+  ((r["loanAmount"] ?? "").trim() ? "Loan Interest" : "Allocation");
+const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft =>
+  applyCostType(rowDraft(r));
 const rowDraft = (r: Record<string, string>): FixedCostDraft => {
   const c = choices();
   const { base, unit } = baseOf(r);
@@ -298,6 +325,7 @@ const rowDraft = (r: Record<string, string>): FixedCostDraft => {
     code: (r["code"] ?? "").trim().toUpperCase(),
     name: (r["name"] ?? "").trim(),
     localName: (r["localName"] ?? "").trim(),
+    costType: costTypeOfRow(r),
     costValue: numOr(r["costValue"], 0),
     currency,
     exchangeRate: rateOf(currency),
@@ -308,7 +336,7 @@ const rowDraft = (r: Record<string, string>): FixedCostDraft => {
       return x ? fcVehicleLabel(x) : v;
     }),
     allocationDays: numOr(r["allocationDays"], 30),
-    loan: loanOfRow(r),
+    loan: costTypeOfRow(r) === "Loan Interest" ? loanOfRow(r) : null,
     status: pick(r["status"], STATUSES) || "Active",
   };
 };
@@ -329,7 +357,8 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       aliases: ["Fixed Cost Name"],
     },
     { key: "localName", header: "Fixed Cost Name (Local)", example: "Khấu hao xe 5 tấn" },
-    { key: "costValue", header: "Cost Value", required: true, example: "900000000" },
+    { key: "costType", header: "Cost Type", example: "Allocation" },
+    { key: "costValue", header: "Cost Value", example: "900000000" },
     { key: "currency", header: "Currency", example: "VND" },
     { key: "allocationBase", header: "Allocation Base", required: true, example: "8" },
     { key: "allocationUnit", header: "Allocation Base Unit", example: "Year" },
@@ -351,6 +380,8 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
     const e: { field: string; error: string }[] = [];
     if (r["costDetail"] && !fareIdOf(r["costDetail"]))
       e.push({ field: "costDetail", error: "Fare Code not found in Fare Code Management" });
+    if (pick(r["costType"], FIXED_COST_TYPES) === undefined)
+      e.push({ field: "costType", error: `Use one of: ${FIXED_COST_TYPES.join(", ")}` });
     if (pick(r["currency"], c.currency) === undefined)
       e.push({ field: "currency", error: `Use one of: ${c.currency.join(", ")}` });
     const { base, unit } = baseOf(r);
@@ -387,6 +418,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         `FC_IMP_${n}`,
         `Imported fixed cost ${n}`,
         `Chi phí cố định nhập mẫu ${n}`,
+        fare === "FIN" ? "Loan Interest" : "Allocation",
         value,
         "VND",
         base,
