@@ -223,6 +223,82 @@ select:disabled.select-chevron {
   background-image: none;
 }
 
+/*
+ * Option list of a native <select>: rounded panel and rows, like the other dropdowns. Browsers
+ * with customizable selects only (Chrome / Edge); the others keep their own list.
+ */
+@supports (appearance: base-select) {
+  select:not(:disabled) {
+    appearance: base-select;
+    /* Keep the closed box as before: one line, centred vertically. */
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* NativeSelect's <button><selectedcontent>: the chosen option on one line, cut with "…". */
+  select > button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+  }
+  select > button > selectedcontent {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* .select-chevron draws the design chevron itself. */
+  select.select-chevron::picker-icon {
+    display: none;
+  }
+  /* Other selects: the same chevron instead of the browser's triangle. */
+  select:not(.select-chevron)::picker-icon {
+    content: "";
+    width: 14px;
+    height: 14px;
+    margin-inline-start: 6px;
+    background: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2714%27 height=%2714%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%2364748b%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E")
+      center / 14px no-repeat;
+  }
+  select::picker(select) {
+    appearance: base-select;
+    margin-block: 4px;
+    padding: 4px;
+    max-height: 18rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: 0 12px 32px -12px rgb(15 23 42 / 0.28);
+  }
+  select option {
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+  }
+  select option::checkmark {
+    display: none;
+  }
+  select option:hover,
+  select option:focus-visible {
+    background: var(--muted);
+    outline: none;
+  }
+  select option:checked {
+    background: var(--accent);
+    font-weight: 600;
+  }
+}
+
 /* Scrollable without a visible scrollbar (left menu). */
 @utility no-scrollbar {
   scrollbar-width: none;

@@ -114,7 +114,7 @@ export function SuggestInput({
             data-suggest-list=""
             // An open modal dialog turns pointer events off outside itself; the list stays clickable.
             style={{ ...pos, pointerEvents: "auto" }}
-            className="z-[100] max-h-60 overflow-y-auto rounded-md border bg-popover p-1 text-sm text-popover-foreground shadow-md"
+            className="z-[100] max-h-60 overflow-y-auto rounded-[14px] border bg-popover p-1 text-sm text-popover-foreground shadow-md"
           >
             {shown.length === 0 ? (
               <li className="px-2 py-1.5 text-xs text-muted-foreground">{emptyText}</li>
@@ -125,7 +125,7 @@ export function SuggestInput({
                   role="option"
                   aria-selected={i === active}
                   className={cn(
-                    "cursor-pointer rounded px-2 py-1.5",
+                    "cursor-pointer rounded-[8px] px-2 py-1.5",
                     i === active ? "bg-accent" : "hover:bg-accent/60",
                   )}
                   onMouseEnter={() => setActive(i)}

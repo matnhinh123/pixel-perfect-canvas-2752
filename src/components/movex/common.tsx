@@ -225,6 +225,23 @@ export function Field({
   );
 }
 
+/**
+ * Browsers with customizable selects (styles.css): give the select a <button><selectedcontent> so
+ * a long option is cut with "…" before the chevron. Added outside React (it only renders options).
+ */
+const withSelectedContent = (el: HTMLSelectElement | null) => {
+  if (
+    !el ||
+    el.querySelector(":scope > button") ||
+    typeof CSS === "undefined" ||
+    !CSS.supports?.("appearance", "base-select")
+  )
+    return;
+  const button = document.createElement("button");
+  button.append(document.createElement("selectedcontent"));
+  el.prepend(button);
+};
+
 export function NativeSelect({
   value,
   onChange,
@@ -244,6 +261,7 @@ export function NativeSelect({
 }) {
   return (
     <select
+      ref={withSelectedContent}
       value={value}
       disabled={disabled}
       aria-invalid={invalid || undefined}
