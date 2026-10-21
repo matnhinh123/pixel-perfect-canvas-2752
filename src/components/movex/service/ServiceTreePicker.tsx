@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, FileText, Folder, FolderOpen, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -53,6 +53,11 @@ export function ServiceTreePicker({
     [services, excludeIds],
   );
   const selected = value ? services.find((s) => s.id === value) : undefined;
+  /** Services that have children (shown as folders). */
+  const parentIds = useMemo(
+    () => new Set(services.filter((s) => !s.deleted && s.parentId).map((s) => s.parentId!)),
+    [services],
+  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -103,30 +108,54 @@ export function ServiceTreePicker({
                 <span className="flex-1 text-muted-foreground">{noneLabel}</span>
                 {!value && <Check className="h-4 w-4 text-primary" />}
               </CommandItem>
-              {options.map((s) => (
-                <CommandItem
-                  key={s.id}
-                  value={`${s.id} ${s.code} ${s.name}`}
-                  onSelect={() => {
-                    onChange(s.id);
-                    setOpen(false);
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <span
-                    className="flex min-w-0 flex-1 items-center gap-2"
-                    style={{ paddingLeft: (levelOf(s, services) - 1) * 16 }}
+              {options.map((s) => {
+                const level = levelOf(s, services);
+                const isParent = parentIds.has(s.id);
+                const Icon = isParent ? (level === 1 ? Folder : FolderOpen) : FileText;
+                return (
+                  <CommandItem
+                    key={s.id}
+                    value={`${s.id} ${s.code} ${s.name}`}
+                    onSelect={() => {
+                      onChange(s.id);
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-2"
                   >
-                    <span className={cn("truncate", !s.parentId && "font-semibold")}>{s.name}</span>
-                    <span className="text-xs text-muted-foreground">{s.code}</span>
-                    {s.status === "Inactive" && (
-                      <span className="text-xs text-muted-foreground">(Inactive)</span>
-                    )}
-                  </span>
-                  {!s.parentId && <Tag tone="tpl">{formName(templateOf(s, services))}</Tag>}
-                  {s.id === value && <Check className="h-4 w-4 text-primary" />}
-                </CommandItem>
-              ))}
+                    {/* Tree: indent per level, a branch mark on children, folder = has children. */}
+                    <span
+                      className="flex min-w-0 flex-1 items-center gap-1.5"
+                      style={{ paddingLeft: (level - 1) * 20 }}
+                    >
+                      {level > 1 && <span className="shrink-0 text-muted-foreground/60">└</span>}
+                      <Icon
+                        className={cn(
+                          "h-4 w-4 shrink-0",
+                          isParent ? "text-primary" : "text-muted-foreground",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "truncate",
+                          level === 1
+                            ? "font-semibold"
+                            : isParent
+                              ? "font-medium"
+                              : "text-foreground/90",
+                        )}
+                      >
+                        {s.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{s.code}</span>
+                      {s.status === "Inactive" && (
+                        <span className="text-xs text-muted-foreground">(Inactive)</span>
+                      )}
+                    </span>
+                    {!s.parentId && <Tag tone="tpl">{formName(templateOf(s, services))}</Tag>}
+                    {s.id === value && <Check className="h-4 w-4 text-primary" />}
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>
