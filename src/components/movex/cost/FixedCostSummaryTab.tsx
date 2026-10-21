@@ -103,7 +103,7 @@ export function FixedCostSummaryTab() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search fare code, internal cost..."
-                className="h-9 w-64 pl-8"
+                className="h-9 w-72 pl-8"
               />
             </div>
             <Button size="sm" onClick={() => setOpen("new")}>
@@ -419,9 +419,7 @@ function MappingDialog({
                   <tr key={f.id} className="border-t">
                     <td className="px-3 py-2 font-semibold text-primary">{f.code}</td>
                     <td className="px-3 py-2">{f.name}</td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {f.costType ?? "Allocation"}
-                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">{f.costType}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">
                       {otherOf(f.id) || "—"}
                     </td>

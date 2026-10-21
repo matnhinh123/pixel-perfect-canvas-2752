@@ -1,6 +1,5 @@
 // Demo seed for Master Data > Cost > Fixed Cost.
-import type { FixedCostRecord, FixedCostSummaryRecord, LoanTerms } from "@/types";
-import { loanSchedule } from "@/services/loanMath";
+import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
 
 /** Rate to VND. */
 export const FIXED_COST_RATES: Record<string, number> = { VND: 1, USD: 25400 };
@@ -26,14 +25,8 @@ const LOCAL_NAMES: Record<string, string> = {
   "FC-OLD": "Bộ bạt phủ (ngưng dùng)",
 };
 
-/** Financial cost of an asset: 6.8 %/year on its full value for 60 months (interest only). */
-const financing = (amount: number): LoanTerms => ({
-  amount,
-  ratePct: 6.8,
-  termMonths: 60,
-  method: "Interest Only",
-});
-const interestOf = (l: LoanTerms) => Math.round(loanSchedule(l).totalInterest);
+/** Financial cost of an asset: 6.8 %/year on its full value for 5 years (60 months). */
+const interestOf = (value: number) => Math.round(value * 0.068 * 5);
 const HEAD = 1_300_000_000;
 const TRAILER = 280_000_000;
 
@@ -50,14 +43,13 @@ const fc = (
   code,
   name,
   localName: LOCAL_NAMES[id] ?? "",
-  costType: "Allocation",
+  costType: "Asset",
   costValue,
   currency: "VND",
   exchangeRate: 1,
   allocationBase,
   allocationUnit,
   allocationDays: 26,
-  loan: null,
   status: "Active",
   ...meta,
   ...extra,
@@ -69,30 +61,26 @@ export const seedFixedCosts = (): FixedCostRecord[] => [
   // financial cost 6.8 %/year over 360 days a year (30 a month), management 200,000 a day.
   fc("FC-DEP-HEAD", "FC_DEP_HEAD", "Header depreciation", HEAD, 60, "Month"),
   fc("FC-DEP-TRL", "FC_DEP_TRAILER", "Trailer depreciation", TRAILER, 60, "Month"),
-  fc(
-    "FC-FIN-HEAD",
-    "FC_FIN_HEAD",
-    "Header financial cost",
-    interestOf(financing(HEAD)),
-    60,
-    "Month",
-    { costType: "Loan Interest", loan: financing(HEAD), allocationDays: 30 },
-  ),
-  fc(
-    "FC-FIN-TRL",
-    "FC_FIN_TRAILER",
-    "Trailer financial cost",
-    interestOf(financing(TRAILER)),
-    60,
-    "Month",
-    { costType: "Loan Interest", loan: financing(TRAILER), allocationDays: 30 },
-  ),
-  fc("FC-MGMT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", {
-    costType: "Other",
+  fc("FC-FIN-HEAD", "FC_FIN_HEAD", "Header financial cost", interestOf(HEAD), 60, "Month", {
+    costType: "Non Asset",
+    allocationDays: 30,
   }),
-  fc("FC-INS", "FC_INSURANCE", "Vehicle insurance", 36_000_000, 1, "Year"),
-  fc("FC-GPS", "FC_GPS", "GPS & camera subscription", 150_000, 1, "Month"),
-  fc("FC-LICENSE", "FC_LICENSE", "Operating license fee", 450_000, 1, "Day"),
+  fc("FC-FIN-TRL", "FC_FIN_TRAILER", "Trailer financial cost", interestOf(TRAILER), 60, "Month", {
+    costType: "Non Asset",
+    allocationDays: 30,
+  }),
+  fc("FC-MGMT", "FC_MANAGEMENT", "Management cost", 200_000, 1, "Day", {
+    costType: "Non Asset",
+  }),
+  fc("FC-INS", "FC_INSURANCE", "Vehicle insurance", 36_000_000, 1, "Year", {
+    costType: "Non Asset",
+  }),
+  fc("FC-GPS", "FC_GPS", "GPS & camera subscription", 150_000, 1, "Month", {
+    costType: "Non Asset",
+  }),
+  fc("FC-LICENSE", "FC_LICENSE", "Operating license fee", 450_000, 1, "Day", {
+    costType: "Non Asset",
+  }),
   fc("FC-OLD", "FC_TARP", "Tarpaulin set (retired)", 6_000_000, 1, "Year", {
     status: "Inactive",
   }),

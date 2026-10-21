@@ -16,14 +16,9 @@ import {
   vehicleMasterRepository,
 } from "@/repositories";
 import { vehicleTypeChoices } from "@/services/fixedCostVehicle";
-import {
-  calcFixedCost,
-  fixedCostCrud,
-  fixedCostImportConfig,
-  loanLabel,
-} from "@/services/fixedCostService";
+import { calcFixedCost, fixedCostCrud, fixedCostImportConfig } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
-import type { FixedCostRecord } from "@/types";
+import { FIXED_COST_TYPES, type FixedCostRecord } from "@/types";
 
 export const Route = createFileRoute("/fixed-cost/")({
   validateSearch: (s: Record<string, unknown>): { tab?: FixedCostTab } =>
@@ -84,7 +79,8 @@ function FixedCostList() {
     () => [
       {
         key: "code",
-        label: "Internal Cost Code",
+        width: 160,
+        label: "Code",
         type: "text",
         pinned: true,
         value: (f) => f.code,
@@ -92,26 +88,30 @@ function FixedCostList() {
       },
       {
         key: "name",
-        label: "Internal Cost Name (EN)",
+        width: 200,
+        label: "English Name",
         type: "text",
         pinned: true,
         value: (f) => f.name,
       },
       {
         key: "localName",
-        label: "Internal Cost Name (Local)",
+        width: 210,
+        label: "Local Name",
         type: "text",
         value: (f) => f.localName ?? "",
       },
       {
         key: "costType",
+        width: 110,
         label: "Fee Type",
         type: "enum",
-        options: ["Allocation", "Loan Interest", "Other"],
-        value: (f) => f.costType ?? "Allocation",
+        options: [...FIXED_COST_TYPES],
+        value: (f) => f.costType,
       },
       {
         key: "costValue",
+        width: 170,
         label: "Cost Value",
         type: "number",
         value: (f) => f.costValue,
@@ -124,30 +124,19 @@ function FixedCostList() {
       },
       {
         key: "allocationBase",
+        width: 130,
         label: "Allocation Base",
         type: "text",
         value: (f) => `${f.allocationBase} ${f.allocationUnit}`,
       },
       {
-        key: "currency",
-        label: "Currency",
-        type: "text",
-        value: (f) => f.currency,
-        defaultHidden: true,
-      },
-      {
-        key: "loan",
-        label: "Loan",
-        type: "text",
-        value: (f) => loanLabel(f.loan),
-        defaultHidden: true,
-      },
-      {
         key: "allocationDays",
+        width: 140,
         label: "Allocation Days",
         type: "number",
-        value: (f) => f.allocationDays,
-        defaultHidden: true,
+        // Not used when the Allocation Base is per Day.
+        value: (f) => (f.allocationUnit === "Day" ? null : f.allocationDays),
+        className: "text-right",
       },
       {
         key: "allocationValue",

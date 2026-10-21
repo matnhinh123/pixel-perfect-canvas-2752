@@ -23,7 +23,6 @@ import { draftImportConfig, numCell, pick } from "./importExportService";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { allocate, type AllocationResult } from "./fixedCostMath";
-import { loanSchedule, REPAYMENT_METHODS, type LoanTerms } from "./loanMath";
 
 const all = () => fixedCostRepository.all().filter((f) => !f.deleted);
 
@@ -62,14 +61,13 @@ export const newFixedCostDraft = (): FixedCostDraft => ({
   code: "",
   name: "",
   localName: "",
-  costType: "Allocation",
+  costType: "Asset",
   costValue: 0,
   currency: "VND",
   exchangeRate: 1,
   allocationBase: 1,
   allocationUnit: "Year",
   allocationDays: 30,
-  loan: null,
   status: "Active",
 });
 
@@ -79,63 +77,23 @@ export const draftOfFixedCost = (f: FixedCostRecord): FixedCostDraft => {
   return {
     ...d,
     localName: d.localName ?? "",
-    costType: d.costType ?? (d.loan ? "Loan Interest" : "Allocation"),
-    loan: d.loan ? { ...d.loan } : null,
+    costType: FIXED_COST_TYPES.includes(d.costType) ? d.costType : "Asset",
   };
 };
-
-/**
- * Fields that follow the Fee Type. Loan Interest: Cost Value = total interest of the loan, spread
- * over its term in months. Other: the value is an amount per day. Allocation: no loan.
- */
-export const applyCostType = <T extends FixedCostDraft>(d: T): T =>
-  d.costType === "Loan Interest" && d.loan
-    ? {
-        ...d,
-        costValue: Math.round(loanSchedule(d.loan).totalInterest),
-        allocationBase: d.loan.termMonths,
-        allocationUnit: "Month",
-      }
-    : d.costType === "Other"
-      ? // An amount per Day, Month or Year (the unit picked), entered as is.
-        { ...d, loan: null, allocationBase: 1, allocationUnit: d.allocationUnit || "Day" }
-      : { ...d, loan: null };
-
-export const loanLabel = (l: LoanTerms | null | undefined) =>
-  l
-    ? `${l.amount.toLocaleString("vi-VN")} · ${l.ratePct}%/year · ${l.termMonths} months · ${l.method}`
-    : "";
 
 export function validateFixedCost(d: FixedCostDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
   const code = d.code.trim().toUpperCase();
-  if (!code) e["code"] = "Internal Cost Code is required.";
+  if (!code) e["code"] = "Code is required.";
   else if (!/^[A-Z0-9_-]{2,30}$/.test(code))
     e["code"] = "Use 2–30 characters: letters, digits, - or _.";
   else if (all().some((f) => f.id !== id && f.code.toUpperCase() === code))
-    e["code"] = `Internal Cost Code ${code} already exists.`;
-  if (!d.name.trim()) e["name"] = "Internal Cost Name is required.";
-  if (d.costType === "Loan Interest") {
-    if (!(d.loan && d.loan.amount > 0)) e["loanAmount"] = "Loan Amount must be greater than 0.";
-  }
-  if (d.costType === "Loan Interest" && d.loan) {
-    if (!(d.loan.ratePct > 0 && d.loan.ratePct <= 100))
-      e["loanRate"] = "Interest Rate must be above 0 and at most 100 %/year.";
-    if (!(
-      Number.isInteger(d.loan.termMonths) &&
-      d.loan.termMonths >= 1 &&
-      d.loan.termMonths <= 360
-    ))
-      e["loanTerm"] = "Loan Term must be 1 – 360 months.";
-  } else if (d.costType !== "Loan Interest" && !(d.costValue > 0))
-    e["costValue"] =
-      d.costType === "Other"
-        ? "Value must be greater than 0."
-        : "Cost Value must be greater than 0.";
-  if (d.costType === "Allocation") {
-    if (!(d.allocationBase > 0)) e["allocationBase"] = "Allocation Base must be greater than 0.";
-    if (!d.allocationUnit) e["allocationUnit"] = "Allocation Base Unit is required.";
-  }
+    e["code"] = `Code ${code} already exists.`;
+  if (!d.name.trim()) e["name"] = "English Name is required.";
+  if (!FIXED_COST_TYPES.includes(d.costType)) e["costType"] = "Fee Type is required.";
+  if (!(d.costValue > 0)) e["costValue"] = "Cost Value must be greater than 0.";
+  if (!(d.allocationBase > 0)) e["allocationBase"] = "Allocation Base must be greater than 0.";
+  if (!d.allocationUnit) e["allocationUnit"] = "Allocation Base Unit is required.";
   if (d.allocationUnit !== "Day" && !(d.allocationDays > 0))
     e["allocationDays"] = "Allocation Days must be greater than 0.";
   return e;
@@ -147,7 +105,7 @@ export const fixedCostService = {
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please check the highlighted fields.", errors);
     const clean: FixedCostDraft = {
-      ...applyCostType(d),
+      ...d,
       code: d.code.trim().toUpperCase(),
       name: d.name.trim(),
       localName: d.localName.trim(),
@@ -172,10 +130,9 @@ export const fixedCostService = {
     const upd = (field: string, a: string, b: string) =>
       a !== b &&
       out.push({ ...base, action: "UPDATE", field, oldValue: a || "—", newValue: b || "—" });
-    upd("Internal Cost Name (EN)", existing.name, next.name);
-    upd("Internal Cost Name (Local)", existing.localName ?? "", next.localName);
-    upd("Fee Type", existing.costType ?? "Allocation", next.costType);
-    upd("Loan", loanLabel(existing.loan), loanLabel(next.loan));
+    upd("English Name", existing.name, next.name);
+    upd("Local Name", existing.localName ?? "", next.localName);
+    upd("Fee Type", existing.costType ?? "", next.costType);
     upd(
       "Cost Value",
       `${existing.costValue} ${existing.currency}`,
@@ -350,23 +307,7 @@ const numOr = (v: string | undefined, dflt: number) => {
   return Number.isNaN(n) ? dflt : n;
 };
 
-const loanOfRow = (r: Record<string, string>): LoanTerms | null =>
-  (r["loanAmount"] ?? "").trim()
-    ? {
-        amount: numOr(r["loanAmount"], 0),
-        ratePct: numOr(r["loanRate"], 0),
-        termMonths: numOr(r["loanTerm"], 0),
-        method: pick(r["repaymentMethod"], REPAYMENT_METHODS) || "Annuity",
-      }
-    : null;
-
-/** Fee Type column, or Loan Interest when a loan amount is given, else Allocation. */
-const costTypeOfRow = (r: Record<string, string>): FixedCostType =>
-  pick(r["costType"], FIXED_COST_TYPES) ||
-  ((r["loanAmount"] ?? "").trim() ? "Loan Interest" : "Allocation");
-const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft =>
-  applyCostType(rowDraft(r));
-const rowDraft = (r: Record<string, string>): FixedCostDraft => {
+const fixedCostDraftOfRow = (r: Record<string, string>): FixedCostDraft => {
   const c = choices();
   const { base, unit } = baseOf(r);
   const currency = pick(r["currency"], c.currency) || "VND";
@@ -374,14 +315,13 @@ const rowDraft = (r: Record<string, string>): FixedCostDraft => {
     code: (r["code"] ?? "").trim().toUpperCase(),
     name: (r["name"] ?? "").trim(),
     localName: (r["localName"] ?? "").trim(),
-    costType: costTypeOfRow(r),
+    costType: pick(r["costType"], FIXED_COST_TYPES) || "Asset",
     costValue: numOr(r["costValue"], 0),
     currency,
     exchangeRate: rateOf(currency),
     allocationBase: Number.isNaN(base) ? 0 : base,
     allocationUnit: pick(unit, c.unit) || "Year",
     allocationDays: numOr(r["allocationDays"], 30),
-    loan: costTypeOfRow(r) === "Loan Interest" ? loanOfRow(r) : null,
     status: pick(r["status"], STATUSES) || "Active",
   };
 };
@@ -394,34 +334,30 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
   columns: [
     {
       key: "code",
-      header: "Internal Cost Code",
+      header: "Code",
       required: true,
-      aliases: ["Fixed Cost Code"],
+      aliases: ["Internal Cost Code", "Fixed Cost Code"],
       example: "FC_DEP_5T",
     },
     {
       key: "name",
-      header: "Internal Cost Name (EN)",
+      header: "English Name",
       required: true,
       example: "5T truck depreciation",
-      aliases: ["Fixed Cost Name (EN)", "Fixed Cost Name"],
+      aliases: ["Internal Cost Name (EN)", "Fixed Cost Name (EN)", "Fixed Cost Name"],
     },
     {
       key: "localName",
-      header: "Internal Cost Name (Local)",
-      aliases: ["Fixed Cost Name (Local)"],
+      header: "Local Name",
+      aliases: ["Internal Cost Name (Local)", "Fixed Cost Name (Local)"],
       example: "Khấu hao xe 5 tấn",
     },
-    { key: "costType", header: "Fee Type", example: "Allocation", aliases: ["Cost Type"] },
+    { key: "costType", header: "Fee Type", example: "Asset", aliases: ["Cost Type"] },
     { key: "costValue", header: "Cost Value", example: "900000000" },
     { key: "currency", header: "Currency", example: "VND" },
     { key: "allocationBase", header: "Allocation Base", required: true, example: "8" },
     { key: "allocationUnit", header: "Allocation Base Unit", example: "Year" },
     { key: "allocationDays", header: "Allocation Days", example: "30" },
-    { key: "loanAmount", header: "Loan Amount", example: "" },
-    { key: "loanRate", header: "Interest Rate (%/year)", example: "" },
-    { key: "loanTerm", header: "Loan Term (months)", example: "" },
-    { key: "repaymentMethod", header: "Repayment Method", example: "" },
     { key: "status", header: "Status", example: "Active" },
   ],
   existingKeys: () => new Set(all().map((f) => f.code.toLowerCase())),
@@ -437,9 +373,7 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
       e.push({ field: "allocationBase", error: "Must be a number (e.g. 8)" });
     if (unit && pick(unit, c.unit) === undefined)
       e.push({ field: "allocationUnit", error: `Use one of: ${c.unit.join(", ")}` });
-    if (pick(r["repaymentMethod"], REPAYMENT_METHODS) === undefined)
-      e.push({ field: "repaymentMethod", error: `Use one of: ${REPAYMENT_METHODS.join(", ")}` });
-    for (const k of ["costValue", "allocationDays", "loanAmount", "loanRate", "loanTerm"])
+    for (const k of ["costValue", "allocationDays"])
       if (r[k] && Number.isNaN(numCell(r[k]))) e.push({ field: k, error: "Must be a number" });
     if (pick(r["status"], STATUSES) === undefined)
       e.push({ field: "status", error: "Active or Inactive (empty = Active)" });
@@ -465,13 +399,12 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
         `FC_IMP_${n}`,
         `Imported internal cost ${n}`,
         `Chi phí cố định nhập mẫu ${n}`,
-        fare === "FIN" ? "Loan Interest" : "Allocation",
+        fare === "DEP" ? "Asset" : "Non Asset",
         value,
         "VND",
         base,
         unit,
         "26",
-        ...(fare === "FIN" ? ["1680000000", "10.5", "60", "Annuity"] : ["", "", "", ""]),
         "Active",
       ];
     });

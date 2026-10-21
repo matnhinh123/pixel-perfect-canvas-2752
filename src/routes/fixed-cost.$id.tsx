@@ -22,7 +22,6 @@ import { useCollection } from "@/hooks/use-store";
 import { fixedCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
-  applyCostType,
   calcFixedCost,
   draftOfFixedCost,
   fixedCostService,
@@ -31,18 +30,13 @@ import {
   type FixedCostDraft,
 } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
-import { EMPTY_SCHEDULE, loanSchedule, type LoanSchedule } from "@/services/loanMath";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
 import { StatusSelect } from "@/components/movex/cost/CostForms";
 import {
   ALLOCATION_UNITS,
-  type AllocationUnit,
   FIXED_COST_TYPES,
-  REPAYMENT_METHODS,
   type FixedCostRecord,
   type FixedCostType,
-  type LoanTerms,
-  type RepaymentMethod,
 } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -123,51 +117,6 @@ function FixedCostForm({
     });
   };
 
-  // Fee Type: Allocation (value ÷ base ÷ days), Loan Interest (total interest ÷ term ÷ days) or
-  // Other (an amount per day).
-  const loan = useMemo(() => (d.loan ? loanSchedule(d.loan) : EMPTY_SCHEDULE), [d.loan]);
-  const clearPriceErrors = () =>
-    setErrors((e) => {
-      const n = { ...e };
-      for (const k of [
-        "loanAmount",
-        "loanRate",
-        "loanTerm",
-        "costValue",
-        "allocationBase",
-        "allocationDays",
-      ])
-        delete n[k];
-      return n;
-    });
-  /** Applies a Fee Type / loan change and the fields that follow it. */
-  const reprice = (p: Partial<FixedCostDraft>) => {
-    const next = applyCostType({ ...d, ...p });
-    patch({
-      costType: next.costType,
-      loan: next.loan,
-      costValue: next.costValue,
-      allocationBase: next.allocationBase,
-      allocationUnit: next.allocationUnit,
-    });
-    clearPriceErrors();
-  };
-  const setCostType = (t: FixedCostType) =>
-    t === d.costType
-      ? undefined
-      : reprice({
-          costType: t,
-          // Start the value fresh: a loan's interest or a daily amount means something else.
-          costValue: 0,
-          allocationBase: 1,
-          allocationUnit: t === "Other" ? "Day" : "Year",
-          allocationDays: t === "Loan Interest" ? 30 : d.allocationDays || 26,
-          loan:
-            t === "Loan Interest"
-              ? (d.loan ?? { amount: 0, ratePct: 0, termMonths: 60, method: "Interest Only" })
-              : null,
-        });
-  const setLoan = (p: Partial<LoanTerms>) => d.loan && reprice({ loan: { ...d.loan, ...p } });
   const calc = calcFixedCost({ ...d, exchangeRate: rateOf(d.currency) });
 
   /** Number input kept as text-friendly: empty string → 0 so validation flags it. */
@@ -184,16 +133,12 @@ function FixedCostForm({
     "aria-invalid": !!errors[k] || undefined,
     ...extra,
   });
-  const daysField = (disabled: boolean, loan = false) => (
+  const daysField = (disabled: boolean) => (
     <Field
       label="Allocation Days"
       error={errors["allocationDays"]}
       className={S2}
-      info={
-        loan
-          ? "Days per month for Month → Day: 30 counts interest on a 360-day year."
-          : "Days per month for Month → Day (e.g. 26 working days)."
-      }
+      info="Days per month for Month → Day (e.g. 26 working days; 30 for a 360-day year)."
     >
       <div className="flex items-center gap-2">
         <Input className={cn("w-16", NUM)} {...numInput("allocationDays", { disabled })} />
@@ -311,7 +256,7 @@ function FixedCostForm({
         <CollapsiblePanel title="Internal Cost Detail">
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
-              label="Internal Cost Code"
+              label="Code"
               required
               error={errors["code"]}
               className={S3}
@@ -325,17 +270,17 @@ function FixedCostForm({
                 onChange={(e) => patch({ code: e.target.value.toUpperCase() })}
               />
             </Field>
-            <Field label="Internal Cost Name (EN)" required error={errors["name"]} className={S5}>
+            <Field label="English Name" required error={errors["name"]} className={S5}>
               <Input
-                placeholder="Enter Internal Cost Name (EN)"
+                placeholder="Enter English Name"
                 value={d.name}
                 aria-invalid={!!errors["name"] || undefined}
                 onChange={(e) => patch({ name: e.target.value })}
               />
             </Field>
-            <Field label="Internal Cost Name (Local)" className={S4}>
+            <Field label="Local Name" className={S4}>
               <Input
-                placeholder="Enter Internal Cost Name (Local)"
+                placeholder="Enter Local Name"
                 value={d.localName}
                 onChange={(e) => patch({ localName: e.target.value })}
               />
@@ -344,147 +289,74 @@ function FixedCostForm({
               label="Fee Type"
               required
               className={cn(S3, "lg:col-start-1")}
-              info="Allocation: a value spread over a period (depreciation, insurance…). Loan Interest: the interest of a loan taken to buy the asset. Other: an amount per day, entered as is."
+              info="Asset: the cost of an asset (vehicle depreciation…). Non Asset: any other fixed cost (insurance, interest, management…). Both are spread the same way."
             >
               <NativeSelect
                 value={d.costType}
-                onChange={(v) => setCostType(v as FixedCostType)}
-                options={FIXED_COST_TYPES}
+                onChange={(v) => patch({ costType: v as FixedCostType })}
+                options={withCurrent([...FIXED_COST_TYPES], d.costType)}
                 className="h-10 w-full"
               />
             </Field>
-            {d.costType !== "Loan Interest" && (
-              <Field
-                label={d.costType === "Other" ? "Value" : "Cost Value"}
-                required
-                error={errors["costValue"]}
-                className={S4}
-                hint={
-                  d.currency !== "VND"
-                    ? `1 ${d.currency} = ${fmtMoney(rate)} ₫ (exchange rate)`
-                    : undefined
-                }
+            <Field
+              label="Cost Value"
+              required
+              error={errors["costValue"]}
+              className={S4}
+              hint={
+                d.currency !== "VND"
+                  ? `1 ${d.currency} = ${fmtMoney(rate)} ₫ (exchange rate)`
+                  : undefined
+              }
+            >
+              {/* One box: the amount, then its currency picked inside it. */}
+              <div
+                className={cn(
+                  "flex h-10 items-center overflow-hidden rounded-[12px] border-2 border-input shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] transition-colors focus-within:border-primary hover:border-border-strong",
+                  "group-disabled:border-transparent group-disabled:bg-muted group-disabled:shadow-none",
+                  errors["costValue"] && "border-destructive",
+                )}
               >
-                <div className="flex gap-1.5">
-                  <MoneyInput
-                    value={d.costValue}
-                    decimals={d.currency === "VND" ? 0 : 2}
-                    onChange={(costValue) => patch({ costValue })}
-                    invalid={!!errors["costValue"]}
-                  />
-                  <NativeSelect
-                    {...select("currency", COST_CURRENCIES, "")}
-                    className="h-10 w-[84px] shrink-0 pl-2.5 pr-7"
-                  />
-                </div>
-              </Field>
-            )}
-            {d.costType === "Other" && (
-              <>
-                <Field
-                  label="Per"
-                  required
-                  className={S2}
-                  info="The Value is an amount per Day, per Month or per Year."
+                <MoneyInput
+                  value={d.costValue}
+                  decimals={d.currency === "VND" ? 0 : 2}
+                  onChange={(costValue) => patch({ costValue })}
+                  className="h-full rounded-none border-0 shadow-none focus-visible:border-0"
+                />
+                <select
+                  aria-label="Currency"
+                  value={d.currency}
+                  onChange={(e) => patch({ currency: e.target.value })}
+                  className="h-full shrink-0 cursor-pointer border-0 border-l border-input bg-transparent pl-2.5 pr-1.5 text-sm font-medium text-ink-2 outline-none group-disabled:cursor-default"
                 >
-                  <NativeSelect
-                    value={d.allocationUnit}
-                    onChange={(u) => patch({ allocationUnit: u as AllocationUnit })}
-                    options={withCurrent(units, d.allocationUnit)}
-                    className="h-10 w-full"
-                  />
-                </Field>
-                {daysField(d.allocationUnit === "Day")}
-              </>
-            )}
-            {d.costType === "Allocation" && (
-              <>
-                <Field
-                  label="Allocation Base"
-                  required
-                  error={errors["allocationBase"] ?? errors["allocationUnit"]}
-                  className={S3}
-                  info={unitNote}
-                >
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="8"
-                      className={cn("w-16", NUM)}
-                      {...numInput("allocationBase")}
-                    />
-                    <NativeSelect
-                      {...select("allocationUnit", withCurrent(units, d.allocationUnit), "Unit")}
-                      className="h-10 flex-1"
-                    />
-                  </div>
-                </Field>
-                {daysField(d.allocationUnit === "Day")}
-              </>
-            )}
-            {d.costType === "Loan Interest" && d.loan && (
-              <>
-                <Field label="Loan Amount" required error={errors["loanAmount"]} className={S4}>
-                  <div className="flex gap-1.5">
-                    <MoneyInput
-                      value={d.loan.amount}
-                      decimals={d.currency === "VND" ? 0 : 2}
-                      onChange={(amount) => setLoan({ amount })}
-                      invalid={!!errors["loanAmount"]}
-                    />
-                    <NativeSelect
-                      {...select("currency", COST_CURRENCIES, "")}
-                      className="h-10 w-[84px] shrink-0 pl-2.5 pr-7"
-                    />
-                  </div>
-                </Field>
-                <Field label="Interest Rate" required error={errors["loanRate"]} className={S3}>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step="any"
-                      placeholder="6.8"
-                      value={d.loan.ratePct || ""}
-                      aria-invalid={!!errors["loanRate"] || undefined}
-                      onChange={(e) => setLoan({ ratePct: Number(e.target.value) || 0 })}
-                      className={cn("min-w-0 flex-1", NUM)}
-                    />
-                    <span className="whitespace-nowrap text-sm text-muted-foreground">%/year</span>
-                  </div>
-                </Field>
-                <Field label="Loan Term" required error={errors["loanTerm"]} className={S2}>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      step={1}
-                      placeholder="60"
-                      value={d.loan.termMonths || ""}
-                      aria-invalid={!!errors["loanTerm"] || undefined}
-                      onChange={(e) => setLoan({ termMonths: Number(e.target.value) || 0 })}
-                      className={cn("min-w-0 flex-1", NUM)}
-                    />
-                    <span className="text-sm text-muted-foreground">months</span>
-                  </div>
-                </Field>
-                <Field
-                  label="Repayment Method"
-                  className={S3}
-                  info="Annuity: the same payment every month. Equal Principal: the same principal every month plus interest on the balance, so payments go down. Interest Only: interest on the full amount every month, the principal at the end."
-                >
-                  <NativeSelect
-                    value={d.loan.method}
-                    onChange={(v) => setLoan({ method: v as RepaymentMethod })}
-                    options={REPAYMENT_METHODS}
-                    className="h-10 w-full"
-                  />
-                </Field>
-                {daysField(false, true)}
-                <LoanSummary schedule={loan} currency={d.currency} />
-              </>
-            )}
+                  {withCurrent(COST_CURRENCIES, d.currency).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </Field>
+            <Field
+              label="Allocation Base"
+              required
+              error={errors["allocationBase"] ?? errors["allocationUnit"]}
+              className={S3}
+              info={unitNote}
+            >
+              <div className="flex gap-2">
+                <Input
+                  placeholder="8"
+                  className={cn("w-16", NUM)}
+                  {...numInput("allocationBase")}
+                />
+                <NativeSelect
+                  {...select("allocationUnit", withCurrent(units, d.allocationUnit), "Unit")}
+                  className="h-10 flex-1"
+                />
+              </div>
+            </Field>
+            {d.allocationUnit !== "Day" && daysField(false)}
             <div className="sm:col-span-6 lg:col-span-12">
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {(
@@ -558,12 +430,14 @@ function MoneyInput({
   decimals,
   invalid,
   disabled,
+  className,
 }: {
   value: number;
   onChange: (v: number) => void;
   decimals: number;
   invalid?: boolean;
   disabled?: boolean;
+  className?: string;
 }) {
   const [text, setText] = useState(() => moneyText(value, decimals));
   useEffect(() => {
@@ -582,89 +456,7 @@ function MoneyInput({
         setText(g.text);
         onChange(g.value);
       }}
-      className={cn("min-w-0 flex-1", NUM)}
+      className={cn("min-w-0 flex-1", NUM, className)}
     />
-  );
-}
-
-/** Repayment of the loan: payment per month, totals and the month-by-month schedule. */
-function LoanSummary({ schedule: s, currency }: { schedule: LoanSchedule; currency: string }) {
-  const [open, setOpen] = useState(false);
-  const cur = currency === "VND" ? "₫" : currency;
-  const m = (v: number) => `${fmtMoney(v, 0)} ${cur}`;
-  const monthly =
-    Math.round(s.firstPayment) === Math.round(s.lastPayment)
-      ? m(s.firstPayment)
-      : `${m(s.firstPayment)} → ${m(s.lastPayment)}`;
-  const cards: [string, string, boolean][] = [
-    ["Monthly Payment", monthly, false],
-    ["Total Payment", m(s.totalPayment), false],
-    ["Total Interest (= Cost Value)", m(s.totalInterest), true],
-  ];
-  return (
-    <div className="sm:col-span-6 lg:col-span-12">
-      {/* Same 4-column grid as the Allocation Value / Year / Month / Day cards below. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map(([label, v, main], i) => (
-          <div
-            key={label}
-            className={cn(
-              "rounded-lg border px-3.5 py-2.5",
-              i === 0 && "sm:col-span-2",
-              main && "border-primary/40 bg-primary/5",
-            )}
-          >
-            <div className="text-xs font-medium text-muted-foreground">{label}</div>
-            <div className={cn("mt-0.5 text-base font-semibold", NUM)}>
-              {s.rows.length ? v : "—"}
-            </div>
-          </div>
-        ))}
-      </div>
-      {s.rows.length > 0 && (
-        <>
-          <button
-            type="button"
-            onClick={() => setOpen((x) => !x)}
-            className="mt-2 text-xs font-medium text-primary hover:underline"
-          >
-            {open ? "Hide repayment schedule" : `Show repayment schedule (${s.rows.length} months)`}
-          </button>
-          {open && (
-            <div className="mt-2 max-h-72 overflow-y-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
-                  <tr>
-                    {["Month", "Payment", "Principal", "Interest", "Balance"].map((h) => (
-                      <th
-                        key={h}
-                        className={cn(
-                          "px-3 py-2 font-medium",
-                          h === "Month" ? "text-left" : "text-right",
-                        )}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {s.rows.map((r) => (
-                    <tr key={r.month} className="border-t">
-                      <td className="px-3 py-1.5">{r.month}</td>
-                      {[r.payment, r.principal, r.interest, r.balance].map((v, i) => (
-                        <td key={i} className={cn("px-3 py-1.5 text-right", NUM)}>
-                          {fmtMoney(v, 0)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-    </div>
   );
 }
