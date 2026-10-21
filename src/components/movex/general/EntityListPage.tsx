@@ -102,7 +102,7 @@ export interface EntityListPageProps<T extends BaseRecord> {
   entityTypeOf?: (row: T) => EntityType;
   /** false: no Import / Export buttons at all (incl. "Export selected"). */
   importExport?: boolean;
-  /** Grey lines between the table columns and rows. */
+  /** Grey lines between the table columns and rows (default on). */
   bordered?: boolean;
   /** Show the refresh button (right of the toolbar). Off for the master-data lists. */
   showRefresh?: boolean;
@@ -837,7 +837,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             page={treeOn ? 1 : Math.min(page, pages)}
             pageSize={treeOn ? Math.max(1, treeRows.length) : pageSize}
             hidePager={treeOn}
-            bordered={p.bordered ?? false}
+            bordered={p.bordered ?? true}
             onPage={setPage}
             onPageSize={setPageSize}
             sort={sort}

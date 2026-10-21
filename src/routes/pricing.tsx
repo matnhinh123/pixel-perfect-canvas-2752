@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PageHeader, Panel, Tag, thClass } from "@/components/movex/common";
+import { gridInBoxClass, PageHeader, Panel, Tag, thClass } from "@/components/movex/common";
 import { pricingInputs } from "@/mock-data/pricing";
 import { formatVnd } from "@/lib/format";
 import { useT } from "@/lib/i18n";
@@ -37,7 +37,7 @@ function PricingPage() {
       />
       <Panel>
         <div className="overflow-hidden rounded-lg border">
-          <Table>
+          <Table className={gridInBoxClass}>
             <TableHeader>
               <TableRow>
                 {["Code", "Route", "Service", "COGS", "Margin", "Sell Price", "Status"].map((h) => (

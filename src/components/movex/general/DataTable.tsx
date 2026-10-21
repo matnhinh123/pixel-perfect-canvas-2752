@@ -49,7 +49,7 @@ export function DataTable<T extends { id: string }>({
   loading,
   empty,
   hidePager,
-  bordered = false,
+  bordered = true,
 }: {
   columns: ListColumn<T>[];
   rows: T[];
@@ -73,7 +73,7 @@ export function DataTable<T extends { id: string }>({
   empty: ReactNode;
   /** Tree view shows every row on one page: only the row count is rendered in the footer. */
   hidePager?: boolean;
-  /** Grey lines between every column and row. */
+  /** Grey lines between every column and row (on by default, as on every list). */
   bordered?: boolean;
 }) {
   const { t } = useT();
