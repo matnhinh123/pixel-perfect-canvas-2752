@@ -54,7 +54,6 @@ import {
   validateService,
 } from "@/services/serviceCatalogService";
 import { formName } from "@/mock-data/templates";
-import { formatDateTime } from "@/lib/format";
 import { tr, useT } from "@/lib/i18n";
 import {
   TEMPLATES,
@@ -367,11 +366,6 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
                   {source.description || <span className="text-muted-foreground">—</span>}
                 </InfoRow>
               </div>
-              <InfoRow label={t("Cập nhật lúc", "Updated At")}>
-                <span className="text-muted-foreground">
-                  {formatDateTime(source.updatedAt)} · {source.updatedBy}
-                </span>
-              </InfoRow>
             </dl>
           </Panel>
 
@@ -709,13 +703,6 @@ function ServiceEditor({
                   onChange={(e) => set("description", e.target.value)}
                 />
               </Field>
-              {source && (
-                <InfoRow label={t("Cập nhật lúc", "Updated At")}>
-                  <span className="text-muted-foreground">
-                    {formatDateTime(source.updatedAt)} · {source.updatedBy}
-                  </span>
-                </InfoRow>
-              )}
             </div>
           </Panel>
 

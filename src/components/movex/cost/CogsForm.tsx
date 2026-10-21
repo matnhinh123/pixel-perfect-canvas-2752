@@ -50,7 +50,7 @@ import {
   type CogsDraft,
 } from "@/services/cost/cogsService";
 import { useFuelSetup, useSalaryRanges } from "@/services/cost/salaryRange";
-import { formatDateTime, formatNumber } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CogsLine, CogsLineGroup, CogsRecord } from "@/types";
 
@@ -320,11 +320,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
           title={route || source ? "COGS / Trip" : "COGS"}
           bodyClassName="p-0"
           actions={
-            readOnly && source ? (
-              <span className="text-xs text-muted-foreground">
-                As saved {formatDateTime(source.updatedAt)} · {source.updatedBy}
-              </span>
-            ) : built ? (
+            !readOnly && built ? (
               <Button variant="outline" size="sm" onClick={addOther}>
                 <Plus className="h-4 w-4" />
                 Add Cost

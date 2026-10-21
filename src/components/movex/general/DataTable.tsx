@@ -26,6 +26,9 @@ import { cn } from "@/lib/utils";
 import { PAGE_SIZES } from "@/lib/paging";
 
 const PAGE_SIZE_OPTIONS = PAGE_SIZES.map(String);
+/** Row checkbox column: fixed width, checkbox centred in it. */
+const CHECK_CELL =
+  "w-12 min-w-12 max-w-12 px-0 text-center [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-0 [&>[role=checkbox]]:mx-auto [&>[role=checkbox]]:flex";
 
 /** Standard table: [checkbox] columns… [actions], sortable headers, resizable columns, paging footer. */
 export function DataTable<T extends { id: string }>({
@@ -139,7 +142,7 @@ export function DataTable<T extends { id: string }>({
           >
             <TableRow className="hover:bg-transparent">
               {selected && (
-                <TableHead className={cn(thClass, "w-10")}>
+                <TableHead className={cn(thClass, CHECK_CELL)}>
                   <Checkbox
                     checked={allOn ? true : someOn ? "indeterminate" : false}
                     onCheckedChange={(v) => onToggleAll?.(ids, v === true)}
@@ -251,7 +254,7 @@ export function DataTable<T extends { id: string }>({
                     onClick={() => onRowClick?.(r)}
                   >
                     {selected && (
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell className={CHECK_CELL} onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selected.has(r.id)}
                           onCheckedChange={() => onToggle?.(r.id)}
