@@ -98,7 +98,8 @@ export const applyCostType = <T extends FixedCostDraft>(d: T): T =>
         allocationUnit: "Month",
       }
     : d.costType === "Other"
-      ? { ...d, loan: null, allocationBase: 1, allocationUnit: "Day" }
+      ? // An amount per Day, Month or Year (the unit picked), entered as is.
+        { ...d, loan: null, allocationBase: 1, allocationUnit: d.allocationUnit || "Day" }
       : { ...d, loan: null };
 
 export const loanLabel = (l: LoanTerms | null | undefined) =>

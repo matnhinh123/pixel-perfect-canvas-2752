@@ -37,6 +37,7 @@ import { COST_CURRENCIES } from "@/mock-data/costMaster";
 import { StatusSelect } from "@/components/movex/cost/CostForms";
 import {
   ALLOCATION_UNITS,
+  type AllocationUnit,
   FIXED_COST_TYPES,
   REPAYMENT_METHODS,
   type FixedCostRecord,
@@ -410,7 +411,7 @@ function FixedCostForm({
             </Field>
             {d.costType !== "Loan Interest" && (
               <Field
-                label={d.costType === "Other" ? "Value / Day" : "Cost Value"}
+                label={d.costType === "Other" ? "Value" : "Cost Value"}
                 required
                 error={errors["costValue"]}
                 className={S4}
@@ -433,6 +434,24 @@ function FixedCostForm({
                   />
                 </div>
               </Field>
+            )}
+            {d.costType === "Other" && (
+              <>
+                <Field
+                  label="Per"
+                  required
+                  className={S2}
+                  info="The Value is an amount per Day, per Month or per Year."
+                >
+                  <NativeSelect
+                    value={d.allocationUnit}
+                    onChange={(u) => patch({ allocationUnit: u as AllocationUnit })}
+                    options={withCurrent(units, d.allocationUnit)}
+                    className="h-10 w-full"
+                  />
+                </Field>
+                {daysField(d.allocationUnit === "Day")}
+              </>
             )}
             {d.costType === "Allocation" && (
               <>
