@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { NativeSelect } from "@/components/movex/common";
+import { Field, NativeSelect } from "@/components/movex/common";
 import { useCollection } from "@/hooks/use-store";
 import { vehicleMasterRepository } from "@/repositories";
 import {
@@ -51,6 +51,59 @@ export function FixedCostVehicleRows({
     const kind = opts.kinds[0] ?? EMPTY.kind;
     onChange([...value, fcVehicleLabel({ ...EMPTY, kind })]);
   };
+
+  // Single: one field on one line — Vehicle Type · Truck Type / Trailer Size · Brand · vehicles.
+  const one = single ? rows[0] : undefined;
+  if (one?.v) {
+    const v = one.v;
+    const count = vehiclesOf(v, vehiclesAll).length;
+    const ready = !needsSpec(v.kind) || !!v.spec;
+    return (
+      <Field
+        label="Vehicle Type"
+        required
+        error={error}
+        info="Picked from the vehicles in Vehicle: type, then Truck Type / Trailer Size, then Brand (“All brands” covers every brand)."
+      >
+        <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-12">
+          <NativeSelect
+            value={v.kind}
+            onChange={(k) => setRow(0, { kind: k as FcVehicleKind, spec: "", brand: "" })}
+            options={withCur([...opts.kinds], v.kind)}
+            className="h-10 w-full sm:col-span-3"
+          />
+          {needsSpec(v.kind) ? (
+            <NativeSelect
+              value={v.spec}
+              onChange={(spec) => setRow(0, { ...v, spec, brand: "" })}
+              options={["", ...withCur(opts.specs(v.kind), v.spec)]}
+              labels={{ "": `Select ${specLabelOf(v.kind)}` }}
+              invalid={!!error && !v.spec}
+              className="h-10 w-full sm:col-span-3"
+            />
+          ) : (
+            <span className="hidden text-sm text-muted-foreground sm:col-span-3 sm:block">—</span>
+          )}
+          <NativeSelect
+            value={v.brand}
+            onChange={(brand) => setRow(0, { ...v, brand })}
+            options={["", ...withCur(opts.brands(v.kind, v.spec), v.brand)]}
+            labels={{ "": "All brands" }}
+            disabled={!ready}
+            className="h-10 w-full sm:col-span-3"
+          />
+          <span
+            className={cn(
+              "text-xs sm:col-span-3",
+              ready && !count ? "text-destructive" : "text-muted-foreground",
+            )}
+          >
+            {!ready ? "" : count ? `${count} vehicle${count > 1 ? "s" : ""}` : "No active vehicle"}
+          </span>
+        </div>
+      </Field>
+    );
+  }
 
   return (
     <div className="sm:col-span-6 lg:col-span-12">
