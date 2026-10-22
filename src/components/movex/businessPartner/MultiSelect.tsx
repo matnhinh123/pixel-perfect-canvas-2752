@@ -25,6 +25,7 @@ export function MultiSelect({
   invalid,
   className,
   disabled,
+  selectAllLabel,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
@@ -33,6 +34,8 @@ export function MultiSelect({
   invalid?: boolean;
   className?: string;
   disabled?: boolean;
+  /** Set: a first "Select all" row ticks / unticks every option. */
+  selectAllLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const toggle = (o: string) =>
@@ -89,6 +92,29 @@ export function MultiSelect({
           <CommandList>
             <CommandEmpty>No results.</CommandEmpty>
             <CommandGroup>
+              {selectAllLabel && options.length > 1 && (
+                <CommandItem
+                  value={`__all ${selectAllLabel}`}
+                  onSelect={() =>
+                    onChange(options.every((o) => value.includes(o)) ? [] : [...options])
+                  }
+                  className="border-b font-medium"
+                >
+                  <Checkbox
+                    checked={
+                      options.every((o) => value.includes(o))
+                        ? true
+                        : value.length
+                          ? "indeterminate"
+                          : false
+                    }
+                    tabIndex={-1}
+                    className="pointer-events-none"
+                    aria-hidden
+                  />
+                  {selectAllLabel}
+                </CommandItem>
+              )}
               {options.map((o) => (
                 <CommandItem key={o} value={o} onSelect={() => toggle(o)}>
                   <Checkbox

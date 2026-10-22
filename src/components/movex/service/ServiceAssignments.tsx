@@ -267,6 +267,7 @@ function AssignmentDialog({
               }}
               options={free.map((x) => x.name)}
               placeholder={t("Chọn phòng ban…", "Select departments…")}
+              selectAllLabel={t("Chọn tất cả", "Select all")}
             />
           </Field>
           <Field label={t("Trạng thái", "Status")} className="col-span-2">
