@@ -68,6 +68,20 @@ export const levelOf = (s: ServiceRecord, list: ServiceRecord[] = serviceReposit
 const descendantsOf = (id: string): string[] =>
   childrenOf(id).flatMap((c) => [c.id, ...descendantsOf(c.id)]);
 
+/** The service tree is at most 5 levels deep (root = level 1). */
+export const MAX_SERVICE_LEVEL = 5;
+/** Levels below a service: 0 for a leaf, 1 if it only has children, … */
+export const subtreeHeight = (id: string, list: ServiceRecord[] = all()): number => {
+  const kids = list.filter((s) => !s.deleted && s.parentId === id);
+  return kids.length ? 1 + Math.max(...kids.map((c) => subtreeHeight(c.id, list))) : 0;
+};
+/**
+ * Deepest level a parent may sit at for `id` (a new service when empty): the service and its own
+ * children must still fit within MAX_SERVICE_LEVEL.
+ */
+export const maxParentLevel = (id?: string, list?: ServiceRecord[]) =>
+  MAX_SERVICE_LEVEL - 1 - (id ? subtreeHeight(id, list) : 0);
+
 /** Depth-first order (children right below their parent, siblings in creation order). */
 export function treeOrder(list: ServiceRecord[]): ServiceRecord[] {
   const ids = new Set(list.map((s) => s.id));
@@ -120,6 +134,14 @@ export function validateService(s: ServiceRecord): Record<string, string> {
       "Không thể chọn chính nó hoặc dịch vụ con của nó làm dịch vụ cha.",
       "A service cannot use itself or one of its child services as its parent.",
     );
+  else if (s.parentId) {
+    const parent = serviceRepository.get(s.parentId);
+    if (parent && levelOf(parent) > maxParentLevel(s.id || undefined))
+      e["parentId"] = tr(
+        `Dịch vụ tối đa ${MAX_SERVICE_LEVEL} cấp — không thể đặt dưới ${parent.code}.`,
+        `Services go at most ${MAX_SERVICE_LEVEL} levels deep — cannot be placed under ${parent.code}.`,
+      );
+  }
   if (s.template && !TEMPLATES.includes(s.template))
     e["template"] = tr(
       "Chỉ chọn Trucking Form, Customs Form, Freight Form hoặc Warehouse Form.",
@@ -299,11 +321,23 @@ export const serviceImportConfig: ImportEntityConfig = {
   ],
   existingKeys: () => new Set(all().map((s) => s.code.toLowerCase())),
   referenceCheck: (r) => {
-    if (r["parent"] && !all().some((s) => s.code.toLowerCase() === r["parent"]!.toLowerCase()))
+    if (!r["parent"]) return [];
+    const parent = all().find((s) => s.code.toLowerCase() === r["parent"]!.toLowerCase());
+    if (!parent)
       return [
         {
           field: "parent",
           error: tr("Không tìm thấy dịch vụ cha", "Parent service not found"),
+        },
+      ];
+    if (levelOf(parent) >= MAX_SERVICE_LEVEL)
+      return [
+        {
+          field: "parent",
+          error: tr(
+            `Dịch vụ cha đã ở cấp ${MAX_SERVICE_LEVEL} — không thêm cấp con được`,
+            `The parent is already at level ${MAX_SERVICE_LEVEL} — no child level allowed`,
+          ),
         },
       ];
     return [];

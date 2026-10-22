@@ -36,6 +36,7 @@ export function ServiceTreePicker({
   value,
   onChange,
   excludeIds,
+  maxLevel,
   invalid,
 }: {
   services: ServiceRecord[];
@@ -43,14 +44,17 @@ export function ServiceTreePicker({
   onChange: (id: string | null) => void;
   /** The service itself and its descendants cannot become its parent. */
   excludeIds: Set<string>;
+  /** Deepest level offered (the tree stops at 5 levels, so a parent is at most level 4). */
+  maxLevel: number;
   invalid?: boolean;
 }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const noneLabel = t("— Không có (dịch vụ gốc)", "— None (root service)");
   const options = useMemo(
-    () => treeOrder(services).filter((s) => !excludeIds.has(s.id)),
-    [services, excludeIds],
+    () =>
+      treeOrder(services).filter((s) => !excludeIds.has(s.id) && levelOf(s, services) <= maxLevel),
+    [services, excludeIds, maxLevel],
   );
   const selected = value ? services.find((s) => s.id === value) : undefined;
   /** Services that have children (shown as folders). */

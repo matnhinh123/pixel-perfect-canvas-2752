@@ -47,6 +47,9 @@ import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
 import { serviceAssignmentService } from "@/services/serviceAssignmentService";
 import {
+  levelOf,
+  MAX_SERVICE_LEVEL,
+  maxParentLevel,
   newServiceDraft,
   rootOf,
   serviceCatalogService,
@@ -162,6 +165,8 @@ interface ChildDraft {
   key: string;
   code: string;
   name: string;
+  /** Optional; saved as the service Remark. */
+  remark: string;
   errors: Record<string, string>;
 }
 let childSeq = 0;
@@ -176,14 +181,14 @@ function ChildServicesPanel({
   form: TemplateType | null;
   onOpen?: (id: string) => void;
   /** Set: "Add Child Service" adds a row typed in place (the template is inherited). */
-  parentId?: string;
+  parentId?: string | undefined;
 }) {
   const { t } = useT();
   const [drafts, setDrafts] = useState<ChildDraft[]>([]);
   const add = () =>
     setDrafts((d) => [
       ...d,
-      { key: `c${Date.now()}${++childSeq}`, code: "", name: "", errors: {} },
+      { key: `c${Date.now()}${++childSeq}`, code: "", name: "", remark: "", errors: {} },
     ]);
   const edit = (key: string, p: Partial<ChildDraft>) =>
     setDrafts((d) =>
@@ -206,6 +211,7 @@ function ChildServicesPanel({
         parentId,
         code: row.code,
         name: row.name,
+        description: row.remark,
       });
       drop(row.key);
       toast.success(t(`Đã thêm ${rec.code}`, `${rec.code} added`));
@@ -250,6 +256,7 @@ function ChildServicesPanel({
               {[
                 t("Mã dịch vụ", "Service Code"),
                 t("Tên dịch vụ", "Service Name"),
+                t("Ghi chú", "Remark"),
                 "Default Template",
                 t("Trạng thái", "Status"),
               ].map((h) => (
@@ -269,6 +276,15 @@ function ChildServicesPanel({
               >
                 <TableCell className="py-2.5 font-semibold text-primary">{c.code}</TableCell>
                 <TableCell className="py-2.5">{c.name}</TableCell>
+                <TableCell
+                  className={cn(
+                    "max-w-64 truncate py-2.5",
+                    !c.description && "text-muted-foreground",
+                  )}
+                  title={c.description || undefined}
+                >
+                  {c.description || "—"}
+                </TableCell>
                 <TableCell className="py-2.5">
                   <Tag tone="tpl">{formName(form)}</Tag>
                 </TableCell>
@@ -307,6 +323,16 @@ function ChildServicesPanel({
                   {row.errors["name"] && (
                     <p className="mt-1 text-xs text-destructive">{row.errors["name"]}</p>
                   )}
+                </TableCell>
+                <TableCell className="py-2 align-top">
+                  <Input
+                    value={row.remark}
+                    maxLength={500}
+                    placeholder={t("Nhập ghi chú", "Enter remark")}
+                    onChange={(e) => edit(row.key, { remark: e.target.value })}
+                    onKeyDown={keys(row)}
+                    className="h-9"
+                  />
                 </TableCell>
                 <TableCell className="py-2.5 align-top">
                   <Tag tone="tpl">{formName(form)}</Tag>
@@ -441,7 +467,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
       >
         <ServiceTabsList assignments={rows.length} />
 
-        <TabsContent value="info" className="flex max-w-4xl flex-col gap-5">
+        <TabsContent value="info" className="flex flex-col gap-5">
           <Panel title={t("Thông tin", "Information")}>
             <dl className={INFO_GRID}>
               <InfoRow label={t("Mã dịch vụ", "Service Code")}>
@@ -490,11 +516,12 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
             items={children}
             form={form}
             onOpen={(id) => go(id)}
-            parentId={source.id}
+            // A level-5 service is the bottom of the tree: no Add Child Service.
+            parentId={levelOf(source, services) < MAX_SERVICE_LEVEL ? source.id : undefined}
           />
         </TabsContent>
 
-        <TabsContent value="form" className="max-w-4xl">
+        <TabsContent value="form">
           <ServiceFormConfig
             form={form}
             root={root}
@@ -503,7 +530,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
           />
         </TabsContent>
 
-        <TabsContent value="assign" className="max-w-5xl">
+        <TabsContent value="assign">
           <ServiceAssignments rows={rows} form={form} service={source} />
         </TabsContent>
       </Tabs>
@@ -724,7 +751,7 @@ function ServiceEditor({
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
         <ServiceTabsList assignments={rows.length} />
 
-        <TabsContent value="info" className="flex max-w-4xl flex-col gap-5">
+        <TabsContent value="info" className="flex flex-col gap-5">
           <Panel title={t("Thông tin", "Information")}>
             <div className={INFO_GRID}>
               <Field label={t("Mã dịch vụ", "Service Code")} required error={errors["code"]}>
@@ -756,6 +783,7 @@ function ServiceEditor({
                   value={s.parentId}
                   onChange={setParent}
                   excludeIds={excludeIds}
+                  maxLevel={maxParentLevel(source?.id, services)}
                   invalid={!!errors["parentId"]}
                 />
               </Field>
@@ -820,7 +848,7 @@ function ServiceEditor({
           {source && <ChildServicesPanel items={children} form={form} />}
         </TabsContent>
 
-        <TabsContent value="form" className="max-w-4xl">
+        <TabsContent value="form">
           <ServiceFormConfig
             form={form}
             root={root ?? { name: s.name.trim() || t("Dịch vụ này", "This service") }}
@@ -832,7 +860,7 @@ function ServiceEditor({
           />
         </TabsContent>
 
-        <TabsContent value="assign" className="max-w-5xl">
+        <TabsContent value="assign">
           <ServiceAssignments rows={rows} form={form} service={s} onChange={setRows} />
         </TabsContent>
       </Tabs>
