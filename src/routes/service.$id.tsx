@@ -854,7 +854,14 @@ function ServiceEditor({
             </div>
           </Panel>
 
-          {source && <ChildServicesPanel items={children} form={form} />}
+          {source && (
+            <ChildServicesPanel
+              items={children}
+              form={form}
+              // Children are added in place even while editing (each is saved on its own).
+              parentId={levelOf(source, services) < MAX_SERVICE_LEVEL ? source.id : undefined}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="form">

@@ -26,6 +26,7 @@ import {
   Tag,
   thClass,
 } from "@/components/movex/common";
+import { MultiSelect } from "@/components/movex/businessPartner/MultiSelect";
 import { DEPARTMENTS, departmentName } from "@/mock-data/staff";
 import { formName } from "@/mock-data/templates";
 import {
@@ -162,11 +163,13 @@ export function ServiceAssignments({
           form={form}
           initial={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
-          onSave={(row) => {
+          onSave={(saved) => {
+            // The edited row is replaced in place by the picked departments (one row each).
+            const at = editing === "new" ? -1 : rows.findIndex((x) => x.key === editing.key);
             onChange(
-              rows.some((x) => x.key === row.key)
-                ? rows.map((x) => (x.key === row.key ? row : x))
-                : [...rows, row],
+              at < 0
+                ? [...rows, ...saved]
+                : [...rows.slice(0, at), ...saved, ...rows.slice(at + 1)],
             );
             setEditing(null);
           }}
@@ -190,13 +193,19 @@ function AssignmentDialog({
   form: TemplateType | null;
   initial: AssignmentRow | null;
   onClose: () => void;
-  onSave: (row: AssignmentRow) => void;
+  /** One row per picked department, sharing Status and Remark. */
+  onSave: (rows: AssignmentRow[]) => void;
 }) {
   const { t } = useT();
   const [d, setD] = useState<AssignmentRow>(
     () => initial ?? { ...newAssignmentDraft(), form, key: newRowKey() },
   );
+  /** Several departments can be picked at once; each becomes its own assignment row. */
+  const [deptIds, setDeptIds] = useState<string[]>(() =>
+    initial?.departmentId ? [initial.departmentId] : [],
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const free = DEPARTMENTS.filter((x) => !taken.includes(x.id));
   const set = <K extends keyof AssignmentDraft>(k: K, v: AssignmentDraft[K]) => {
     setD((p) => ({ ...p, [k]: v }));
     setErrors((e) => {
@@ -206,8 +215,8 @@ function AssignmentDialog({
     });
   };
   const save = () => {
-    const e = validateAssignment(d, service);
-    if (d.departmentId && taken.includes(d.departmentId))
+    const e = validateAssignment({ ...d, departmentId: deptIds[0] ?? "" }, service);
+    if (deptIds.some((id) => taken.includes(id)))
       e["departmentId"] = t(
         "Phòng ban này đã được phân công cho dịch vụ.",
         "This department is already assigned to the service.",
@@ -216,7 +225,16 @@ function AssignmentDialog({
       setErrors(e);
       return;
     }
-    onSave({ ...d, employeeId: null, note: d.note.trim() });
+    const { id: _id, key: _key, ...shared } = d;
+    onSave(
+      deptIds.map((departmentId, i) => ({
+        // The edited row keeps its id / key on its first department; the others are new rows.
+        ...(i === 0 ? d : { ...shared, key: newRowKey() }),
+        departmentId,
+        employeeId: null,
+        note: d.note.trim(),
+      })),
+    );
   };
 
   return (
@@ -236,15 +254,19 @@ function AssignmentDialog({
             error={errors["departmentId"]}
             className="col-span-2"
           >
-            <NativeSelect
-              value={d.departmentId}
+            <MultiSelect
+              value={deptIds.map(departmentName)}
               invalid={!!errors["departmentId"]}
-              onChange={(v) => set("departmentId", v)}
-              options={["", ...DEPARTMENTS.map((x) => x.id)]}
-              labels={{
-                "": t("Chọn phòng ban…", "Select department…"),
-                ...Object.fromEntries(DEPARTMENTS.map((x) => [x.id, x.name])),
+              onChange={(names) => {
+                setDeptIds(free.filter((x) => names.includes(x.name)).map((x) => x.id));
+                setErrors((e) => {
+                  const n = { ...e };
+                  delete n["departmentId"];
+                  return n;
+                });
               }}
+              options={free.map((x) => x.name)}
+              placeholder={t("Chọn phòng ban…", "Select departments…")}
             />
           </Field>
           <Field label={t("Trạng thái", "Status")} className="col-span-2">
