@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { CheckCircle2, History, Lock, Pencil, Plus, XCircle } from "lucide-react";
+import { Check, CheckCircle2, History, Lock, Pencil, Plus, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -156,29 +157,83 @@ function ServiceTabsList({ assignments }: { assignments: number }) {
   );
 }
 
+/** A child service being typed in the Child Services table (not saved yet). */
+interface ChildDraft {
+  key: string;
+  code: string;
+  name: string;
+  errors: Record<string, string>;
+}
+let childSeq = 0;
+
 function ChildServicesPanel({
   items,
   form,
   onOpen,
-  onAdd,
+  parentId,
 }: {
   items: ServiceRecord[];
   form: TemplateType | null;
   onOpen?: (id: string) => void;
-  onAdd?: () => void;
+  /** Set: "Add Child Service" adds a row typed in place (the template is inherited). */
+  parentId?: string;
 }) {
   const { t } = useT();
+  const [drafts, setDrafts] = useState<ChildDraft[]>([]);
+  const add = () =>
+    setDrafts((d) => [
+      ...d,
+      { key: `c${Date.now()}${++childSeq}`, code: "", name: "", errors: {} },
+    ]);
+  const edit = (key: string, p: Partial<ChildDraft>) =>
+    setDrafts((d) =>
+      d.map((x) =>
+        x.key === key
+          ? {
+              ...x,
+              ...p,
+              errors: Object.fromEntries(Object.entries(x.errors).filter(([k]) => !(k in p))),
+            }
+          : x,
+      ),
+    );
+  const drop = (key: string) => setDrafts((d) => d.filter((x) => x.key !== key));
+  const save = (row: ChildDraft) => {
+    if (!parentId) return;
+    try {
+      const rec = serviceCatalogService.save({
+        ...newServiceDraft(),
+        parentId,
+        code: row.code,
+        name: row.name,
+      });
+      drop(row.key);
+      toast.success(t(`Đã thêm ${rec.code}`, `${rec.code} added`));
+    } catch (err) {
+      if (err instanceof BusinessRuleError)
+        setDrafts((d) => d.map((x) => (x.key === row.key ? { ...x, errors: err.fieldErrors } : x)));
+      else toast.error(err instanceof Error ? err.message : "Save failed");
+    }
+  };
+  const keys = (row: ChildDraft) => (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      save(row);
+    } else if (e.key === "Escape") drop(row.key);
+  };
+  const editable = !!parentId;
+
   return (
     <Panel
       title={t(`Dịch vụ con (${items.length})`, `Child Services (${items.length})`)}
       bodyClassName="p-0"
       actions={
-        onAdd && (
+        editable && (
           <Button
             variant="outline"
             size="sm"
             className="h-8 border-primary/40 text-primary"
-            onClick={onAdd}
+            onClick={add}
           >
             <Plus className="h-4 w-4" />
             {t("Thêm dịch vụ con", "Add Child Service")}
@@ -186,7 +241,7 @@ function ChildServicesPanel({
         )
       }
     >
-      {items.length === 0 ? (
+      {items.length === 0 && drafts.length === 0 ? (
         <EmptyState title={t("Chưa có dịch vụ con", "No child services yet")} />
       ) : (
         <Table>
@@ -202,6 +257,7 @@ function ChildServicesPanel({
                   {h}
                 </TableHead>
               ))}
+              {editable && <TableHead className={cn(thClass, "w-24")} />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -218,6 +274,67 @@ function ChildServicesPanel({
                 </TableCell>
                 <TableCell className="py-2.5">
                   <StatusBadge status={c.status} />
+                </TableCell>
+                {editable && <TableCell />}
+              </TableRow>
+            ))}
+            {drafts.map((row) => (
+              <TableRow key={row.key} className="bg-primary/5 hover:bg-primary/5">
+                <TableCell className="py-2 align-top">
+                  <Input
+                    autoFocus
+                    value={row.code}
+                    maxLength={30}
+                    placeholder={t("Nhập mã", "Enter code")}
+                    aria-invalid={!!row.errors["code"] || undefined}
+                    onChange={(e) => edit(row.key, { code: e.target.value.toUpperCase() })}
+                    onKeyDown={keys(row)}
+                    className="h-9"
+                  />
+                  {row.errors["code"] && (
+                    <p className="mt-1 text-xs text-destructive">{row.errors["code"]}</p>
+                  )}
+                </TableCell>
+                <TableCell className="py-2 align-top">
+                  <Input
+                    value={row.name}
+                    placeholder={t("Nhập tên dịch vụ", "Enter service name")}
+                    aria-invalid={!!row.errors["name"] || undefined}
+                    onChange={(e) => edit(row.key, { name: e.target.value })}
+                    onKeyDown={keys(row)}
+                    className="h-9"
+                  />
+                  {row.errors["name"] && (
+                    <p className="mt-1 text-xs text-destructive">{row.errors["name"]}</p>
+                  )}
+                </TableCell>
+                <TableCell className="py-2.5 align-top">
+                  <Tag tone="tpl">{formName(form)}</Tag>
+                </TableCell>
+                <TableCell className="py-2.5 align-top">
+                  <StatusBadge status="Active" />
+                </TableCell>
+                <TableCell className="py-2 align-top">
+                  <div className="flex justify-end gap-1">
+                    <button
+                      type="button"
+                      title={t("Lưu (Enter)", "Save (Enter)")}
+                      aria-label={t("Lưu dịch vụ con", "Save child service")}
+                      className="rounded p-1.5 text-success hover:bg-success/10"
+                      onClick={() => save(row)}
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title={t("Huỷ (Esc)", "Cancel (Esc)")}
+                      aria-label={t("Huỷ dòng", "Cancel row")}
+                      className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => drop(row.key)}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -373,13 +490,7 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
             items={children}
             form={form}
             onOpen={(id) => go(id)}
-            onAdd={() =>
-              void navigate({
-                to: "/service/$id",
-                params: { id: "new" },
-                search: { parent: source.id },
-              })
-            }
+            parentId={source.id}
           />
         </TabsContent>
 
