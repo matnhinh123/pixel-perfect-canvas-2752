@@ -190,9 +190,15 @@ export function Field({
   required,
   error,
   hint,
+  hintAbove,
+  labelAside,
   info,
 }: {
   label: string;
+  /** Shown right after the label (e.g. the current value in short). */
+  labelAside?: ReactNode;
+  /** Put the hint between the label and the input instead of below it. */
+  hintAbove?: boolean;
   /** Help text shown in a tooltip behind an (i) icon next to the label. */
   info?: ReactNode;
   children: ReactNode;
@@ -214,11 +220,13 @@ export function Field({
             <TooltipContent className="max-w-xs">{info}</TooltipContent>
           </Tooltip>
         )}
+        {labelAside}
       </span>
+      {hint && hintAbove && <span className="-mt-1 text-xs text-muted-foreground">{hint}</span>}
       {children}
       {error ? (
         <span className="text-xs font-medium text-destructive">{error}</span>
-      ) : hint ? (
+      ) : hint && !hintAbove ? (
         <span className="text-xs text-muted-foreground">{hint}</span>
       ) : null}
     </label>

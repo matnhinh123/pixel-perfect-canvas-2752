@@ -129,10 +129,31 @@ function ServiceDetailPage() {
 
 // ---------------------------------------------------------------- Shared layout
 
-function InfoRow({ label, children }: { label: string; children: ReactNode }) {
+/** The direct parent, shown next to the "Parent Service" label. */
+function DirectParent({ parent }: { parent: ServiceRecord }) {
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 align-middle text-xs font-medium text-primary">
+      {parent.name}
+      <span className="font-normal text-primary/70">{parent.code}</span>
+    </span>
+  );
+}
+
+function InfoRow({
+  label,
+  aside,
+  children,
+}: {
+  label: string;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dt className="text-xs font-medium text-muted-foreground">
+        {label}
+        {aside}
+      </dt>
       <dd className="text-sm">{children}</dd>
     </div>
   );
@@ -475,7 +496,10 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
                 <span className="font-semibold">{source.code}</span>
               </InfoRow>
               <InfoRow label={t("Tên dịch vụ", "Service Name")}>{source.name}</InfoRow>
-              <InfoRow label={t("Dịch vụ cha", "Parent Service")}>
+              <InfoRow
+                label={t("Dịch vụ cha", "Parent Service")}
+                aside={parent && <DirectParent parent={parent} />}
+              >
                 {parent ? (
                   // Full path as shown in the picker: "Trucking › Inland Trucking"; each part opens it.
                   <span className="flex flex-wrap items-center gap-x-1.5">
@@ -781,7 +805,9 @@ function ServiceEditor({
               </Field>
               <Field
                 label={t("Dịch vụ cha", "Parent Service")}
+                labelAside={parent && <DirectParent parent={parent} />}
                 error={errors["parentId"]}
+                hintAbove
                 hint={t(
                   "Bỏ trống nếu đây là dịch vụ gốc (nhóm dịch vụ).",
                   "Leave empty if this is a root service (service group).",
