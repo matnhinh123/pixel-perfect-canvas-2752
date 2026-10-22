@@ -15,6 +15,7 @@ import {
   Table2,
   Trash2,
   Upload,
+  FileDown,
   X,
   XCircle,
 } from "lucide-react";
@@ -34,7 +35,7 @@ import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import type { BaseRecord, EntityType, FilterCondition, SortState } from "@/types";
 import type { EntityCrud } from "@/services/crudService";
 import type { ImportEntityConfig } from "@/services/importExportService";
-import { exportView } from "@/services/importExportService";
+import { downloadTemplate, exportView } from "@/services/importExportService";
 import {
   applyConditions,
   applySearch,
@@ -533,6 +534,14 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     </DisabledWithReason>
   );
 
+  // The import template is one click away, next to Import (also offered inside the import dialog).
+  const templateBtn = importExport && p.importConfig && (
+    <Button variant="outline" onClick={() => void downloadTemplate(p.importConfig!)}>
+      <FileDown className="h-4 w-4" />
+      Download Template
+    </Button>
+  );
+
   // One click → Excel (.xlsx) of the current view (search + filter + sort, visible columns).
   // Selected rows are exported from the selection bar.
   const exportBtn = importExport && (
@@ -646,6 +655,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             subtitle={p.subtitle}
             actions={
               <>
+                {templateBtn}
                 {importBtn}
                 {exportBtn}
                 {addBtn}
@@ -658,6 +668,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
         <div>
           {p.embedded && (
             <div className="mb-4 flex flex-wrap justify-end gap-2">
+              {templateBtn}
               {importBtn}
               {exportBtn}
               {addBtn}
