@@ -1,13 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Download,
-  FileSpreadsheet,
-  Loader2,
-  RotateCcw,
-  Upload,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Loader2, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,8 +23,6 @@ import { useConfirm } from "./ConfirmDialog";
 import {
   commitImport,
   downloadErrorFile,
-  downloadTable,
-  downloadTemplate,
   readImportFile,
   rollbackImport,
   validateImport,
@@ -45,14 +35,9 @@ import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useT } from "./listLang";
 
-const STEPS = [
-  "Tải template",
-  "Upload file",
-  "Kiểm tra",
-  "Xem kết quả",
-  "Xác nhận import",
-] as const;
-const STEPS_EN = ["Download template", "Upload file", "Validate", "Review", "Confirm import"];
+// The template is downloaded from the list header ("Download Template"), so the wizard starts at Upload.
+const STEPS = ["Upload file", "Kiểm tra", "Xem kết quả", "Xác nhận import"] as const;
+const STEPS_EN = ["Upload file", "Validate", "Review", "Confirm import"];
 const CHECKS_EN = [
   "File structure",
   "Required fields",
@@ -112,12 +97,12 @@ export function ImportDialog({
   };
 
   const runValidation = (fileName: string, table: string[][]) => {
-    setStep(2);
+    setStep(1);
     setValidating(true);
     setTimeout(() => {
       setResult(validateImport(config, fileName, table));
       setValidating(false);
-      setStep(3);
+      setStep(2);
     }, 700);
   };
 
@@ -142,7 +127,7 @@ export function ImportDialog({
     if (!result) return;
     const b = commitImport(config, result);
     setDone({ success: b.successRows, failed: b.failedRows, status: b.status });
-    setStep(4);
+    setStep(3);
     if (b.successRows)
       toast.success(
         t(
@@ -196,7 +181,7 @@ export function ImportDialog({
           </TabsList>
 
           <TabsContent value="import" className="mt-4">
-            <ol className="mb-5 grid grid-cols-5 gap-2">
+            <ol className="mb-5 grid grid-cols-4 gap-2">
               {(en ? STEPS_EN : STEPS).map((s, i) => (
                 <li
                   key={s}
@@ -215,43 +200,14 @@ export function ImportDialog({
               ))}
             </ol>
 
-            {step <= 1 && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-lg border p-4">
-                  <div className="mb-1 text-sm font-semibold">
-                    1. {t("Tải template", "Download template")}
-                  </div>
-                  <p className="mb-3 text-xs text-muted-foreground">
+            {step === 0 && (
+              <div>
+                <div className="rounded-lg border border-dashed p-4">
+                  <div className="mb-1 text-sm font-semibold">Upload file Excel</div>
+                  <p className="mb-1 text-xs text-muted-foreground">
                     {t("Các cột:", "Columns:")}{" "}
                     {config.columns.map((c) => `${c.header}${c.required ? "*" : ""}`).join(", ")}
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        void downloadTemplate(config);
-                        setStep(1);
-                      }}
-                    >
-                      <Download className="h-4 w-4" />
-                      Download Template
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const [h, ...rows] = config.sampleFile();
-                        void downloadTable(`${config.screen}_sample_20rows`, h!, rows);
-                      }}
-                    >
-                      <FileSpreadsheet className="h-4 w-4" />
-                      {t("File mẫu (20 dòng)", "Sample file (20 rows)")}
-                    </Button>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-dashed p-4">
-                  <div className="mb-1 text-sm font-semibold">2. Upload file Excel</div>
                   <p className="mb-3 text-xs text-muted-foreground">
                     {t("Chấp nhận file Excel", "Accepts Excel")} <b>.xlsx</b> {t("hoặc", "or")}{" "}
                     <b>.csv</b>{" "}
@@ -289,7 +245,7 @@ export function ImportDialog({
               </div>
             )}
 
-            {step === 2 && (
+            {step === 1 && (
               <div className="rounded-lg border p-5">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -305,7 +261,7 @@ export function ImportDialog({
               </div>
             )}
 
-            {step === 3 && result && !validating && (
+            {step === 2 && result && !validating && (
               <div className="flex flex-col gap-4">
                 {result.structureError ? (
                   <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-danger-soft p-4 text-sm">
@@ -407,7 +363,7 @@ export function ImportDialog({
               </div>
             )}
 
-            {step === 4 && done && (
+            {step === 3 && done && (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <CheckCircle2 className="h-10 w-10 text-success" />
                 <div className="text-lg font-semibold">{done.status}</div>
