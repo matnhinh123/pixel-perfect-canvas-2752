@@ -1,14 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
-import { History, Info, XCircle } from "lucide-react";
+import { History, Info, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState, Field, NativeSelect, Panel } from "@/components/movex/common";
+import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
   FormErrorBanner,
@@ -34,7 +33,6 @@ import {
   hasOperationalTransactions,
   identityNoRequired,
   taxCodeRequired,
-  toEnglishAddress,
   type BusinessPartnerDraft,
 } from "@/services/businessPartnerService";
 import {
@@ -77,6 +75,7 @@ export const Route = createFileRoute("/business-partner/$id")({
 function BusinessPartnerPage() {
   const { t } = useT();
   const { id } = Route.useParams();
+  const { mode } = Route.useSearch();
   const all = useCollection(businessPartnerRepository);
   const raw = id === "new" ? null : (all.find((r) => r.id === id && !r.deleted) ?? null);
   // Records saved by older versions are brought to the current shape before the form reads them.
@@ -95,12 +94,13 @@ function BusinessPartnerPage() {
         />
       </Panel>
     );
-  // The detail is always an editable form; `key` resets it when switching records or after a save.
+  // Opening a record shows it read-only; "Edit" in the header switches to the form. `key` resets the
+  // form when switching records / modes or after a save.
   return (
     <BpForm
-      key={source ? `${source.id}:${JSON.stringify(source)}` : "new"}
+      key={source ? `${source.id}:${mode ?? "view"}:${JSON.stringify(source)}` : "new"}
       source={source}
-      readOnly={false}
+      readOnly={!!source && mode !== "edit"}
     />
   );
 }
@@ -202,18 +202,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
   /** Role is locked once the partner has operational transactions. */
   const roleLocked = hasOperationalTransactions(source?.id);
 
-  /** English Address follows the Local Address (transliterated) until the user edits it. */
-  const setLocalAddress = (v: string) => {
-    setD((x) => ({
-      ...x,
-      localAddress: v,
-      englishAddress:
-        !x.englishAddress || x.englishAddress === toEnglishAddress(x.localAddress)
-          ? toEnglishAddress(v)
-          : x.englishAddress,
-    }));
-    clearErr(["localAddress", "englishAddress"]);
-  };
   /** Company "Get Info": tax-authority lookup by MST (mock registry in the demo) fills Local Name and Local Address. */
   const getTaxInfo = () => {
     const res = lookupTaxPayer(d.taxCode);
@@ -226,7 +214,15 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
     toast.success(t("Đã lấy thông tin doanh nghiệp.", "Company information retrieved."));
   };
 
-  const back = () => void navigate({ to: "/business-partner" });
+  /** Cancel: an edited record goes back to its view page, a new one to the list. */
+  const back = () =>
+    source
+      ? void navigate({
+          to: "/business-partner/$id",
+          params: { id: source.id },
+          search: { mode: "view" },
+        })
+      : void navigate({ to: "/business-partner" });
 
   const save = async () => {
     setFormError(null);
@@ -276,6 +272,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               : t(`Chỉnh sửa: ${source.englishName}`, `Edit: ${source.englishName}`)
         }
         subtitle={source ? source.bpCode : undefined}
+        badge={source && readOnly ? <StatusBadge status={source.status} /> : undefined}
         dirty={dirty}
         readOnly={readOnly}
         onBack={() => (readOnly || isNew ? void navigate({ to: "/business-partner" }) : back())}
@@ -284,30 +281,44 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
         extra={
           source && (
             <>
-              <div className="relative">
-                <span
-                  className={cn(
-                    "absolute left-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full",
-                    d.status === "Active" ? "bg-success" : "bg-muted-foreground",
-                  )}
-                />
-                <select
-                  aria-label="Status"
-                  value={d.status}
-                  onChange={(e) => patch({ status: e.target.value as "Active" | "Inactive" })}
-                  className="h-11 appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm font-medium outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                  ▾
-                </span>
-              </div>
+              {!readOnly && (
+                <div className="relative">
+                  <span
+                    className={cn(
+                      "absolute left-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full",
+                      d.status === "Active" ? "bg-success" : "bg-muted-foreground",
+                    )}
+                  />
+                  <select
+                    aria-label="Status"
+                    value={d.status}
+                    onChange={(e) => patch({ status: e.target.value as "Active" | "Inactive" })}
+                    className="h-11 appearance-none rounded-md border border-input bg-card pl-8 pr-8 text-sm font-medium outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    ▾
+                  </span>
+                </div>
+              )}
               <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
                 <History className="h-4 w-4" />
                 {t("Lịch sử", "History")}
               </Button>
+              {readOnly && (
+                <Button asChild size="lg">
+                  <Link
+                    to="/business-partner/$id"
+                    params={{ id: source.id }}
+                    search={{ mode: "edit" }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Link>
+                </Button>
+              )}
             </>
           )
         }
@@ -400,12 +411,7 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               error={errors["localAddress"]}
               className="sm:col-span-2 lg:col-span-4"
             >
-              <Input
-                placeholder="Enter Local Address"
-                value={d.localAddress}
-                onChange={(e) => setLocalAddress(e.target.value)}
-                aria-invalid={!!errors["localAddress"] || undefined}
-              />
+              <Input placeholder="Enter Local Address" {...text("localAddress")} />
             </Field>
 
             <Field
@@ -420,10 +426,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
               label="English Address"
               required
               error={errors["englishAddress"]}
-              info={t(
-                "Tự điền từ Local Address (bỏ dấu) — vui lòng kiểm tra lại.",
-                "Filled in from Local Address — please review.",
-              )}
               className="sm:col-span-2 lg:col-span-4"
             >
               <Input placeholder="Enter English Address" {...text("englishAddress")} />
@@ -537,24 +539,6 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
           </div>
         </ReadOnlyScope>
       </Tabs>
-
-      {!readOnly && (
-        <div className="sticky bottom-0 z-20 -mx-6 mt-4 flex items-center justify-end gap-2 border-t bg-card/95 px-6 py-3 backdrop-blur">
-          {dirty && (
-            <span className="mr-auto text-sm font-medium text-warning">
-              {t("Có thay đổi chưa lưu", "You have unsaved changes")}
-            </span>
-          )}
-          <Button variant="outline" onClick={back}>
-            <X className="h-4 w-4" />
-            Cancel
-          </Button>
-          <Button onClick={() => void save()}>
-            <Save className="h-4 w-4" />
-            Save
-          </Button>
-        </div>
-      )}
 
       {source && (
         <AuditHistoryDrawer

@@ -61,19 +61,6 @@ function useHeader(code: string | undefined, isNew: boolean, readOnly: boolean) 
   };
 }
 
-function FormFooter({ onCancel, onSave }: { onCancel: () => void; onSave: () => void }) {
-  return (
-    <div className="sticky bottom-0 z-20 -mx-6 mt-6 flex items-center justify-end gap-2 border-t bg-card/95 px-6 py-3 backdrop-blur">
-      <Button variant="outline" size="lg" onClick={onCancel}>
-        Cancel
-      </Button>
-      <Button size="lg" onClick={onSave}>
-        Save
-      </Button>
-    </div>
-  );
-}
-
 /** Status select in the header while editing (a new record starts Active). */
 export function StatusSelect({
   value,
@@ -336,7 +323,6 @@ export function CostDetailForm({
         </CollapsiblePanel>
       </ReadOnlyScope>
 
-      {!readOnly && <FormFooter onCancel={back} onSave={save} />}
       {source && (
         <AuditHistoryDrawer
           open={historyOpen}
