@@ -65,6 +65,20 @@ export const levelOf = (s: ServiceRecord, list: ServiceRecord[] = serviceReposit
   return lvl;
 };
 
+/** The service and its ancestors, root first. */
+export const servicePath = (s: ServiceRecord, list: ServiceRecord[]): ServiceRecord[] => {
+  const path: ServiceRecord[] = [];
+  let cur: ServiceRecord | undefined = s;
+  const guard = new Set<string>();
+  while (cur && !guard.has(cur.id)) {
+    guard.add(cur.id);
+    path.unshift(cur);
+    const pid: string | null = cur.parentId;
+    cur = pid ? list.find((x) => x.id === pid) : undefined;
+  }
+  return path;
+};
+
 const descendantsOf = (id: string): string[] =>
   childrenOf(id).flatMap((c) => [c.id, ...descendantsOf(c.id)]);
 

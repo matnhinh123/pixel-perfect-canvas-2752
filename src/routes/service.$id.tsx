@@ -54,6 +54,7 @@ import {
   rootOf,
   serviceCatalogService,
   serviceCrud,
+  servicePath,
   templateOf,
   validateService,
 } from "@/services/serviceCatalogService";
@@ -476,13 +477,21 @@ function ServiceView({ source, services }: { source: ServiceRecord; services: Se
               <InfoRow label={t("Tên dịch vụ", "Service Name")}>{source.name}</InfoRow>
               <InfoRow label={t("Dịch vụ cha", "Parent Service")}>
                 {parent ? (
-                  <button
-                    type="button"
-                    className="font-medium text-primary hover:underline"
-                    onClick={() => go(parent.id)}
-                  >
-                    {parent.name}
-                  </button>
+                  // Full path as shown in the picker: "Trucking › Inland Trucking"; each part opens it.
+                  <span className="flex flex-wrap items-center gap-x-1.5">
+                    {servicePath(parent, services).map((p, i) => (
+                      <span key={p.id} className="inline-flex items-center gap-1.5">
+                        {i > 0 && <span className="text-muted-foreground">›</span>}
+                        <button
+                          type="button"
+                          className="font-medium text-primary hover:underline"
+                          onClick={() => go(p.id)}
+                        >
+                          {p.name}
+                        </button>
+                      </span>
+                    ))}
+                  </span>
                 ) : (
                   <span className="text-muted-foreground">
                     {t("— (dịch vụ gốc)", "— (root service)")}

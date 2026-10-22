@@ -11,24 +11,16 @@ import {
 } from "@/components/ui/command";
 import { Tag } from "@/components/movex/common";
 import { formName } from "@/mock-data/templates";
-import { levelOf, templateOf, treeOrder } from "@/services/serviceCatalogService";
+import { levelOf, servicePath, templateOf, treeOrder } from "@/services/serviceCatalogService";
 import type { ServiceRecord } from "@/types";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
 /** "Trucking › Inland Trucking" */
-const servicePathLabel = (s: ServiceRecord, list: ServiceRecord[]): string => {
-  const names: string[] = [];
-  let cur: ServiceRecord | undefined = s;
-  const guard = new Set<string>();
-  while (cur && !guard.has(cur.id)) {
-    guard.add(cur.id);
-    names.unshift(cur.name);
-    const pid: string | null = cur.parentId;
-    cur = pid ? list.find((x) => x.id === pid) : undefined;
-  }
-  return names.join(" › ");
-};
+const servicePathLabel = (s: ServiceRecord, list: ServiceRecord[]): string =>
+  servicePath(s, list)
+    .map((x) => x.name)
+    .join(" › ");
 
 /** Pick "Dịch vụ cha" from the service tree (indented, searchable). Empty = root service. */
 export function ServiceTreePicker({
