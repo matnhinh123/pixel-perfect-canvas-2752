@@ -50,6 +50,7 @@ import {
   cogsService,
   draftOfCogs,
   newCogsDraft,
+  factorOf,
   sanitizeCogsCode,
   type CogsDraft,
 } from "@/services/cost/cogsService";
@@ -122,6 +123,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
           fixedCosts: fixedAll,
           mappings,
           mappingIds: d.mappingIds,
+          utilizationFactor: factorOf(d),
           salaryRangeId: d.salaryRangeId,
           fuelCostId: d.fuelCostId,
           costs,
@@ -135,6 +137,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   const lines: CogsLine[] = readOnly && source ? source.lines : (built?.lines ?? []);
   const total = readOnly && source ? source.total : (built?.total ?? 0);
   const costErrors =
+    errors["utilizationFactor"] ??
     errors["mappingIds"] ??
     errors["salaryRangeId"] ??
     errors["fuelCostId"] ??
@@ -738,8 +741,35 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                 <TableBody>
                   {sectionHead(
                     "Fixed Cost",
-                    "per day of the vehicle, from the Fixed Cost Mappings",
-                    addMapping(fixedRows, d.mappingIds, "mappingIds", "Fixed Cost Mapping"),
+                    "per day of the vehicle ÷ Utilization Factor, from the Fixed Cost Mappings",
+                    <>
+                      <label
+                        className="flex items-center gap-2 text-xs"
+                        title="Hệ số khai thác: trips the vehicle runs per day. The fixed costs of a day are shared by them — Fixed Cost per trip = per day ÷ factor (e.g. 2 → half). 1 = one trip a day."
+                      >
+                        <span className="whitespace-nowrap font-medium">Utilization Factor</span>
+                        {readOnly ? (
+                          <b className="tabular-nums">{source?.utilizationFactor ?? 1}</b>
+                        ) : (
+                          <Input
+                            inputMode="decimal"
+                            value={d.utilizationFactor}
+                            onChange={(e) =>
+                              patch({
+                                utilizationFactor: e.target.value
+                                  .replace(/[^\d.]/g, "")
+                                  .slice(0, 5),
+                              })
+                            }
+                            className="h-8 w-16 bg-background text-right tabular-nums"
+                            aria-label="Utilization Factor"
+                            aria-invalid={!!errors["utilizationFactor"] || undefined}
+                          />
+                        )}
+                        <span className="whitespace-nowrap text-muted-foreground">trip/day</span>
+                      </label>
+                      {addMapping(fixedRows, d.mappingIds, "mappingIds", "Fixed Cost Mapping")}
+                    </>,
                     { to: "/fixed-cost", label: "Fixed Cost" },
                   )}
                   {mappingRowsOf(d.mappingIds, fixedRows, "mappingIds", "Fixed Cost Mapping")}

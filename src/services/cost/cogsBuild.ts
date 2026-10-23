@@ -154,6 +154,8 @@ export interface CogsBuildInput extends VariableSetups {
   mappings: FixedCostSummaryRecord[];
   /** Mappings picked on the COGS. */
   mappingIds: readonly string[];
+  /** Trips per day (hệ số khai thác): Fixed Cost per trip = per day ÷ factor. */
+  utilizationFactor: number;
   /** Fare Codes (Fare Code Management). */
   costs: CostItemRecord[];
   excluded: readonly string[];
@@ -176,7 +178,9 @@ export interface CogsBuild {
 export function buildCogs(i: CogsBuildInput): CogsBuild {
   const t = routeTotals(i.route);
 
-  // Fixed Cost: the fixed costs of each mapping picked, in order (a cost in two mappings counts once).
+  // Fixed Cost: the fixed costs of each mapping picked, in order (a cost in two mappings counts once),
+  // per day shared by the trips of the day (Utilization Factor).
+  const factor = i.utilizationFactor > 0 ? i.utilizationFactor : 1;
   const seen = new Set<string>();
   const fixedLines: CogsLine[] = [];
   for (const id of i.mappingIds) {
@@ -192,8 +196,10 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
         group: "Fixed Cost",
         code: f.code,
         name: f.name,
-        basis: `${fare ? `Fare Code ${fare.code} · ` : ""}${formatNumber(f.costValue)} ${f.currency} per ${f.allocationBase} ${f.allocationUnit} → per day`,
-        amount: Math.round(fixedCostPerDay(f)),
+        basis:
+          `${fare ? `Fare Code ${fare.code} · ` : ""}${formatNumber(f.costValue)} ${f.currency} per ${f.allocationBase} ${f.allocationUnit} → per day ${formatNumber(Math.round(fixedCostPerDay(f)))}` +
+          (factor !== 1 ? ` ÷ ${factor} trips/day` : ""),
+        amount: Math.round(fixedCostPerDay(f) / factor),
         mappingId: m.id,
       });
     }

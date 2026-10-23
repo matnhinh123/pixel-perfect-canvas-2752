@@ -35,6 +35,8 @@ export interface CogsDraft {
   routeId: string;
   vehicleType: string;
   mappingIds: string[];
+  /** Utilization Factor (trips per day); text while typed. */
+  utilizationFactor: string;
   /** "" = the first Salary Range / Fuel Cost that applies to the vehicle type. */
   salaryRangeId: string;
   fuelCostId: string;
@@ -51,6 +53,7 @@ export const newCogsDraft = (): CogsDraft => ({
   routeId: "",
   vehicleType: "",
   mappingIds: [],
+  utilizationFactor: "1",
   salaryRangeId: "",
   fuelCostId: "",
   excluded: [],
@@ -66,6 +69,7 @@ export const draftOfCogs = (c: CogsRecord): CogsDraft => ({
   routeId: c.routeId,
   vehicleType: c.vehicleType,
   mappingIds: [...(c.mappingIds ?? [])],
+  utilizationFactor: String(c.utilizationFactor ?? 1),
   salaryRangeId: c.salaryRangeId ?? "",
   fuelCostId: c.fuelCostId ?? "",
   excluded: [...c.excluded],
@@ -125,6 +129,11 @@ export function validateCogs(d: CogsDraft, id?: string): Record<string, string> 
       e["fuelCostId"] =
         `The Fuel Cost picked is not for ${vt.key} (or was removed): pick it again.`;
   }
+  const f = Number(d.utilizationFactor);
+  if (!d.utilizationFactor.trim()) e["utilizationFactor"] = "Utilization Factor is required.";
+  else if (!(f > 0) || f > 10 || !/^\d+(\.\d{1,2})?$/.test(d.utilizationFactor.trim()))
+    e["utilizationFactor"] =
+      "Utilization Factor must be a number above 0 and up to 10, with at most 2 decimals.";
   const badEdit = Object.values(d.overrides).some((v) => !(v >= 0));
   if (badEdit) e["overrides"] = "An edited amount must be 0 or more.";
   const badOther = d.others.findIndex((o) => !o.costId || !(o.amount > 0));
@@ -132,6 +141,12 @@ export function validateCogs(d: CogsDraft, id?: string): Record<string, string> 
     e["others"] = `Other Cost row ${badOther + 1}: enter a valid Fare Code and an amount above 0.`;
   return e;
 }
+
+/** Utilization Factor of a draft; 1 while what is typed is not a valid number. */
+export const factorOf = (d: Pick<CogsDraft, "utilizationFactor">) => {
+  const f = Number(d.utilizationFactor);
+  return f > 0 && f <= 10 ? f : 1;
+};
 
 /** Builds the COGS of a draft from the current Route / Fixed Cost / Variable Cost / Cost setup. */
 export const buildCogsOf = (d: CogsDraft) => {
@@ -147,6 +162,7 @@ export const buildCogsOf = (d: CogsDraft) => {
     fixedCosts: fixedCostRepository.all(),
     mappings: fixedCostSummaryRepository.all(),
     mappingIds: d.mappingIds,
+    utilizationFactor: factorOf(d),
     salaryRangeId: d.salaryRangeId,
     fuelCostId: d.fuelCostId,
     costs: costItemRepository.all().filter((c) => !c.deleted),
@@ -171,6 +187,7 @@ export const cogsService = {
       routeName: route.name,
       vehicleType: d.vehicleType,
       mappingIds: d.mappingIds,
+      utilizationFactor: factorOf(d),
       salaryRangeId: b.variable.salaryRange?.id ?? "",
       fuelCostId: b.variable.fuelCost?.id ?? "",
       excluded: d.excluded,

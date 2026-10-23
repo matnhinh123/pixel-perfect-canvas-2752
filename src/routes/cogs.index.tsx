@@ -78,6 +78,15 @@ function CogsListPage() {
         value: (c) => c.vehicleType,
       },
       {
+        key: "utilizationFactor",
+        width: 120,
+        label: "Utilization Factor",
+        type: "number",
+        value: (c) => c.utilizationFactor ?? 1,
+        render: (c) => `${c.utilizationFactor ?? 1} trip/day`,
+        className: "text-right",
+      },
+      {
         key: "fixed",
         width: 130,
         label: "Fixed Cost",

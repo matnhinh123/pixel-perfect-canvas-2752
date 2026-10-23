@@ -37,6 +37,11 @@ export interface CogsRecord extends BaseRecord {
   vehicleType: string;
   /** Fixed Cost Mappings (Fare Code mappings) picked: their fixed costs make up the Fixed Cost part. */
   mappingIds: string[];
+  /**
+   * Utilization Factor (hệ số khai thác): trips the vehicle runs per day. The fixed costs of a day are
+   * shared by them: Fixed Cost per trip = per day ÷ factor. 1 when not set.
+   */
+  utilizationFactor?: number;
   /** Salary Range and Fuel Cost the variable costs were read from (of the vehicle type). */
   salaryRangeId: string;
   fuelCostId: string;
