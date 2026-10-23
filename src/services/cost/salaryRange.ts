@@ -1,90 +1,29 @@
-// Variable Cost (old Xink screen): driver salary ranges, toll cost by vehicle group, fuel cost and the
-// per route × vehicle type summary. Setups are kept in local storage with an effective version.
-import { useSyncExternalStore } from "react";
-import { readJson, subscribeKey, writeJson } from "@/repositories/storage";
-import { currentUser } from "@/services/session";
-import type { RouteRecord, TollStation } from "@/types";
-import { routeLegs, routeTotals } from "./costMath";
+// Variable Cost maths: the calculation rule of the trip salary, salary tiers, fuel cost and toll fees by
+// vehicle group. The setups themselves (Salary Range, Fuel Cost, mappings) are records in repositories.
+import type { CalcRule, RouteRecord, SalaryTier, TollStation } from "@/types";
+import { routeLegs } from "./costMath";
 
-// ---------------------------------------------------------------- Vehicle types
-
-export type VehicleCategory = "Truck" | "Container";
-export interface VehicleTypeDef {
-  type: string;
-  /** Short label used in the Trip Salary grid. */
-  short: string;
-  /** Toll vehicle group (Group 1..5). */
-  group: number;
-  category: VehicleCategory;
-}
-export const VEHICLE_TYPE_DEFS: VehicleTypeDef[] = [
-  { type: "Xe tải 1T", short: "Truck 1T", group: 1, category: "Truck" },
-  { type: "Xe tải 2T", short: "Truck 2T", group: 2, category: "Truck" },
-  { type: "Xe tải 5T", short: "Truck 5T", group: 3, category: "Truck" },
-  { type: "Xe tải 10T", short: "Truck 10T", group: 4, category: "Truck" },
-  { type: "CNTR · Dry", short: "CNTR · Dry", group: 5, category: "Container" },
-  { type: "CNTR · Ref", short: "CNTR · Reefer", group: 5, category: "Container" },
-];
-export const ALL_VEHICLE_TYPES = VEHICLE_TYPE_DEFS.map((d) => d.type);
-export const VEHICLE_TYPES_BY_CATEGORY: Record<VehicleCategory, string[]> = {
-  Truck: VEHICLE_TYPE_DEFS.filter((d) => d.category === "Truck").map((d) => d.type),
-  Container: VEHICLE_TYPE_DEFS.filter((d) => d.category === "Container").map((d) => d.type),
-};
-export const defOf = (type: string) => VEHICLE_TYPE_DEFS.find((d) => d.type === type);
+export type { CalcRule, SalaryTier } from "@/types";
 export const TOLL_GROUPS = [1, 2, 3, 4, 5] as const;
 
-// ---------------------------------------------------------------- Versioned stores
+// ---------------------------------------------------------------- Calculation rule
 
-export interface VersionMeta {
-  version: string;
-  effectiveFrom: string;
-  effectiveTo: string;
-  savedAt: string;
-  savedBy: string;
-}
-const stamp = () => ({ savedAt: new Date().toISOString(), savedBy: currentUser.name });
-const bump = (v: string) => {
-  const [major, minor] = v.replace(/^v/, "").split(".").map(Number);
-  return `v${major ?? 1}.${(minor ?? 0) + 1}`;
-};
-
-function makeStore<T>(key: string, seed: () => T) {
-  let cache: T | null = null;
-  const get = (): T => {
-    if (cache) return cache;
-    const stored = readJson<T | null>(key, null);
-    cache = stored ?? seed();
-    if (!stored) writeJson(key, cache);
-    return cache;
-  };
-  const save = (v: T) => {
-    cache = v;
-    writeJson(key, v);
-  };
-  const subscribe = (cb: () => void) => subscribeKey(key, cb);
-  return { get, save, subscribe };
+export const DEFAULT_RULE: CalcRule = { roundStep: 10_000, regionOn: true, regionAmount: 200_000 };
+/** The rule of a Salary Range; missing or bad values fall back to the defaults. */
+export function ruleOf(r: Partial<CalcRule> | null | undefined): CalcRule {
+  const out = { ...DEFAULT_RULE };
+  for (const k of Object.keys(DEFAULT_RULE) as (keyof CalcRule)[]) {
+    const x = r?.[k];
+    if (typeof DEFAULT_RULE[k] === "boolean") {
+      if (typeof x === "boolean") (out[k] as boolean) = x;
+    } else if (typeof x === "number" && Number.isFinite(x) && x >= 0) (out[k] as number) = x;
+  }
+  return out;
 }
 
-// ---------------------------------------------------------------- Salary Range
+// ---------------------------------------------------------------- Salary tiers
 
-export interface SalaryTier {
-  from: number;
-  to: number;
-  /** Salary of a trip whose standard distance falls in the tier. */
-  tripSalary: number;
-  /** Paid per km driven beyond the standard distance (đ/km). */
-  extraRate: number;
-  tollAllowance: number;
-}
-export interface SalaryRangeVersion extends VersionMeta {
-  tables: Record<string, SalaryTier[]>;
-}
-export interface SalaryRangeStore {
-  current: SalaryRangeVersion;
-  history: SalaryRangeVersion[];
-}
-
-/** Xe tải 2T tiers from the old Xink screen; the other types are scaled from it. */
+/** Truck 2T tiers of the old Xink screen; the demo Salary Ranges are scaled from it. */
 const BASE_2T: [number, number, number, number, number][] = [
   [0, 50, 400_000, 0, 50_000],
   [51, 100, 400_000, 2_900, 100_000],
@@ -106,72 +45,29 @@ const BASE_2T: [number, number, number, number, number][] = [
   [1551, 1650, 3_165_000, 2_000, 700_000],
   [1651, 1750, 3_365_000, 2_000, 700_000],
 ];
-/** [salary scale, allowance scale] of each vehicle type against Xe tải 2T. */
-const SCALE: Record<string, [number, number]> = {
-  "Xe tải 1T": [0.88, 1],
-  "Xe tải 2T": [1, 1],
-  "Xe tải 5T": [1.12, 1],
-  "Xe tải 10T": [1.28, 1.13],
-  "CNTR · Dry": [1.45, 1.33],
-  "CNTR · Ref": [1.667, 1.33],
-};
 const round = (n: number, step: number) => Math.round(n / step) * step;
-
-export const seedSalaryRanges = (): SalaryRangeStore => ({
-  current: {
-    version: "v2.1",
-    effectiveFrom: "2026-07-01",
-    effectiveTo: "2026-12-31",
-    tables: Object.fromEntries(
-      ALL_VEHICLE_TYPES.map((type) => {
-        const [k, a] = SCALE[type] ?? [1, 1];
-        return [
-          type,
-          BASE_2T.map(([from, to, s, x, t]) => ({
-            from,
-            to,
-            tripSalary: round(s * k, 500),
-            extraRate: round(x * k, 10),
-            tollAllowance: round(t * a, 10_000),
-          })),
-        ];
-      }),
-    ),
-    savedAt: "2026-07-15T03:30:00.000Z",
-    savedBy: "System",
-  },
-  history: [],
-});
-
-const salaryStore = makeStore<SalaryRangeStore>("salary-ranges.v2", seedSalaryRanges);
-export const useSalaryRanges = () =>
-  useSyncExternalStore(salaryStore.subscribe, salaryStore.get, salaryStore.get);
-
-export const salaryRangeService = {
-  get: salaryStore.get,
-  saveTable(type: string, tiers: SalaryTier[]) {
-    const s = salaryStore.get();
-    salaryStore.save({
-      ...s,
-      current: { ...s.current, tables: { ...s.current.tables, [type]: tiers }, ...stamp() },
-    });
-  },
-  saveVersion(effectiveFrom: string, effectiveTo: string) {
-    const s = salaryStore.get();
-    const version = bump(s.current.version);
-    salaryStore.save({
-      current: { ...s.current, version, effectiveFrom, effectiveTo, ...stamp() },
-      history: [s.current, ...s.history],
-    });
-    return version;
-  },
-};
+/** Demo tiers: the Truck 2T tiers × a salary scale and a road support fee scale. */
+export const seedTiers = (salaryScale = 1, roadFeeScale = 1): SalaryTier[] =>
+  BASE_2T.map(([from, to, s, x, t]) => ({
+    from,
+    to,
+    tripSalary: round(s * salaryScale, 500),
+    extraRate: round(x * salaryScale, 10),
+    roadSupportFee: round(t * roadFeeScale, 10_000),
+  }));
+/** Tiers copied with a surcharge (e.g. a reefer container from its dry one); road support fee unchanged. */
+export const scaleTiers = (tiers: SalaryTier[], salaryPct: number, extraPct: number) =>
+  tiers.map((t) => ({
+    ...t,
+    tripSalary: Math.round(t.tripSalary * (1 + salaryPct / 100)),
+    extraRate: Math.round(t.extraRate * (1 + extraPct / 100)),
+  }));
 
 export function validateTiers(tiers: SalaryTier[]): { ok: boolean; message: string } {
   if (!tiers.length) return { ok: false, message: "Add at least one tier." };
   for (const [i, t] of tiers.entries()) {
     const n = i + 1;
-    const nums = [t.from, t.to, t.tripSalary, t.extraRate, t.tollAllowance];
+    const nums = [t.from, t.to, t.tripSalary, t.extraRate, t.roadSupportFee];
     if (nums.some((v) => !Number.isFinite(v) || v < 0))
       return { ok: false, message: `Tier ${n}: every value must be a number of 0 or more.` };
     const expected = i === 0 ? 0 : tiers[i - 1]!.to + 1;
@@ -196,111 +92,87 @@ export function validateTiers(tiers: SalaryTier[]): { ok: boolean; message: stri
 export interface TripSalary {
   tier: number;
   tierRange: string;
-  /** Salary of the tier the standard distance falls in. */
+  /** Salary written in the tier (at its start km). */
+  tierSalary: number;
+  /** Km of the standard distance past the tier start. */
+  intoKm: number;
+  /** Tier salary + extra rate × intoKm, before rounding. */
+  raw: number;
+  /** Trip salary: raw rounded up to the rule's step. */
   base: number;
   extraKm: number;
   extraRate: number;
   /** (actual − standard km) × extra rate. */
   extra: number;
-  tollAllowance: number;
-  /** Base + toll allowance. */
+  /** Tier road support fee (or the actual one given). */
+  roadStd: number;
+  /** Highland surcharge included in the road support fee. */
+  region: number;
+  roadSupportFee: number;
+  /** Base + road support fee. */
   baseTotal: number;
-  /** Base + extra + toll allowance. */
+  /** Base + extra + road support fee. */
   total: number;
+  /** "Tier 2 (51–100 km) · 400.000 + 2.900 × 9 km = 426.100 → 430.000". */
+  basis: string;
+  roadSupportBasis: string;
 }
 
 /**
- * Salary of a trip: the tier is picked by the standard distance; km driven beyond it are paid at
- * the tier's extra rate; the toll allowance is the tier's unless an actual toll is given.
- * Null when the distance is past the last tier ("Out of range").
+ * Trip salary (QTL Excel): the tier is picked by the standard distance; inside it the salary grows
+ * with the extra rate per km past the tier start and is rounded up; km driven beyond the standard
+ * distance are paid at the extra rate; the road support fee is the tier's (or the actual one) plus the
+ * Highland surcharge. Null when the distance is past the last tier ("Out of range").
  */
 export function tripSalaryOf(
   tiers: SalaryTier[],
   standardKm: number,
   actualKm?: number,
-  actualToll?: number,
+  actualRoadFee?: number,
+  opts: { rule?: CalcRule; terrain?: string } = {},
 ): TripSalary | null {
+  const rule = opts.rule ?? DEFAULT_RULE;
   if (!(standardKm >= 0)) return null;
   const i = tiers.findIndex((t) => standardKm >= t.from && standardKm < t.to + 1);
   if (i < 0) return null;
   const t = tiers[i]!;
+  const intoKm = Math.max(0, Math.round((standardKm - t.from) * 10) / 10);
+  const raw = Math.round(t.tripSalary + t.extraRate * intoKm);
+  const base = rule.roundStep > 0 ? Math.ceil(raw / rule.roundStep) * rule.roundStep : raw;
   const extraKm = Math.max(0, Math.round(((actualKm ?? standardKm) - standardKm) * 10) / 10);
   const extra = Math.round(extraKm * t.extraRate);
-  const tollAllowance = actualToll ?? t.tollAllowance;
+  const roadStd = actualRoadFee ?? t.roadSupportFee;
+  const region = rule.regionOn && opts.terrain === "Highland" ? rule.regionAmount : 0;
+  const roadSupportFee = roadStd + region;
+  const f = (n: number) => Math.round(n).toLocaleString("vi-VN");
   return {
     tier: i + 1,
     tierRange: `${t.from} – ${t.to} km`,
-    base: t.tripSalary,
+    tierSalary: t.tripSalary,
+    intoKm,
+    raw,
+    base,
     extraKm,
     extraRate: t.extraRate,
     extra,
-    tollAllowance,
-    baseTotal: t.tripSalary + tollAllowance,
-    total: t.tripSalary + extra + tollAllowance,
+    roadStd,
+    region,
+    roadSupportFee,
+    baseTotal: base + roadSupportFee,
+    total: base + extra + roadSupportFee,
+    basis:
+      `Tier ${i + 1} (${t.from}–${t.to} km) · ${f(t.tripSalary)} + ${f(t.extraRate)} × ${intoKm} km = ${f(raw)}` +
+      (base !== raw ? ` → ${f(base)}` : ""),
+    roadSupportBasis: `Tier ${i + 1} ${f(roadStd)}${region ? ` + ${f(region)} Highland` : ""}`,
   };
 }
 
 // ---------------------------------------------------------------- Fuel
 
-export interface FuelSetup extends VersionMeta {
-  price: number;
-  basePrice: number;
-  /** Litres per 100 km per vehicle type. */
-  norms: Record<string, number>;
-}
-export const seedFuelSetup = (): FuelSetup => ({
-  version: "v2.0",
-  effectiveFrom: "2026-07-15",
-  effectiveTo: "2026-12-31",
-  savedAt: "2026-07-15T03:30:00.000Z",
-  savedBy: "Accounting",
-  price: 18_500,
-  basePrice: 18_500,
-  norms: {
-    "Xe tải 1T": 10,
-    "Xe tải 2T": 14,
-    "Xe tải 5T": 20,
-    "Xe tải 10T": 26,
-    "CNTR · Dry": 32,
-    "CNTR · Ref": 38,
-  },
-});
-const fuelStore = makeStore<FuelSetup>("fuel-setup.v1", seedFuelSetup);
-export const useFuelSetup = () =>
-  useSyncExternalStore(fuelStore.subscribe, fuelStore.get, fuelStore.get);
-export const fuelService = {
-  get: fuelStore.get,
-  /** Saves price + norms as a new version. */
-  save(price: number, norms: Record<string, number>) {
-    const s = fuelStore.get();
-    const version = bump(s.version);
-    fuelStore.save({ ...s, price, norms, version, ...stamp() });
-    return version;
-  },
-};
-export const fuelCostOf = (km: number, norm: number, price: number) =>
-  Math.round(((km * norm) / 100) * price);
+export const fuelCostOf = (km: number, rate: number, price: number) =>
+  Math.round(((km * rate) / 100) * price);
 
 // ---------------------------------------------------------------- Toll by vehicle group
-
-export const seedTollVersion = (): VersionMeta => ({
-  version: "v1.5",
-  effectiveFrom: "2026-07-01",
-  effectiveTo: "2026-12-31",
-  savedAt: "2026-07-15T03:30:00.000Z",
-  savedBy: "System",
-});
-const tollVersionStore = makeStore<VersionMeta>("toll-cost-version.v1", seedTollVersion);
-export const useTollVersion = () =>
-  useSyncExternalStore(tollVersionStore.subscribe, tollVersionStore.get, tollVersionStore.get);
-export const tollVersionService = {
-  saveVersion(effectiveFrom: string, effectiveTo: string) {
-    const s = tollVersionStore.get();
-    const version = bump(s.version);
-    tollVersionStore.save({ version, effectiveFrom, effectiveTo, ...stamp() });
-    return version;
-  },
-};
 
 /** Toll Station master entry as far as fees go. */
 export interface TollMaster {
@@ -335,89 +207,3 @@ export function routeTollStations(route: RouteRecord, masters: TollMaster[]): Ro
 }
 export const tollTotals = (stations: RouteTollStation[]) =>
   TOLL_GROUPS.map((_, i) => stations.reduce((s, x) => s + (x.fees[i] ?? 0), 0));
-
-// ---------------------------------------------------------------- Other cost (Summary)
-
-export interface OtherCostStore {
-  values: Record<string, number>;
-  savedAt: string;
-  savedBy: string;
-}
-const otherStore = makeStore<OtherCostStore>("variable-other.v1", () => ({
-  values: {},
-  savedAt: "2026-07-15T03:30:00.000Z",
-  savedBy: "System",
-}));
-export const useOtherCosts = () =>
-  useSyncExternalStore(otherStore.subscribe, otherStore.get, otherStore.get);
-export const otherKey = (routeId: string, type: string) => `${routeId}|${type}`;
-export const otherCostService = {
-  get: otherStore.get,
-  set(routeId: string, type: string, amount: number) {
-    const s = otherStore.get();
-    otherStore.save({ values: { ...s.values, [otherKey(routeId, type)]: amount }, ...stamp() });
-  },
-};
-
-// ---------------------------------------------------------------- Route × vehicle type
-
-export interface VariableContext {
-  tables: Record<string, SalaryTier[]>;
-  fuel: Pick<FuelSetup, "price" | "norms">;
-  masters: TollMaster[];
-  others: Record<string, number>;
-}
-
-export interface RouteVariableCost {
-  route: RouteRecord;
-  type: string;
-  group: number;
-  calculated: boolean;
-  /** Standard distance of the route (km). */
-  stdKm: number;
-  salary: TripSalary | null;
-  fuelNorm: number;
-  fuelPrice: number;
-  fuelLitres: number;
-  fuel: number;
-  /** Σ station fees at the vehicle group's column. */
-  toll: number;
-  stationCount: number;
-  other: number;
-  /** Fuel + driver (trip salary) + toll + other. */
-  total: number;
-}
-
-export function routeVariableCost(
-  route: RouteRecord,
-  type: string,
-  ctx: VariableContext,
-  /** A vehicle of the Vehicle master: its own toll group and fuel rate. */
-  vehicle: { group?: number; fuelNorm?: number } = {},
-): RouteVariableCost {
-  const t = routeTotals(route);
-  const group = vehicle.group || (defOf(type)?.group ?? 1);
-  const stdKm = Math.round(t.distanceKm);
-  const fuelNorm = vehicle.fuelNorm || (ctx.fuel.norms[type] ?? 0);
-  const fuel = fuelCostOf(stdKm, fuelNorm, ctx.fuel.price);
-  const stations = routeTollStations(route, ctx.masters);
-  const toll = tollTotals(stations)[group - 1] ?? 0;
-  const salary = t.calculated ? tripSalaryOf(ctx.tables[type] ?? [], stdKm) : null;
-  const other = ctx.others[otherKey(route.id, type)] ?? 0;
-  return {
-    route,
-    type,
-    group,
-    calculated: t.calculated,
-    stdKm,
-    salary,
-    fuelNorm,
-    fuelPrice: ctx.fuel.price,
-    fuelLitres: Math.round(((stdKm * fuelNorm) / 100) * 10) / 10,
-    fuel,
-    toll,
-    stationCount: stations.length,
-    other,
-    total: fuel + (salary?.base ?? 0) + toll + other,
-  };
-}

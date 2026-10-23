@@ -101,15 +101,20 @@ export function fcVehicleErrors(
   return null;
 }
 
-/** Does a fixed-cost vehicle row cover a COGS vehicle type (truck type / header + trailer size)? */
+/**
+ * Does a fixed-cost vehicle row cover a COGS vehicle type (truck type / header + trailer size, and its
+ * brand when the COGS has one)? A row without a brand covers every brand; a trailer row's brand is the
+ * trailer's, so it is not compared with the header brand of the COGS.
+ */
 export function coversCogsVehicle(
   label: string,
-  cogs: { kind: "TRUCK" | "HEADER"; spec: string },
+  cogs: { kind: "TRUCK" | "HEADER"; spec: string; brand?: string },
 ): boolean {
   const v = parseFcVehicle(label);
   if (!v) return false;
-  if (cogs.kind === "TRUCK") return v.kind === "TRUCK" && v.spec === cogs.spec;
-  return v.kind === "HEADER" || (v.kind === "TRAILER" && v.spec === cogs.spec);
+  const brandOk = !v.brand || v.brand === (cogs.brand ?? "");
+  if (cogs.kind === "TRUCK") return v.kind === "TRUCK" && v.spec === cogs.spec && brandOk;
+  return (v.kind === "HEADER" && brandOk) || (v.kind === "TRAILER" && v.spec === cogs.spec);
 }
 
 /** Vehicle types a Summary / list filter can pick: Vehicle Type + Truck Type / Trailer Size (no brand). */

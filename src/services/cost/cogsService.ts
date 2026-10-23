@@ -5,7 +5,9 @@ import {
   costItemRepository,
   fixedCostRepository,
   fixedCostSummaryRepository,
+  fuelCostRepository,
   routeRepository,
+  salaryRangeRepository,
   tollStationRepository,
   uid,
   vehicleMasterRepository,
@@ -13,9 +15,9 @@ import {
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "@/services/crudService";
 import { formatNumber } from "@/lib/format";
-import { buildCogs } from "./cogsBuild";
+import { buildCogs, setupsFor } from "./cogsBuild";
 import { cogsVehicleTypes } from "./cogsVehicle";
-import { fuelService, salaryRangeService } from "./salaryRange";
+import { mappingsFor } from "./cogsBuild";
 
 /** Vehicle types of the current Vehicle master. */
 export const currentCogsVehicleTypes = () => cogsVehicleTypes(vehicleMasterRepository.all());
@@ -28,8 +30,14 @@ export const cogsCrud = makeCrud<CogsRecord>({
 });
 
 export interface CogsDraft {
+  code: string;
+  name: string;
   routeId: string;
   vehicleType: string;
+  mappingIds: string[];
+  /** "" = the first Salary Range / Fuel Cost that applies to the vehicle type. */
+  salaryRangeId: string;
+  fuelCostId: string;
   excluded: string[];
   overrides: Record<string, number>;
   others: CogsOtherCost[];
@@ -38,8 +46,13 @@ export interface CogsDraft {
 }
 
 export const newCogsDraft = (): CogsDraft => ({
+  code: "",
+  name: "",
   routeId: "",
   vehicleType: "",
+  mappingIds: [],
+  salaryRangeId: "",
+  fuelCostId: "",
   excluded: [],
   overrides: {},
   others: [],
@@ -48,8 +61,13 @@ export const newCogsDraft = (): CogsDraft => ({
 });
 
 export const draftOfCogs = (c: CogsRecord): CogsDraft => ({
+  code: c.code,
+  name: c.name ?? "",
   routeId: c.routeId,
   vehicleType: c.vehicleType,
+  mappingIds: [...(c.mappingIds ?? [])],
+  salaryRangeId: c.salaryRangeId ?? "",
+  fuelCostId: c.fuelCostId ?? "",
   excluded: [...c.excluded],
   overrides: { ...(c.overrides ?? {}) },
   others: c.others.map((o) => ({ ...o })),
@@ -57,10 +75,28 @@ export const draftOfCogs = (c: CogsRecord): CogsDraft => ({
   status: c.status === "Inactive" ? "Inactive" : "Active",
 });
 
+/** A–Z, 0–9, dot, hyphen, underscore; max 20. */
+const COGS_CODE = /^[A-Z0-9._-]{1,20}$/;
+export const sanitizeCogsCode = (v: string) =>
+  v
+    .toUpperCase()
+    .replace(/[^A-Z0-9._-]/g, "")
+    .slice(0, 20);
+
 const live = () => cogsRepository.all().filter((c) => !c.deleted);
 
 export function validateCogs(d: CogsDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
+  const code = d.code.trim().toUpperCase();
+  if (!code) e["code"] = "COGS Code is required.";
+  else if (!COGS_CODE.test(code))
+    e["code"] =
+      "COGS Code may only contain A–Z, 0–9, dot (.), hyphen (-), underscore (_), max 20 characters.";
+  else {
+    const dup = live().find((c) => c.id !== id && c.code.toUpperCase() === code);
+    if (dup) e["code"] = `COGS Code ${code} is already used by ${dup.name || dup.code}.`;
+  }
+  if (!d.name.trim()) e["name"] = "COGS Name is required.";
   const route = d.routeId ? routeRepository.get(d.routeId) : undefined;
   if (!route || route.deleted) e["routeId"] = "Route is required.";
   else if (!route.outbound)
@@ -74,18 +110,28 @@ export function validateCogs(d: CogsDraft, id?: string): Record<string, string> 
     );
     if (dup) e["routeId"] = `${dup.code} already exists for ${route.code} · ${d.vehicleType}.`;
   }
+  const vt = currentCogsVehicleTypes().find((t) => t.key === d.vehicleType);
+  if (vt) {
+    const ok = new Set(mappingsFor(fixedCostSummaryRepository.all(), vt).map((m) => m.id));
+    if (d.mappingIds.some((m) => !ok.has(m)))
+      e["mappingIds"] =
+        `A Fixed Cost Mapping picked is not for ${vt.key} (or was removed): pick it again.`;
+    const sr = setupsFor(salaryRangeRepository.all(), vt.key);
+    if (d.salaryRangeId && !sr.some((r) => r.id === d.salaryRangeId))
+      e["salaryRangeId"] =
+        `The Salary Range picked is not for ${vt.key} (or was removed): pick it again.`;
+    const fu = setupsFor(fuelCostRepository.all(), vt.key);
+    if (d.fuelCostId && !fu.some((r) => r.id === d.fuelCostId))
+      e["fuelCostId"] =
+        `The Fuel Cost picked is not for ${vt.key} (or was removed): pick it again.`;
+  }
   const badEdit = Object.values(d.overrides).some((v) => !(v >= 0));
   if (badEdit) e["overrides"] = "An edited amount must be 0 or more.";
   const badOther = d.others.findIndex((o) => !o.costId || !(o.amount > 0));
   if (badOther >= 0)
-    e["others"] = `Other Cost row ${badOther + 1}: pick a Fare Code and enter an amount above 0.`;
+    e["others"] = `Other Cost row ${badOther + 1}: enter a valid Fare Code and an amount above 0.`;
   return e;
 }
-
-const nextCode = () => {
-  const max = live().reduce((m, c) => Math.max(m, Number(/(\d+)$/.exec(c.code)?.[1] ?? 0)), 0);
-  return `COGS-${String(max + 1).padStart(4, "0")}`;
-};
 
 /** Builds the COGS of a draft from the current Route / Fixed Cost / Variable Cost / Cost setup. */
 export const buildCogsOf = (d: CogsDraft) => {
@@ -95,11 +141,14 @@ export const buildCogsOf = (d: CogsDraft) => {
   return buildCogs({
     route,
     vehicle,
-    tables: salaryRangeService.get().current.tables,
-    fuel: fuelService.get(),
+    salaryRanges: salaryRangeRepository.all(),
+    fuelCosts: fuelCostRepository.all(),
     tollMasters: tollStationRepository.all().filter((t) => !t.deleted),
     fixedCosts: fixedCostRepository.all(),
     mappings: fixedCostSummaryRepository.all(),
+    mappingIds: d.mappingIds,
+    salaryRangeId: d.salaryRangeId,
+    fuelCostId: d.fuelCostId,
     costs: costItemRepository.all().filter((c) => !c.deleted),
     excluded: d.excluded,
     overrides: d.overrides,
@@ -115,10 +164,15 @@ export const cogsService = {
     const route = routeRepository.get(d.routeId)!;
     const b = buildCogsOf(d)!;
     const body = {
+      code: d.code.trim().toUpperCase(),
+      name: d.name.trim(),
       routeId: route.id,
       routeCode: route.code,
       routeName: route.name,
       vehicleType: d.vehicleType,
+      mappingIds: d.mappingIds,
+      salaryRangeId: b.variable.salaryRange?.id ?? "",
+      fuelCostId: b.variable.fuelCost?.id ?? "",
       excluded: d.excluded,
       overrides: d.overrides,
       others: d.others,
@@ -129,7 +183,7 @@ export const cogsService = {
     };
     const existing = id ? cogsRepository.get(id) : undefined;
     if (!existing) {
-      const rec: CogsRecord = { ...body, id: uid("COGS-"), code: nextCode(), ...stampCreate() };
+      const rec: CogsRecord = { ...body, id: uid("COGS-"), ...stampCreate() };
       cogsRepository.insert(rec);
       auditService.log({
         action: "CREATE",

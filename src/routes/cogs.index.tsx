@@ -49,6 +49,13 @@ function CogsListPage() {
         render: (c) => <span className="font-semibold text-primary">{c.code}</span>,
       },
       {
+        key: "name",
+        width: 260,
+        label: "COGS Name",
+        type: "text",
+        value: (c) => c.name ?? "",
+      },
+      {
         key: "routeCode",
         width: 140,
         label: "Route Code",
@@ -127,8 +134,8 @@ function CogsListPage() {
       subtitle="Cost of goods sold of one trip, per route and vehicle type"
       rows={rows}
       columns={columns}
-      searchPlaceholder="Search COGS code, route..."
-      searchValues={(c) => [c.code, c.routeCode, c.routeName]}
+      searchPlaceholder="Search COGS code, name, route..."
+      searchValues={(c) => [c.code, c.name ?? "", c.routeCode, c.routeName]}
       quickFilters={[
         statusFilter,
         {

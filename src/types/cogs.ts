@@ -13,6 +13,8 @@ export interface CogsLine {
   amount: number;
   /** Set when the amount was edited by hand: the calculated amount. */
   calculated?: number;
+  /** Fixed Cost Mapping the line came from. */
+  mappingId?: string;
 }
 
 /** An extra Cost Detail added to a COGS by hand. */
@@ -24,13 +26,20 @@ export interface CogsOtherCost {
 
 /** COGS (cost of goods sold) of one trip: a route, a vehicle type and the costs picked for it. */
 export interface CogsRecord extends BaseRecord {
+  /** Entered by the user, unique. */
   code: string;
+  name: string;
   routeId: string;
   /** Route code when saved (kept if the route is renamed or removed). */
   routeCode: string;
   routeName: string;
   /** Vehicle type from Master Data > Vehicle, e.g. "Truck 5 tấn", "Header + 40 ft". */
   vehicleType: string;
+  /** Fixed Cost Mappings (Fare Code mappings) picked: their fixed costs make up the Fixed Cost part. */
+  mappingIds: string[];
+  /** Salary Range and Fuel Cost the variable costs were read from (of the vehicle type). */
+  salaryRangeId: string;
+  fuelCostId: string;
   /** Fixed / Variable cost keys left out of the COGS. */
   excluded: string[];
   others: CogsOtherCost[];

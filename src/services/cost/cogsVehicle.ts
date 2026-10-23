@@ -1,22 +1,76 @@
-// Vehicle types a COGS can be built for: taken from the vehicles set up in Master Data > Vehicle.
-// Truck → one type per Truck Type ("Truck 5 tấn"); Header → one type per trailer size ("Header + 40 ft").
-// Pure (the vehicles are passed in), so the screen, the save and the demo seed agree.
+// Vehicle types of Variable Cost and COGS, picked as in Master Data › Vehicle: TRUCK, then its Truck Type
+// (load), or HEADER, then the container behind it (trailer size) and whether it is a reefer (cont lạnh);
+// then, optionally, the Brand. Keys: "TRUCK · 5 tấn", "TRUCK · 5 tấn · HINO", "HEADER · 40 ft",
+// "HEADER · 40 ft · Reefer · HYUNDAI". A type without a brand covers every brand.
+// Pure (the vehicles are passed in), so the screens, the save and the seed agree.
 import { BASE_OF_TYPE_NAME, TRAILER_TYPES, type VehicleMasterRecord } from "@/types";
-import { VEHICLE_TYPES_BY_CATEGORY } from "./salaryRange";
 
-export interface CogsVehicleType {
-  /** Stored on the COGS, e.g. "Truck 5 tấn", "Header + 40 ft". */
+export type VariableVehicleKind = "TRUCK" | "HEADER";
+
+export interface VehicleKeyParts {
+  kind: VariableVehicleKind;
+  /** Truck Type (TRUCK) or container / trailer size (HEADER). */
+  spec: string;
+  /** HEADER only: reefer container (cont lạnh). */
+  reefer: boolean;
+  /** Brand (Vehicle › Brand); "" = every brand. */
+  brand: string;
+}
+
+export interface CogsVehicleType extends VehicleKeyParts {
+  /** Stored on the setups and the COGS. */
   key: string;
-  kind: "TRUCK" | "HEADER";
+  category: "Truck" | "Container";
   /** Toll vehicle group (1..5): the vehicles' Vehicle Group / Container Size Mapping. */
   group: number;
   vehicleCount: number;
-  /** Average Fuel Rate (l/100km) of those vehicles; 0 = none entered. */
+  /** Average Fuel Rate (per 100 km) of those vehicles; 0 = none entered. */
   fuelNorm: number;
-  /** Salary Range table (Variable Cost) used for the driver salary. */
-  salaryTable: string;
-  /** Truck Type (TRUCK) or trailer size (HEADER) — Fixed Costs of that vehicle apply. */
+  /** Fuel Type most of those vehicles run on; "" = none entered. */
+  fuelType: string;
+  /** Every Fuel Type those vehicles run on. */
+  fuelTypes: string[];
+}
+
+const SEP = " · ";
+export const REEFER = "Reefer";
+export const vehicleKey = (v: {
+  kind: VariableVehicleKind;
   spec: string;
+  reefer?: boolean;
+  brand?: string;
+}) =>
+  [v.kind, v.spec, v.kind === "HEADER" && v.reefer ? REEFER : "", v.brand ?? ""]
+    .filter(Boolean)
+    .join(SEP);
+export function parseVehicleKey(key: string): VehicleKeyParts | undefined {
+  const [kind, spec, ...rest] = key.split(SEP).map((s) => s.trim());
+  if (kind !== "TRUCK" && kind !== "HEADER") return undefined;
+  const reefer = kind === "HEADER" && rest[0] === REEFER;
+  const brand = (reefer ? rest[1] : rest[0]) ?? "";
+  return { kind, spec: spec ?? "", reefer, brand };
+}
+export const specLabel = (kind: VariableVehicleKind) =>
+  kind === "TRUCK" ? "Truck Type" : "Container";
+/** The same type with every brand (the setups of all brands apply to it). */
+export const withoutBrand = (key: string) => {
+  const p = parseVehicleKey(key);
+  return p ? vehicleKey({ ...p, brand: "" }) : key;
+};
+/**
+ * Does a setup made for `setupKey` apply to a vehicle of `key`? Same type (kind, Truck Type /
+ * Container, reefer) and either no brand on the setup or the same brand.
+ */
+export function coversVehicle(setupKey: string, key: string): boolean {
+  const s = parseVehicleKey(setupKey);
+  const v = parseVehicleKey(key);
+  if (!s || !v) return setupKey === key;
+  return (
+    s.kind === v.kind &&
+    s.spec === v.spec &&
+    s.reefer === v.reefer &&
+    (!s.brand || s.brand === v.brand)
+  );
 }
 
 const groupNo = (g: string) => Number(/(\d+)/.exec(g)?.[1] ?? 0);
@@ -26,67 +80,81 @@ const mode = (xs: number[]) => {
   for (const x of xs) if (x) n.set(x, (n.get(x) ?? 0) + 1);
   return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
 };
+const modeText = (xs: string[]) => {
+  const n = new Map<string, number>();
+  for (const x of xs) if (x) n.set(x, (n.get(x) ?? 0) + 1);
+  return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? "";
+};
 const avg = (xs: number[]) => {
   const ok = xs.filter((x) => x > 0);
   return ok.length ? Math.round((ok.reduce((s, x) => s + x, 0) / ok.length) * 10) / 10 : 0;
 };
-const tonsOf = (s: string) => Number(/(\d+(?:[.,]\d+)?)/.exec(s)?.[1]?.replace(",", ".") ?? 0);
-
-/** Truck salary table for a load class: the smallest table that carries it, else the largest. */
-const truckTable = (tons: number) => {
-  const tables = VEHICLE_TYPES_BY_CATEGORY.Truck.map((t) => ({ t, tons: tonsOf(t) })).sort(
-    (a, b) => a.tons - b.tons,
-  );
-  return (tables.find((x) => x.tons >= tons) ?? tables[tables.length - 1])?.t ?? "";
-};
+const sizeOf = (s: string) => Number(/(\d+(?:[.,]\d+)?)/.exec(s)?.[1]?.replace(",", ".") ?? 0);
+const brandsOf = (list: VehicleMasterRecord[]) =>
+  [...new Set(list.map((v) => v.tradeMark).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+const fuelOf = (list: VehicleMasterRecord[]) => ({
+  fuelNorm: avg(list.map((v) => Number(v.fuelRate))),
+  fuelType: modeText(list.map((v) => v.fuelType)),
+  fuelTypes: [...new Set(list.map((v) => v.fuelType).filter(Boolean))].sort(),
+});
 
 export function cogsVehicleTypes(vehicles: readonly VehicleMasterRecord[]): CogsVehicleType[] {
   const live = vehicles.filter((v) => !v.deleted && v.status === "Active");
   const base = (v: VehicleMasterRecord) => BASE_OF_TYPE_NAME[v.vehicleType];
   const out: CogsVehicleType[] = [];
 
+  // Trucks: one type per Truck Type (every brand), then one per brand of it.
   const trucks = live.filter((v) => base(v) === "TRUCK" && v.truckType);
   const truckTypes = [...new Set(trucks.map((v) => v.truckType))].sort(
-    (a, b) => tonsOf(a) - tonsOf(b),
+    (a, b) => sizeOf(a) - sizeOf(b),
   );
   for (const tt of truckTypes) {
-    const list = trucks.filter((v) => v.truckType === tt);
-    const tons = tonsOf(tt);
-    out.push({
-      key: `Truck ${tt}`,
-      kind: "TRUCK",
-      group: mode(list.map((v) => groupNo(v.vehicleGroup))) || 1,
-      vehicleCount: list.length,
-      fuelNorm: avg(list.map((v) => Number(v.fuelRate))),
-      salaryTable: truckTable(tons),
-      spec: tt,
-    });
+    const all = trucks.filter((v) => v.truckType === tt);
+    for (const brand of ["", ...brandsOf(all)]) {
+      const list = brand ? all.filter((v) => v.tradeMark === brand) : all;
+      out.push({
+        key: vehicleKey({ kind: "TRUCK", spec: tt, brand }),
+        kind: "TRUCK",
+        category: "Truck",
+        spec: tt,
+        reefer: false,
+        brand,
+        group: mode(list.map((v) => groupNo(v.vehicleGroup))) || 1,
+        vehicleCount: list.length,
+        ...fuelOf(list),
+      });
+    }
   }
 
+  // Headers: one type per container size of the trailers (dry, and reefer), then one per head brand.
   const heads = live.filter((v) => base(v) === "HEAD");
   if (heads.length) {
-    const trailerSizes = live
-      .filter((v) => base(v) === "TRAILER" && v.trailerSize)
-      .map((v) => v.trailerSize);
-    const sizes = [...new Set(trailerSizes.length ? trailerSizes : TRAILER_TYPES)].sort(
-      (a, b) => tonsOf(a) - tonsOf(b),
-    );
+    const trailers = live.filter((v) => base(v) === "TRAILER" && v.trailerSize);
+    const sizes = [
+      ...new Set(trailers.length ? trailers.map((v) => v.trailerSize) : [...TRAILER_TYPES]),
+    ].sort((a, b) => sizeOf(a) - sizeOf(b));
     for (const size of sizes) {
-      const ft = tonsOf(size);
-      const mapped = heads.flatMap((h) =>
-        h.containerMappings
-          .filter((m) => m.trailerType === size)
-          .map((m) => groupNo(m.vehicleGroup)),
-      );
-      out.push({
-        key: `Header + ${size}`,
-        kind: "HEADER",
-        group: mode(mapped) || (ft <= 20 ? 4 : 5),
-        vehicleCount: heads.length,
-        fuelNorm: avg(heads.map((v) => Number(v.fuelRate))),
-        salaryTable: VEHICLE_TYPES_BY_CATEGORY.Container[0] ?? "",
-        spec: size,
-      });
+      const ft = sizeOf(size);
+      for (const reefer of [false, true])
+        for (const brand of ["", ...brandsOf(heads)]) {
+          const list = brand ? heads.filter((v) => v.tradeMark === brand) : heads;
+          const mapped = list.flatMap((h) =>
+            h.containerMappings
+              .filter((m) => m.trailerType.includes(size))
+              .map((m) => groupNo(m.vehicleGroup)),
+          );
+          out.push({
+            key: vehicleKey({ kind: "HEADER", spec: size, reefer, brand }),
+            kind: "HEADER",
+            category: "Container",
+            spec: size,
+            reefer,
+            brand,
+            group: mode(mapped) || (ft <= 20 ? 4 : 5),
+            vehicleCount: list.length,
+            ...fuelOf(list),
+          });
+        }
     }
   }
   return out;
