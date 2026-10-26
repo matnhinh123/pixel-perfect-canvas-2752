@@ -18,6 +18,7 @@ import type {
   TenantTemplateConfig,
   SalaryRangeRecord,
   FuelCostRecord,
+  VariableCostMappingRecord,
 } from "@/types";
 import {
   seedAudit,
@@ -31,7 +32,11 @@ import {
 import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
 import { seedFixedCosts, seedFixedCostSummaries } from "@/mock-data/fixedCost";
 import { seedCogs } from "@/mock-data/cogs";
-import { seedFuelCosts, seedSalaryRangeRecords } from "@/mock-data/variableSetup";
+import {
+  seedFuelCosts,
+  seedSalaryRangeRecords,
+  seedVariableCostMappings,
+} from "@/mock-data/variableSetup";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
 import { seedFiveTonTrucks, seedVehicleMasters } from "@/mock-data/vehicleMaster";
 import { seedBusinessPartners, seedPetrolimexTienGiang } from "@/mock-data/businessPartners";
@@ -59,10 +64,15 @@ export const costGroupRepository = createCollection<CostGroupRecord>(
 );
 export const costItemRepository = createCollection<CostItemRecord>("cost-items.v6", seedCostItems);
 /** COGS of a trip (route × vehicle type) built on the Cost screens. */
-export const cogsRepository = createCollection<CogsRecord>("cogs.v8", seedCogs);
+export const cogsRepository = createCollection<CogsRecord>("cogs.v12", seedCogs);
+/** Variable Cost Mapping: the Fare Code each variable cost is booked to. */
+export const variableCostMappingRepository = createCollection<VariableCostMappingRecord>(
+  "variable-cost-mappings.v8",
+  seedVariableCostMappings,
+);
 /** Salary Range: driver salary tiers of a vehicle type, under a code. */
 export const salaryRangeRepository = createCollection<SalaryRangeRecord>(
-  "salary-range-records.v2",
+  "salary-range-records.v6",
   seedSalaryRangeRecords,
 );
 /** Fuel Cost: fuel of a vehicle type (type, rate, price), under a code. */

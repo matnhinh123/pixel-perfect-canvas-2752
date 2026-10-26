@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RULE,
+  reeferRateOf,
   scaleTiers,
   seedTiers,
   tripSalaryOf,
@@ -56,6 +57,20 @@ describe("Driver salary range (Variable Cost)", () => {
     expect(rf[1]!.tripSalary).toBe(Math.round(tiers2T[1]!.tripSalary * 1.15));
     expect(rf[1]!.extraRate).toBe(Math.round(tiers2T[1]!.extraRate * 1.2));
     expect(rf[1]!.roadSupportFee).toBe(tiers2T[1]!.roadSupportFee);
+  });
+
+  it("reefer container (CNTR lạnh): its own rate per tier, entered (QTL sheet values seeded)", () => {
+    const rf = (from: number) => tiers2T.find((t) => t.from === from)!.reeferRate;
+    expect([rf(51), rf(101), rf(451), rf(751), rf(851), rf(951)]).toEqual([
+      3_335, 2_990, 1_495, 1_265, 2_300, 2_400,
+    ]);
+    // Trip salary and road support fee stay; only the per-km rate changes.
+    const dry = tripSalaryOf(tiers2T, 60)!;
+    const reefer = tripSalaryOf(tiers2T, 60, undefined, undefined, { reefer: true })!;
+    expect(reefer.raw).toBe(400_000 + 3_335 * 9);
+    expect(reefer.roadSupportFee).toBe(dry.roadSupportFee);
+    // Empty: the extra rate.
+    expect(reeferRateOf({ extraRate: 2_000 })).toBe(2_000);
   });
 
   it("vehicle type keys: Truck → Truck Type, Header → Container (+ Reefer), then Brand", () => {

@@ -11,6 +11,7 @@ export type EntityType =
   | "Fixed Cost"
   | "Fixed Cost Summary"
   | "Salary Range"
+  | "Variable Cost Mapping"
   | "Fuel Cost"
   | "COGS"
   | "Location"

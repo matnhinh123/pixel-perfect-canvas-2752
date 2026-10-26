@@ -1,23 +1,29 @@
-// Variable Cost: Salary Range (with its calculation rule) · Fuel Cost · Reference Trip.
+// Variable Cost: Salary Range (with its calculation rule) · Fuel Cost · Variable Cost Mapping.
 // Vehicle types come from Master Data › Vehicle.
-import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/movex/common";
 import { SalaryRangeTab } from "@/components/movex/cost/SalaryRangeTab";
 import { FuelCostTab } from "@/components/movex/cost/FuelCostTab";
-import { ReferenceTripTab } from "@/components/movex/cost/ReferenceTripTab";
+import { VariableMappingTab } from "@/components/movex/cost/VariableMappingTab";
 import { useVehicleTypes } from "@/components/movex/cost/useVehicleTypes";
 
 const TABS = [
   ["salary", "Salary Range"],
   ["fuel", "Fuel Cost"],
-  ["reference", "Reference Trip"],
+  ["mapping", "Variable Cost Mapping"],
 ] as const;
 
-export function VariableCostPage() {
-  const [tab, setTab] = useState<string>("salary");
+export type VariableCostTab = (typeof TABS)[number][0];
+
+export function VariableCostPage({
+  tab,
+  onTab,
+}: {
+  tab: VariableCostTab;
+  onTab: (tab: VariableCostTab) => void;
+}) {
   const types = useVehicleTypes();
   return (
     <div>
@@ -34,7 +40,7 @@ export function VariableCostPage() {
           </span>
         </div>
       )}
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(v) => onTab(v as VariableCostTab)}>
         <TabsList className="mb-4 grid h-auto w-full grid-cols-3 rounded-none border-b bg-transparent p-0">
           {TABS.map(([k, label]) => (
             <TabsTrigger
@@ -52,8 +58,8 @@ export function VariableCostPage() {
         <TabsContent value="fuel">
           <FuelCostTab />
         </TabsContent>
-        <TabsContent value="reference">
-          <ReferenceTripTab />
+        <TabsContent value="mapping">
+          <VariableMappingTab />
         </TabsContent>
       </Tabs>
     </div>

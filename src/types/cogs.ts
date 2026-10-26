@@ -15,6 +15,8 @@ export interface CogsLine {
   calculated?: number;
   /** Fixed Cost Mapping the line came from. */
   mappingId?: string;
+  /** Variable cost: the Fare Code it is booked to (in its Variable Cost Mapping). */
+  fareCode?: string;
 }
 
 /** An extra Cost Detail added to a COGS by hand. */
@@ -42,9 +44,8 @@ export interface CogsRecord extends BaseRecord {
    * shared by them: Fixed Cost per trip = per day ÷ factor. 1 when not set.
    */
   utilizationFactor?: number;
-  /** Salary Range and Fuel Cost the variable costs were read from (of the vehicle type). */
-  salaryRangeId: string;
-  fuelCostId: string;
+  /** Variable Cost Mapping of the route and vehicle type the variable costs were read from. */
+  variableMappingId: string;
   /** Fixed / Variable cost keys left out of the COGS. */
   excluded: string[];
   others: CogsOtherCost[];

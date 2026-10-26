@@ -1,7 +1,7 @@
 // Create / view / edit a COGS: Code + Name, a route, a vehicle type (from Master Data > Vehicle), the
-// Fixed Cost Mappings picked (their fixed costs) and the Variable Cost of the route × vehicle type (Trip
-// Salary and Road Support Fee from its Salary Range, Fuel Cost from its Fuel Cost, Toll Fee of the route).
-// Lines can be edited or removed; other Fare Codes can be added. View shows the costs as saved.
+// Fixed Cost Mappings picked (their fixed costs, shared by the trips of a day) and the Variable Cost of
+// the Variable Cost Mapping of the route × vehicle type (Salary Range, Fuel Cost, Toll Fee, each with its
+// Fare Code). Lines can be edited or removed; other Fare Codes can be added. View shows them as saved.
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { History, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
@@ -41,10 +41,11 @@ import {
   fuelCostRepository,
   salaryRangeRepository,
   tollStationRepository,
+  variableCostMappingRepository,
   vehicleMasterRepository,
 } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
-import { buildCogs, fixedCostPerDay, mappingsFor, setupsFor } from "@/services/cost/cogsBuild";
+import { buildCogs, fixedCostPerDay, mappingsFor } from "@/services/cost/cogsBuild";
 import { cogsVehicleTypes } from "@/services/cost/cogsVehicle";
 import {
   cogsService,
@@ -80,6 +81,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   const vehiclesAll = useCollection(vehicleMasterRepository);
   const salaryRanges = useCollection(salaryRangeRepository);
   const fuelCosts = useCollection(fuelCostRepository);
+  const variableMappings = useCollection(variableCostMappingRepository);
   const tollAll = useCollection(tollStationRepository);
   const tollMasters = useMemo(() => tollAll.filter((t) => !t.deleted), [tollAll]);
   const routes = useMemo(
@@ -112,6 +114,11 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   };
   const route = routes.find((r) => r.id === d.routeId);
   const vehicle = vehicleTypes.find((t) => t.key === d.vehicleType);
+  /** Fixed Cost: every Fixed Cost Mapping of the vehicle type (set up in Fixed Cost). */
+  const autoMappingIds = useMemo(
+    () => (vehicle ? mappingsFor(mappings, vehicle).map((m) => m.id) : []),
+    [vehicle, mappings],
+  );
   const built =
     route && vehicle
       ? buildCogs({
@@ -122,10 +129,9 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
           tollMasters,
           fixedCosts: fixedAll,
           mappings,
-          mappingIds: d.mappingIds,
+          mappingIds: autoMappingIds,
+          variableMappings,
           utilizationFactor: factorOf(d),
-          salaryRangeId: d.salaryRangeId,
-          fuelCostId: d.fuelCostId,
           costs,
           excluded: d.excluded,
           overrides: d.overrides,
@@ -136,13 +142,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   // View: the costs as saved. Create / Edit: rebuilt from the current setup.
   const lines: CogsLine[] = readOnly && source ? source.lines : (built?.lines ?? []);
   const total = readOnly && source ? source.total : (built?.total ?? 0);
-  const costErrors =
-    errors["utilizationFactor"] ??
-    errors["mappingIds"] ??
-    errors["salaryRangeId"] ??
-    errors["fuelCostId"] ??
-    errors["others"] ??
-    errors["overrides"];
+  const costErrors = errors["utilizationFactor"] ?? errors["others"] ?? errors["overrides"];
 
   // Mappings of the vehicle type (Fixed and Variable) a COGS can pick.
   type MappingRow = { id: string; fareCode: string; fareName: string; hint: string };
@@ -168,14 +168,6 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
     const m = mappings.find((x) => x.id === id);
     return m ? fareOf(m.assignCostId) : undefined;
   };
-  /** Picks / drops a mapping, keeping the picked ones in list order. */
-  const toggleMapping = (field: "mappingIds", rows: MappingRow[], id: string, on: boolean) =>
-    patch({
-      [field]: on
-        ? rows.filter((m) => m.id === id || d[field].includes(m.id)).map((m) => m.id)
-        : d[field].filter((x) => x !== id),
-    });
-
   // Other Cost rows: the Fare Code is typed; the text is kept while it matches no code yet.
   const [codeText, setCodeText] = useState<Record<string, string>>({});
   const typeCode = (rid: string, v: string) => {
@@ -283,7 +275,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
     <>
       <TableCell className="py-2 align-top">
         <div className="flex min-w-0 items-baseline gap-2">
-          {l.code && l.group !== "Variable Cost" && (
+          {l.code && (
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
               {l.code}
             </span>
@@ -325,29 +317,23 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   );
 
   /** Picked mappings of a section: the Fare Code spans the costs it books. */
-  const mappingRowsOf = (
-    picked: string[],
-    rows: MappingRow[],
-    field: "mappingIds",
-    label: string,
-  ) => {
+  const mappingRowsOf = (picked: string[], rows: MappingRow[], label: string) => {
     if (!picked.length)
       return (
         <TableRow className="hover:bg-transparent">
           <TableCell colSpan={cols} className="py-3 text-center text-xs text-muted-foreground">
-            {rows.length || readOnly
-              ? `No ${label} picked.`
-              : `No ${label} for ${vehicle?.key ?? "this vehicle type"} yet.`}
+            {readOnly
+              ? `No ${label}.`
+              : `No ${label} for ${vehicle?.key ?? "this vehicle type"} yet — set it up in Fixed Cost.`}
           </TableCell>
         </TableRow>
       );
     return picked.map((id) => {
       const items = lines.filter((l) => l.mappingId === id);
-      const remove = readOnly ? undefined : () => toggleMapping(field, rows, id, false);
       if (!items.length)
         return (
           <TableRow key={id} className="hover:bg-transparent">
-            {fareCell(id, 1, remove)}
+            {fareCell(id, 1)}
             <TableCell colSpan={cols - 1} className="py-2 text-xs text-muted-foreground">
               Nothing for this route / vehicle type (or every cost of it was removed).
             </TableCell>
@@ -355,85 +341,68 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
         );
       return items.map((l, k) => (
         <TableRow key={l.key} className="group">
-          {k === 0 && fareCell(id, items.length, remove)}
+          {k === 0 && fareCell(id, items.length)}
           {costCells(l)}
         </TableRow>
       ));
     });
   };
 
-  // Variable Cost: read from the vehicle type's Salary Range / Fuel Cost and the route's Toll Stations.
-  const salaryOptions = vehicle ? setupsFor(salaryRanges, vehicle.key) : [];
-  const fuelOptions = vehicle ? setupsFor(fuelCosts, vehicle.key) : [];
-  type SourceKey = "salaryRangeId" | "fuelCostId" | "toll";
-  const SOURCES: { key: SourceKey; label: string; names: string[] }[] = [
-    { key: "salaryRangeId", label: "Salary Range", names: ["Trip Salary", "Road Support Fee"] },
-    { key: "fuelCostId", label: "Fuel Cost", names: ["Fuel Cost"] },
-    { key: "toll", label: "Toll Station · Route", names: ["Toll Fee"] },
-  ];
-  const sourceCell = (src: (typeof SOURCES)[number], span: number, code: string) => {
-    const options =
-      src.key === "salaryRangeId" ? salaryOptions : src.key === "fuelCostId" ? fuelOptions : [];
-    const picked =
-      src.key === "salaryRangeId"
-        ? built?.variable.salaryRange?.id
-        : src.key === "fuelCostId"
-          ? built?.variable.fuelCost?.id
-          : undefined;
-    return (
-      <TableCell rowSpan={span} className="border-r bg-card py-2 align-top">
-        <div className="text-xs text-muted-foreground">{src.label}</div>
-        {!readOnly && src.key !== "toll" && options.length > 1 ? (
-          <NativeSelect
-            value={picked ?? ""}
-            onChange={(id) => patch({ [src.key]: id })}
-            options={options.map((o) => o.id)}
-            labels={Object.fromEntries(
-              options.map((o) => [
-                o.id,
-                `${o.code}${o.vehicleType === vehicle?.key ? "" : " (all brands)"}`,
-              ]),
-            )}
-            className="mt-1 h-8 w-full text-xs"
-          />
-        ) : (
-          <div className="font-semibold text-primary">{code || "—"}</div>
-        )}
-      </TableCell>
-    );
-  };
+  // Variable Cost: from the Variable Cost Mapping of the route and vehicle type (Salary Range, Fuel
+  // Cost, Toll Stations of the route); each cost shows its Fare Code.
   const variableRowsOf = () => {
     const vLines = lines.filter((l) => l.group === "Variable Cost");
-    const rows = SOURCES.flatMap((src) => {
-      const ls = vLines.filter((l) => src.names.includes(l.name));
-      return ls.map((l, k) => (
-        <TableRow key={l.key} className="group">
-          {k === 0 && sourceCell(src, ls.length, l.code)}
-          {costCells(l)}
-        </TableRow>
-      ));
-    });
-    const missing =
-      !readOnly && built && vehicle
-        ? [
-            !built.variable.salaryRange && "Salary Range (Trip Salary, Road Support Fee)",
-            !built.variable.fuelCost && "Fuel Cost",
-          ].filter(Boolean)
-        : [];
+    const fareCode = vLines.find((l) => l.fareCode)?.fareCode ?? "";
+    const fare = costsAll.find((c) => c.code === fareCode && !c.deleted);
+    const rows = vLines.map((l, k) => (
+      <TableRow key={l.key} className="group">
+        {k === 0 && (
+          <TableCell rowSpan={vLines.length} className="border-r bg-card py-2 align-top">
+            {fareCode ? (
+              <>
+                <div className="font-semibold text-primary">{fareCode}</div>
+                <div className="truncate text-xs text-muted-foreground" title={fare?.name}>
+                  {fare?.name}
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-warning">No Fare Code</span>
+            )}
+            {built?.variableMapping && (
+              <Link
+                to="/variable-cost-mapping/$id"
+                params={{ id: built.variableMapping.id }}
+                search={{ mode: "view" }}
+                className="mt-1 inline-block text-xs text-primary hover:underline"
+              >
+                Open mapping
+              </Link>
+            )}
+          </TableCell>
+        )}
+        {costCells(l)}
+      </TableRow>
+    ));
+    const noMapping = !readOnly && built && route && vehicle && !built.variableMapping;
     return (
       <>
         {rows}
-        {missing.length > 0 && (
+        {noMapping && (
           <TableRow className="hover:bg-transparent">
             <TableCell colSpan={cols} className="py-2 text-xs text-warning">
-              Not counted: no {missing.join(" or ")} for {vehicle?.key} yet.{" "}
-              <Link to="/variable-cost" className="text-primary hover:underline">
-                Add it in Variable Cost
+              No Variable Cost Mapping for {route.code} · {vehicle.key} yet, so no variable cost is
+              counted.{" "}
+              <Link
+                to="/variable-cost"
+                search={{ tab: "mapping" }}
+                className="text-primary hover:underline"
+              >
+                Add it in Variable Cost › Variable Cost Mapping
               </Link>
             </TableCell>
           </TableRow>
         )}
-        {rows.length === 0 && missing.length === 0 && (
+        {rows.length === 0 && !noMapping && (
           <TableRow className="hover:bg-transparent">
             <TableCell colSpan={cols} className="py-3 text-center text-xs text-muted-foreground">
               No variable cost.
@@ -441,30 +410,6 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
           </TableRow>
         )}
       </>
-    );
-  };
-
-  /** "+ Add …" picker of the mappings not picked yet. */
-  const addMapping = (rows: MappingRow[], picked: string[], field: "mappingIds", label: string) => {
-    const off = rows.filter((m) => !picked.includes(m.id));
-    if (readOnly || !built) return null;
-    return (
-      <div className="w-64">
-        <SearchableSelect
-          value=""
-          onChange={(id) => id && toggleMapping(field, rows, id, true)}
-          options={["", ...off.map((m) => m.id)]}
-          labels={{
-            "": off.length ? `+ Add ${label}` : `All ${label}s added`,
-            ...Object.fromEntries(
-              off.map((m) => [m.id, `${m.fareCode} · ${m.fareName} · ${m.hint}`]),
-            ),
-          }}
-          disabled={!off.length}
-          searchPlaceholder="Search Fare Code…"
-          emptyText="No matching mapping"
-        />
-      </div>
     );
   };
 
@@ -661,8 +606,6 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                     patch({
                       vehicleType,
                       mappingIds: [],
-                      salaryRangeId: "",
-                      fuelCostId: "",
                       excluded: [],
                       overrides: {},
                     })
@@ -741,7 +684,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                 <TableBody>
                   {sectionHead(
                     "Fixed Cost",
-                    "per day of the vehicle ÷ Utilization Factor, from the Fixed Cost Mappings",
+                    "loaded from the Fixed Cost Mappings of the vehicle type · per day ÷ Utilization Factor",
                     <>
                       <label
                         className="flex items-center gap-2 text-xs"
@@ -768,15 +711,18 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                         )}
                         <span className="whitespace-nowrap text-muted-foreground">trip/day</span>
                       </label>
-                      {addMapping(fixedRows, d.mappingIds, "mappingIds", "Fixed Cost Mapping")}
                     </>,
                     { to: "/fixed-cost", label: "Fixed Cost" },
                   )}
-                  {mappingRowsOf(d.mappingIds, fixedRows, "mappingIds", "Fixed Cost Mapping")}
+                  {mappingRowsOf(
+                    readOnly && source ? (source.mappingIds ?? []) : autoMappingIds,
+                    fixedRows,
+                    "Fixed Cost Mapping",
+                  )}
 
                   {sectionHead(
                     "Variable Cost",
-                    "worked out for this route and vehicle type",
+                    "from the Variable Cost Mapping of this route and vehicle type",
                     undefined,
                     { to: "/variable-cost", label: "Variable Cost" },
                   )}

@@ -8,6 +8,8 @@ export interface SalaryTier {
   tripSalary: number;
   /** Paid per km driven beyond the standard distance (đ/km). */
   extraRate: number;
+  /** The same for a reefer container — CNTR lạnh (đ/km); empty: the extra rate. */
+  reeferRate?: number;
   roadSupportFee: number;
 }
 
@@ -27,9 +29,11 @@ export interface CalcRule {
 export interface SalaryRangeRecord extends BaseRecord {
   code: string;
   name: string;
-  /** Vehicle type key: "TRUCK · 5 tấn", "HEADER · 40 ft", "HEADER · 40 ft · Reefer". */
-  vehicleType: string;
+  /** Vehicle types it applies to ("TRUCK · 5 tấn", "HEADER · 40 ft · Reefer"…); each vehicle type is in one Salary Range only. */
+  vehicleTypes: string[];
   tiers: SalaryTier[];
+  /** CNTR lạnh = Extra Distance Rate + this % (a tier can hold another amount, entered by hand). */
+  reeferPct: number;
   rule: CalcRule;
   remark: string;
 }
@@ -60,4 +64,19 @@ export type VariableComponent = (typeof VARIABLE_COMPONENTS)[number];
 export interface VariableItem {
   component: VariableComponent;
   refId: string;
+}
+
+/**
+ * Variable Cost Mapping of a route and a vehicle type: the Fare Code its variable costs are booked to,
+ * and the Salary Range and Fuel Cost they are read from (Toll Fee from the route's Toll Stations).
+ */
+export interface VariableCostMappingRecord extends BaseRecord {
+  routeId: string;
+  /** Vehicle type key ("TRUCK · 5 tấn", "HEADER · 40 ft · Reefer · HINO"); no brand = every brand. */
+  vehicleType: string;
+  salaryRangeId: string;
+  fuelCostId: string;
+  /** Fare Code (Fare Code Management) the variable costs are booked to. */
+  assignCostId: string;
+  remark: string;
 }

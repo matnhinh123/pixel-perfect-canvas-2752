@@ -9,13 +9,14 @@ import {
   routeRepository,
   salaryRangeRepository,
   tollStationRepository,
+  variableCostMappingRepository,
   uid,
   vehicleMasterRepository,
 } from "@/repositories";
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "@/services/crudService";
 import { formatNumber } from "@/lib/format";
-import { buildCogs, setupsFor } from "./cogsBuild";
+import { buildCogs } from "./cogsBuild";
 import { cogsVehicleTypes } from "./cogsVehicle";
 import { mappingsFor } from "./cogsBuild";
 
@@ -37,9 +38,6 @@ export interface CogsDraft {
   mappingIds: string[];
   /** Utilization Factor (trips per day); text while typed. */
   utilizationFactor: string;
-  /** "" = the first Salary Range / Fuel Cost that applies to the vehicle type. */
-  salaryRangeId: string;
-  fuelCostId: string;
   excluded: string[];
   overrides: Record<string, number>;
   others: CogsOtherCost[];
@@ -54,8 +52,6 @@ export const newCogsDraft = (): CogsDraft => ({
   vehicleType: "",
   mappingIds: [],
   utilizationFactor: "1",
-  salaryRangeId: "",
-  fuelCostId: "",
   excluded: [],
   overrides: {},
   others: [],
@@ -70,8 +66,6 @@ export const draftOfCogs = (c: CogsRecord): CogsDraft => ({
   vehicleType: c.vehicleType,
   mappingIds: [...(c.mappingIds ?? [])],
   utilizationFactor: String(c.utilizationFactor ?? 1),
-  salaryRangeId: c.salaryRangeId ?? "",
-  fuelCostId: c.fuelCostId ?? "",
   excluded: [...c.excluded],
   overrides: { ...(c.overrides ?? {}) },
   others: c.others.map((o) => ({ ...o })),
@@ -114,21 +108,6 @@ export function validateCogs(d: CogsDraft, id?: string): Record<string, string> 
     );
     if (dup) e["routeId"] = `${dup.code} already exists for ${route.code} · ${d.vehicleType}.`;
   }
-  const vt = currentCogsVehicleTypes().find((t) => t.key === d.vehicleType);
-  if (vt) {
-    const ok = new Set(mappingsFor(fixedCostSummaryRepository.all(), vt).map((m) => m.id));
-    if (d.mappingIds.some((m) => !ok.has(m)))
-      e["mappingIds"] =
-        `A Fixed Cost Mapping picked is not for ${vt.key} (or was removed): pick it again.`;
-    const sr = setupsFor(salaryRangeRepository.all(), vt.key);
-    if (d.salaryRangeId && !sr.some((r) => r.id === d.salaryRangeId))
-      e["salaryRangeId"] =
-        `The Salary Range picked is not for ${vt.key} (or was removed): pick it again.`;
-    const fu = setupsFor(fuelCostRepository.all(), vt.key);
-    if (d.fuelCostId && !fu.some((r) => r.id === d.fuelCostId))
-      e["fuelCostId"] =
-        `The Fuel Cost picked is not for ${vt.key} (or was removed): pick it again.`;
-  }
   const f = Number(d.utilizationFactor);
   if (!d.utilizationFactor.trim()) e["utilizationFactor"] = "Utilization Factor is required.";
   else if (!(f > 0) || f > 10 || !/^\d+(\.\d{1,2})?$/.test(d.utilizationFactor.trim()))
@@ -161,10 +140,10 @@ export const buildCogsOf = (d: CogsDraft) => {
     tollMasters: tollStationRepository.all().filter((t) => !t.deleted),
     fixedCosts: fixedCostRepository.all(),
     mappings: fixedCostSummaryRepository.all(),
-    mappingIds: d.mappingIds,
+    // Fixed Cost: every Fixed Cost Mapping of the vehicle type.
+    mappingIds: mappingsFor(fixedCostSummaryRepository.all(), vehicle).map((m) => m.id),
+    variableMappings: variableCostMappingRepository.all(),
     utilizationFactor: factorOf(d),
-    salaryRangeId: d.salaryRangeId,
-    fuelCostId: d.fuelCostId,
     costs: costItemRepository.all().filter((c) => !c.deleted),
     excluded: d.excluded,
     overrides: d.overrides,
@@ -186,10 +165,9 @@ export const cogsService = {
       routeCode: route.code,
       routeName: route.name,
       vehicleType: d.vehicleType,
-      mappingIds: d.mappingIds,
+      mappingIds: [...new Set(b.lines.flatMap((l) => (l.mappingId ? [l.mappingId] : [])))],
       utilizationFactor: factorOf(d),
-      salaryRangeId: b.variable.salaryRange?.id ?? "",
-      fuelCostId: b.variable.fuelCost?.id ?? "",
+      variableMappingId: b.variableMapping?.id ?? "",
       excluded: d.excluded,
       overrides: d.overrides,
       others: d.others,

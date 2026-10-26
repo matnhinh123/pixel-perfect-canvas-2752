@@ -12,6 +12,7 @@ import type {
   RouteRecord,
   SalaryRangeRecord,
   VariableComponent,
+  VariableCostMappingRecord,
   VariableItem,
 } from "@/types";
 import { VARIABLE_COMPONENTS } from "@/types";
@@ -42,21 +43,52 @@ export const fixedCostPerDay = (f: FixedCostRecord) =>
 export const mappingsFor = (mappings: readonly FixedCostSummaryRecord[], vt: CogsVehicleType) =>
   mappings.filter((m) => !m.deleted && !!m.vehicleType && coversCogsVehicle(m.vehicleType, vt));
 
+/** Vehicle types a setup is made for (a Salary Range has several, a Fuel Cost one). */
+export const setupTypes = (r: { vehicleType?: string; vehicleTypes?: readonly string[] }) =>
+  r.vehicleTypes ?? (r.vehicleType ? [r.vehicleType] : []);
+
 /**
- * Live, active Salary Ranges / Fuel Costs that apply to a vehicle type: the ones of its brand first,
- * then the all-brands ones, each by code. The first one is used unless another is picked.
+ * Live, active Salary Ranges / Fuel Costs that apply to a vehicle type: the ones made for it (its brand)
+ * first, then the all-brands ones, each by code. The first one is used unless another is picked.
  */
 export function setupsFor<
-  T extends { deleted?: boolean; status: string; vehicleType: string; code: string },
+  T extends {
+    deleted?: boolean;
+    status: string;
+    code: string;
+    vehicleType?: string;
+    vehicleTypes?: readonly string[];
+  },
 >(xs: readonly T[], vehicleType: string): T[] {
+  const exact = (r: T) => setupTypes(r).includes(vehicleType);
   return xs
-    .filter((r) => !r.deleted && r.status === "Active" && coversVehicle(r.vehicleType, vehicleType))
-    .sort(
-      (a, b) =>
-        Number(b.vehicleType === vehicleType) - Number(a.vehicleType === vehicleType) ||
-        a.code.localeCompare(b.code),
-    );
+    .filter(
+      (r) =>
+        !r.deleted &&
+        r.status === "Active" &&
+        setupTypes(r).some((t) => coversVehicle(t, vehicleType)),
+    )
+    .sort((a, b) => Number(exact(b)) - Number(exact(a)) || a.code.localeCompare(b.code));
 }
+
+/**
+ * Variable Cost Mapping of a route and vehicle type: the one made for that vehicle type, else one made
+ * for every brand of it.
+ */
+export const variableMappingFor = (
+  mappings: readonly VariableCostMappingRecord[],
+  routeId: string,
+  vehicleType: string,
+) => {
+  const ok = mappings.filter(
+    (m) =>
+      !m.deleted &&
+      m.status === "Active" &&
+      m.routeId === routeId &&
+      coversVehicle(m.vehicleType, vehicleType),
+  );
+  return ok.find((m) => m.vehicleType === vehicleType) ?? ok[0];
+};
 
 /** What the variable costs are read from. */
 export interface VariableSetups {
@@ -69,7 +101,7 @@ export interface VariableSetups {
 export function variableItemOf(
   item: VariableItem,
   route: RouteRecord,
-  vt: Pick<CogsVehicleType, "group">,
+  vt: Pick<CogsVehicleType, "group" | "reefer">,
   s: VariableSetups,
 ): { code: string; basis: string; amount: number } {
   const t = routeTotals(route);
@@ -107,6 +139,7 @@ export function variableItemOf(
   const sal = tripSalaryOf(r.tiers, km, undefined, undefined, {
     rule: ruleOf(r.rule),
     terrain: route.terrain ?? "Plain",
+    reefer: vt.reefer,
   });
   if (!sal) return { code: r.code, basis: `Out of range (${formatNumber(km)} km)`, amount: 0 };
   return item.component === "Trip Salary"
@@ -147,13 +180,12 @@ export function tripVariable(
 export interface CogsBuildInput extends VariableSetups {
   route: RouteRecord;
   vehicle: CogsVehicleType;
-  /** Salary Range / Fuel Cost picked ("" = the first that applies). */
-  salaryRangeId: string;
-  fuelCostId: string;
   fixedCosts: FixedCostRecord[];
   mappings: FixedCostSummaryRecord[];
   /** Mappings picked on the COGS. */
   mappingIds: readonly string[];
+  /** Variable Cost Mappings: the one of the route and vehicle type is used. */
+  variableMappings: readonly VariableCostMappingRecord[];
   /** Trips per day (hệ số khai thác): Fixed Cost per trip = per day ÷ factor. */
   utilizationFactor: number;
   /** Fare Codes (Fare Code Management). */
@@ -167,6 +199,8 @@ export interface CogsBuild {
   /** Standard distance of the route (km); 0 when not calculated. */
   stdKm: number;
   calculated: boolean;
+  /** Variable Cost Mapping of the route and vehicle type (none: no variable cost). */
+  variableMapping: VariableCostMappingRecord | undefined;
   variable: TripVariable;
   /** Every Fixed / Variable cost that applies, before removal or edits. */
   autoLines: CogsLine[];
@@ -205,8 +239,15 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
     }
   }
 
-  // Variable Cost: worked out for the route and vehicle type.
-  const variable = tripVariable(i.route, i.vehicle, i);
+  // Variable Cost: the Variable Cost Mapping of the route and vehicle type, worked out for the route.
+  const variableMapping = variableMappingFor(i.variableMappings, i.route.id, i.vehicle.key);
+  const variable: TripVariable = variableMapping
+    ? tripVariable(i.route, i.vehicle, {
+        ...i,
+        salaryRangeId: variableMapping.salaryRangeId,
+        fuelCostId: variableMapping.fuelCostId,
+      })
+    : { salaryRange: undefined, fuelCost: undefined, lines: [], total: 0 };
   const variableLines: CogsLine[] = variable.lines.map((v) => ({
     key: `V:${v.component}`,
     group: "Variable Cost",
@@ -214,6 +255,7 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
     name: v.component,
     basis: v.basis,
     amount: v.amount,
+    fareCode: i.costs.find((c) => c.id === variableMapping?.assignCostId)?.code ?? "",
   }));
 
   const autoLines = [...fixedLines, ...variableLines];
@@ -242,6 +284,7 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
   return {
     stdKm: t.calculated ? Math.round(t.distanceKm) : 0,
     calculated: t.calculated,
+    variableMapping,
     variable,
     autoLines,
     lines,

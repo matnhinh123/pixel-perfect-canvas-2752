@@ -8,7 +8,19 @@ export const TOLL_GROUPS = [1, 2, 3, 4, 5] as const;
 
 // ---------------------------------------------------------------- Calculation rule
 
-export const DEFAULT_RULE: CalcRule = { roundStep: 10_000, regionOn: true, regionAmount: 200_000 };
+export const DEFAULT_RULE: CalcRule = {
+  roundStep: 10_000,
+  regionOn: true,
+  regionAmount: 200_000,
+};
+
+/** CNTR lạnh worked out from the Extra Distance Rate and the Salary Range's %. */
+export const reeferFromPct = (extraRate: number, pct: number) =>
+  Math.round(extraRate * (1 + pct / 100));
+
+/** Extra-distance rate of a reefer container (CNTR lạnh) in a tier: entered; empty → the extra rate. */
+export const reeferRateOf = (t: Pick<SalaryTier, "extraRate" | "reeferRate">) =>
+  t.reeferRate !== undefined && Number.isFinite(t.reeferRate) ? t.reeferRate : t.extraRate;
 /** The rule of a Salary Range; missing or bad values fall back to the defaults. */
 export function ruleOf(r: Partial<CalcRule> | null | undefined): CalcRule {
   const out = { ...DEFAULT_RULE };
@@ -48,13 +60,18 @@ const BASE_2T: [number, number, number, number, number][] = [
 const round = (n: number, step: number) => Math.round(n / step) * step;
 /** Demo tiers: the Truck 2T tiers × a salary scale and a road support fee scale. */
 export const seedTiers = (salaryScale = 1, roadFeeScale = 1): SalaryTier[] =>
-  BASE_2T.map(([from, to, s, x, t]) => ({
-    from,
-    to,
-    tripSalary: round(s * salaryScale, 500),
-    extraRate: round(x * salaryScale, 10),
-    roadSupportFee: round(t * roadFeeScale, 10_000),
-  }));
+  BASE_2T.map(([from, to, s, x, t]) => {
+    const extraRate = round(x * salaryScale, 10);
+    return {
+      from,
+      to,
+      tripSalary: round(s * salaryScale, 500),
+      extraRate,
+      // CNTR lạnh of the QTL sheet: the extra rate +15 %, +20 % from 951 km.
+      reeferRate: Math.round(extraRate * (from >= 951 ? 1.2 : 1.15)),
+      roadSupportFee: round(t * roadFeeScale, 10_000),
+    };
+  });
 /** Tiers copied with a surcharge (e.g. a reefer container from its dry one); road support fee unchanged. */
 export const scaleTiers = (tiers: SalaryTier[], salaryPct: number, extraPct: number) =>
   tiers.map((t) => ({
@@ -67,7 +84,14 @@ export function validateTiers(tiers: SalaryTier[]): { ok: boolean; message: stri
   if (!tiers.length) return { ok: false, message: "Add at least one tier." };
   for (const [i, t] of tiers.entries()) {
     const n = i + 1;
-    const nums = [t.from, t.to, t.tripSalary, t.extraRate, t.roadSupportFee];
+    const nums = [
+      t.from,
+      t.to,
+      t.tripSalary,
+      t.extraRate,
+      Number.isFinite(t.reeferRate) ? t.reeferRate! : 0,
+      t.roadSupportFee,
+    ];
     if (nums.some((v) => !Number.isFinite(v) || v < 0))
       return { ok: false, message: `Tier ${n}: every value must be a number of 0 or more.` };
     const expected = i === 0 ? 0 : tiers[i - 1]!.to + 1;
@@ -129,7 +153,7 @@ export function tripSalaryOf(
   standardKm: number,
   actualKm?: number,
   actualRoadFee?: number,
-  opts: { rule?: CalcRule; terrain?: string } = {},
+  opts: { rule?: CalcRule; terrain?: string; reefer?: boolean } = {},
 ): TripSalary | null {
   const rule = opts.rule ?? DEFAULT_RULE;
   if (!(standardKm >= 0)) return null;
@@ -137,10 +161,12 @@ export function tripSalaryOf(
   if (i < 0) return null;
   const t = tiers[i]!;
   const intoKm = Math.max(0, Math.round((standardKm - t.from) * 10) / 10);
-  const raw = Math.round(t.tripSalary + t.extraRate * intoKm);
+  // A reefer container (CNTR lạnh) is paid its own extra-distance rate.
+  const rate = opts.reefer ? reeferRateOf(t) : t.extraRate;
+  const raw = Math.round(t.tripSalary + rate * intoKm);
   const base = rule.roundStep > 0 ? Math.ceil(raw / rule.roundStep) * rule.roundStep : raw;
   const extraKm = Math.max(0, Math.round(((actualKm ?? standardKm) - standardKm) * 10) / 10);
-  const extra = Math.round(extraKm * t.extraRate);
+  const extra = Math.round(extraKm * rate);
   const roadStd = actualRoadFee ?? t.roadSupportFee;
   const region = rule.regionOn && opts.terrain === "Highland" ? rule.regionAmount : 0;
   const roadSupportFee = roadStd + region;
@@ -153,7 +179,7 @@ export function tripSalaryOf(
     raw,
     base,
     extraKm,
-    extraRate: t.extraRate,
+    extraRate: rate,
     extra,
     roadStd,
     region,
@@ -161,7 +187,7 @@ export function tripSalaryOf(
     baseTotal: base + roadSupportFee,
     total: base + extra + roadSupportFee,
     basis:
-      `Tier ${i + 1} (${t.from}–${t.to} km) · ${f(t.tripSalary)} + ${f(t.extraRate)} × ${intoKm} km = ${f(raw)}` +
+      `Tier ${i + 1} (${t.from}–${t.to} km) · ${f(t.tripSalary)} + ${f(rate)}${opts.reefer ? " (CNTR lạnh)" : ""} × ${intoKm} km = ${f(raw)}` +
       (base !== raw ? ` → ${f(base)}` : ""),
     roadSupportBasis: `Tier ${i + 1} ${f(roadStd)}${region ? ` + ${f(region)} Highland` : ""}`,
   };
