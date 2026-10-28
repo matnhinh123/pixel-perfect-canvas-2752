@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/movex/general/MoneyInput";
 import {
   Dialog,
   DialogContent,
@@ -191,14 +192,12 @@ function AddTollBody({
       </Field>
       <Field label={t("Giá (₫)", "Price (₫)")} required error={errors["price"]}>
         <div className="relative">
-          <Input
-            inputMode="numeric"
-            value={fee.price}
-            placeholder="0"
-            className="pr-8 text-right"
+          <MoneyInput
+            value={fee.price === "" ? NaN : Number(fee.price)}
+            className="pr-8"
             disabled={tab === "list" && !pick}
-            onChange={(e) => {
-              setFee((f) => ({ ...f, price: e.target.value }));
+            onChange={(v) => {
+              setFee((f) => ({ ...f, price: Number.isFinite(v) ? String(v) : "" }));
               if (errors["price"]) setErrors(({ price: _p, ...rest }) => rest);
             }}
             aria-invalid={!!errors["price"] || undefined}

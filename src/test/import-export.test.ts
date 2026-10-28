@@ -94,7 +94,7 @@ describe("Import / Export", () => {
         "Medium Truck",
         "8000",
         "round trip",
-        "highland",
+        "highland", // old name: read as Other
       ],
     ];
     const v = validateImport(routeImportConfig, "routing.xlsx", table);
@@ -102,7 +102,7 @@ describe("Import / Export", () => {
     const [id] = routeImportConfig.commit(v.validRows);
     expect(routeRepository.get(id!)).toMatchObject({
       type: "Round Trip",
-      terrain: "Highland",
+      terrain: "Other",
       vehicleProfile: "Truck",
       origin: { locationId: loc.id },
     });

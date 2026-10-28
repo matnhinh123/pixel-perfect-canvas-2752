@@ -3,10 +3,15 @@
 // system rules), so only those are registered here.
 import {
   businessPartnerRepository,
+  cogsRepository,
   commonCodeRepository,
   costItemRepository,
   fixedCostRepository,
   fixedCostSummaryRepository,
+  fuelCostRepository,
+  routeRepository,
+  salaryRangeRepository,
+  variableCostMappingRepository,
   vehicleMasterRepository,
 } from "@/repositories";
 import type { Collection } from "@/repositories/storage";
@@ -64,14 +69,86 @@ const CODE_FIELDS: Record<string, { repo: AnyRepo; paths: string[] }[]> = {
       paths: ["vehicleGroup", "containerMappings[].vehicleGroup"],
     },
   ],
-  [CC.FUEL_TYPE]: [{ repo: vehicleMasterRepository as AnyRepo, paths: ["fuelType"] }],
+  [CC.FUEL_TYPE]: [
+    { repo: vehicleMasterRepository as AnyRepo, paths: ["fuelType"] },
+    { repo: fuelCostRepository as AnyRepo, paths: ["fuelType"] },
+  ],
   [CC.TRADE_MARK]: [{ repo: vehicleMasterRepository as AnyRepo, paths: ["tradeMark"] }],
   [CC.TAX_EVIDENCE]: [{ repo: costItemRepository as AnyRepo, paths: ["taxEvidence"] }],
   [CC.TAX_TARIFF]: [{ repo: costItemRepository as AnyRepo, paths: ["taxTariff"] }],
 };
 
+/** Lists whose names are parts of the vehicle-type keys ("TRUCK · 5 tấn · HINO", "HEADER · 40 ft"). */
+const VEHICLE_KEY_TYPES: string[] = [CC.TRUCK_TYPE, CC.TRAILER_SIZE, CC.TRADE_MARK];
+
 /** Lists whose option names are stored on records (renaming rewrites them). */
-export const SYNCED_CODE_TYPES = Object.keys(CODE_FIELDS);
+export const SYNCED_CODE_TYPES = [
+  ...new Set([...Object.keys(CODE_FIELDS), ...VEHICLE_KEY_TYPES, CC.CONTAINER_TYPE]),
+];
+
+/** Updates the records `f` returns a new value for; returns how many. */
+function rewrite<T extends { id: string }>(repo: Collection<T>, f: (r: T) => T | null): number {
+  let n = 0;
+  for (const r of repo.all()) {
+    const next = f(r);
+    if (next) {
+      repo.update(r.id, () => next);
+      n++;
+    }
+  }
+  return n;
+}
+
+/**
+ * Vehicle-type keys of the cost setups, mappings and COGS follow a renamed Truck Type / Trailer Size /
+ * Brand (each " · " part of a key is renamed), and so does the Truck Type picked on a route.
+ */
+function renameVehicleKeys(typeCode: string, map: Map<string, string>): number {
+  const key = (k: string) =>
+    k
+      .split(" · ")
+      .map((p) => map.get(p) ?? p)
+      .join(" · ");
+  const one = <T extends { id: string; vehicleType: string }>(r: T) =>
+    r.vehicleType && key(r.vehicleType) !== r.vehicleType
+      ? { ...r, vehicleType: key(r.vehicleType) }
+      : null;
+  let n = 0;
+  n += rewrite(salaryRangeRepository, one);
+  n += rewrite(cogsRepository, one);
+  n += rewrite(fixedCostSummaryRepository, one);
+  n += rewrite(variableCostMappingRepository, (r) => {
+    const next = r.vehicleTypes.map(key);
+    return next.join("|") !== r.vehicleTypes.join("|") ? { ...r, vehicleTypes: next } : null;
+  });
+  if (typeCode === CC.TRUCK_TYPE)
+    n += rewrite(routeRepository, (r) =>
+      r.truckType && map.has(r.truckType) ? { ...r, truckType: map.get(r.truckType)! } : null,
+    );
+  return n;
+}
+
+/** Container columns of the Salary Ranges (and their rates in the tiers) follow a renamed Container Type. */
+function renameContainerTypes(map: Map<string, string>): number {
+  return rewrite(salaryRangeRepository, (r) => {
+    if (!r.containers?.some((c) => map.has(c.container))) return null;
+    const to = (c: string) => map.get(c) ?? c;
+    return {
+      ...r,
+      containers: r.containers.map((c) => ({ ...c, container: to(c.container) })),
+      tiers: r.tiers.map((t) =>
+        t.containerRates
+          ? {
+              ...t,
+              containerRates: Object.fromEntries(
+                Object.entries(t.containerRates).map(([k, v]) => [to(k), v]),
+              ),
+            }
+          : t,
+      ),
+    };
+  });
+}
 
 /** Rewrites the names found at `path` (immutably); returns the new value and how many changed. */
 function renameAt(value: unknown, path: string[], map: Map<string, string>): [unknown, number] {
@@ -134,6 +211,9 @@ export function propagateRenames(typeCode: string, renames: [string, string][]):
       }
     }
   }
+  if (VEHICLE_KEY_TYPES.includes(typeCode)) records += renameVehicleKeys(typeCode, map);
+  if (typeCode === CC.CONTAINER_TYPE)
+    records += renameContainerTypes(map) + renameVehicleKeys(typeCode, map);
   // A UoM belongs to its category through the option's attribute: keep that link too.
   if (typeCode === CC.UOM_CATEGORY) {
     const uom = commonCodeRepository.get(CC.UOM);

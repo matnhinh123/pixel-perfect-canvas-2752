@@ -5,4 +5,4 @@ import type { Terrain } from "@/types";
 export const FUEL_PRICE = 19_500;
 
 /** Terrain adjustment applied to the fuel norm. */
-export const TERRAIN_FACTORS: Record<Terrain, number> = { Plain: 1, Highland: 1.15 };
+export const TERRAIN_FACTORS: Record<Terrain, number> = { Plain: 1, Other: 1.15 };

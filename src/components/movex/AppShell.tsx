@@ -51,6 +51,7 @@ import { HEADER_CRUMBS_ID } from "./common";
 import { useConfirm } from "./general/ConfirmDialog";
 import { ExpiringDocumentsList } from "./vehicle/VehicleAlerts";
 import { useExpiringDocumentCount } from "./vehicle/useVehicleData";
+import { startCogsAutoSync } from "@/services/cost/cogsAutoSync";
 
 interface NavItem {
   to: string;
@@ -370,6 +371,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const atHome = useRouterState({ select: (s) => s.location.pathname }) === "/";
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => setCollapsed(readJson<boolean>(COLLAPSE_KEY, false)), []);
+  // COGS follow their setup by themselves (created for new routes, worked out again on changes).
+  useEffect(() => startCogsAutoSync(), []);
   const toggle = () =>
     setCollapsed((c) => {
       writeJson(COLLAPSE_KEY, !c);

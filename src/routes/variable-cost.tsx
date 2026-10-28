@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { VariableCostPage, type VariableCostTab } from "@/components/movex/cost/VariableCostPage";
+import { VariableCostPage } from "@/components/movex/cost/VariableCostPage";
+import type { VariableCostTab } from "@/components/movex/cost/VariableCostTabs";
 
-const TABS: readonly VariableCostTab[] = ["salary", "fuel", "mapping"];
+const TABS: readonly VariableCostTab[] = ["salary", "fuel", "mapping", "reference"];
 
 export const Route = createFileRoute("/variable-cost")({
   validateSearch: (s: Record<string, unknown>): { tab?: VariableCostTab } =>
@@ -12,11 +13,5 @@ export const Route = createFileRoute("/variable-cost")({
 
 function VariableCostRoute() {
   const { tab } = Route.useSearch();
-  const navigate = Route.useNavigate();
-  return (
-    <VariableCostPage
-      tab={tab ?? "salary"}
-      onTab={(t) => void navigate({ search: { tab: t }, replace: true })}
-    />
-  );
+  return <VariableCostPage tab={tab ?? "salary"} />;
 }

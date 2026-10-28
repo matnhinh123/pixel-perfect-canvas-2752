@@ -37,7 +37,6 @@ import { Route as ServiceIndexRouteImport } from './routes/service.index'
 import { Route as ServiceIdRouteImport } from './routes/service.$id'
 import { Route as TollStationIndexRouteImport } from './routes/toll-station.index'
 import { Route as TollStationIdRouteImport } from './routes/toll-station.$id'
-import { Route as VariableCostMappingIdRouteImport } from './routes/variable-cost-mapping.$id'
 import { Route as VehicleIndexRouteImport } from './routes/vehicle.index'
 import { Route as VehicleIdRouteImport } from './routes/vehicle.$id'
 import { Route as ApiVietmapSplatRouteImport } from './routes/api.vietmap.$'
@@ -182,11 +181,6 @@ const TollStationIdRoute = TollStationIdRouteImport.update({
   path: '/toll-station/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const VariableCostMappingIdRoute = VariableCostMappingIdRouteImport.update({
-  id: '/variable-cost-mapping/$id',
-  path: '/variable-cost-mapping/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const VehicleIndexRoute = VehicleIndexRouteImport.update({
   id: '/vehicle/',
   path: '/vehicle/',
@@ -222,7 +216,6 @@ export interface FileRoutesByFullPath {
   '/salary-range/$id': typeof SalaryRangeIdRoute
   '/service/$id': typeof ServiceIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
-  '/variable-cost-mapping/$id': typeof VariableCostMappingIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
   '/cogs/': typeof CogsIndexRoute
@@ -256,7 +249,6 @@ export interface FileRoutesByTo {
   '/salary-range/$id': typeof SalaryRangeIdRoute
   '/service/$id': typeof ServiceIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
-  '/variable-cost-mapping/$id': typeof VariableCostMappingIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner': typeof BusinessPartnerIndexRoute
   '/cogs': typeof CogsIndexRoute
@@ -291,7 +283,6 @@ export interface FileRoutesById {
   '/salary-range/$id': typeof SalaryRangeIdRoute
   '/service/$id': typeof ServiceIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
-  '/variable-cost-mapping/$id': typeof VariableCostMappingIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
   '/cogs/': typeof CogsIndexRoute
@@ -327,7 +318,6 @@ export interface FileRouteTypes {
     | '/salary-range/$id'
     | '/service/$id'
     | '/toll-station/$id'
-    | '/variable-cost-mapping/$id'
     | '/vehicle/$id'
     | '/business-partner/'
     | '/cogs/'
@@ -361,7 +351,6 @@ export interface FileRouteTypes {
     | '/salary-range/$id'
     | '/service/$id'
     | '/toll-station/$id'
-    | '/variable-cost-mapping/$id'
     | '/vehicle/$id'
     | '/business-partner'
     | '/cogs'
@@ -395,7 +384,6 @@ export interface FileRouteTypes {
     | '/salary-range/$id'
     | '/service/$id'
     | '/toll-station/$id'
-    | '/variable-cost-mapping/$id'
     | '/vehicle/$id'
     | '/business-partner/'
     | '/cogs/'
@@ -430,7 +418,6 @@ export interface RootRouteChildren {
   SalaryRangeIdRoute: typeof SalaryRangeIdRoute
   ServiceIdRoute: typeof ServiceIdRoute
   TollStationIdRoute: typeof TollStationIdRoute
-  VariableCostMappingIdRoute: typeof VariableCostMappingIdRoute
   VehicleIdRoute: typeof VehicleIdRoute
   BusinessPartnerIndexRoute: typeof BusinessPartnerIndexRoute
   CogsIndexRoute: typeof CogsIndexRoute
@@ -644,13 +631,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TollStationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/variable-cost-mapping/$id': {
-      id: '/variable-cost-mapping/$id'
-      path: '/variable-cost-mapping/$id'
-      fullPath: '/variable-cost-mapping/$id'
-      preLoaderRoute: typeof VariableCostMappingIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/vehicle/': {
       id: '/vehicle/'
       path: '/vehicle'
@@ -694,7 +674,6 @@ const rootRouteChildren: RootRouteChildren = {
   SalaryRangeIdRoute: SalaryRangeIdRoute,
   ServiceIdRoute: ServiceIdRoute,
   TollStationIdRoute: TollStationIdRoute,
-  VariableCostMappingIdRoute: VariableCostMappingIdRoute,
   VehicleIdRoute: VehicleIdRoute,
   BusinessPartnerIndexRoute: BusinessPartnerIndexRoute,
   CogsIndexRoute: CogsIndexRoute,

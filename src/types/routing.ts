@@ -1,7 +1,7 @@
 import type { BaseRecord } from "./common";
 
-/** Terrain of the route: highland (cao nguyên) is slower than plain (đồng bằng). */
-export type Terrain = "Plain" | "Highland";
+/** Terrain of the route: Other (e.g. highland) is slower than Plain. */
+export type Terrain = "Plain" | "Other";
 export type RouteType = "Single Trip" | "Round Trip";
 
 /**
@@ -181,6 +181,8 @@ export interface RouteRecord extends BaseRecord {
   returnWaypoints: RoutePoint[];
   /** Vehicle class 1..5 picked on the route map (Truck 1–5, Container 3–5). */
   vehicleClass?: number;
+  /** Truck only: the Truck Type picked (Vehicle master); its trucks' Vehicle Group gives the class. */
+  truckType?: string | undefined;
   /** Custom return route only: start / end when they differ from the outbound destination / origin. */
   returnStart?: RoutePoint;
   returnEnd?: RoutePoint;

@@ -10,6 +10,7 @@ import { cogsCrud } from "@/services/cost/cogsService";
 import { cogsVehicleTypes } from "@/services/cost/cogsVehicle";
 import { formatNumber } from "@/lib/format";
 import type { CogsLineGroup, CogsRecord } from "@/types";
+import { useVehicleTypes } from "@/components/movex/cost/useVehicleTypes";
 
 export const Route = createFileRoute("/cogs/")({
   head: () => ({ meta: [{ title: "COGS — MoveX" }] }),
@@ -23,15 +24,18 @@ const money = (n: number) => <span className="tabular-nums">{formatNumber(Math.r
 function CogsListPage() {
   const all = useCollection(cogsRepository);
   const rows = useMemo(() => all.filter((c) => !c.deleted), [all]);
-  const vehiclesAll = useCollection(vehicleMasterRepository);
+  /** Routes of the COGS (code, name), for the Route filter. */
+  const routeChoices = useMemo(
+    () =>
+      [...new Map(rows.map((c) => [c.routeCode, c.routeName] as const)).entries()].sort((x, y) =>
+        x[0].localeCompare(y[0]),
+      ),
+    [rows],
+  );
+  const liveTypes = useVehicleTypes();
   const vehicleTypes = useMemo(
-    () => [
-      ...new Set([
-        ...cogsVehicleTypes(vehiclesAll).map((t) => t.key),
-        ...rows.map((c) => c.vehicleType),
-      ]),
-    ],
-    [vehiclesAll, rows],
+    () => [...new Set([...liveTypes.map((t) => t.key), ...rows.map((c) => c.vehicleType)])],
+    [liveTypes, rows],
   );
   const navigate = useNavigate();
   const open = (c: CogsRecord, mode: "view" | "edit") =>
@@ -147,6 +151,14 @@ function CogsListPage() {
       searchValues={(c) => [c.code, c.name ?? "", c.routeCode, c.routeName]}
       quickFilters={[
         statusFilter,
+        {
+          key: "route",
+          allLabel: "All routes",
+          options: routeChoices.map(([code, name]) => ({
+            label: `${code} · ${name}`,
+            conditions: [{ field: "routeCode", operator: "eq", value: code }],
+          })),
+        },
         {
           key: "vehicleType",
           allLabel: "All vehicle types",

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   businessPartnerRepository,
+  cogsRepository,
   commonCodeRepository,
+  fixedCostSummaryRepository,
+  salaryRangeRepository,
+  variableCostMappingRepository,
   vehicleMasterRepository,
 } from "@/repositories";
 import { CC } from "@/mock-data/commonCodes";
@@ -69,12 +73,28 @@ describe("Common Code → records sync", () => {
       .all()
       .filter((v) => v.truckType === "5 tấn").length;
     expect(trucksBefore).toBeGreaterThan(0);
+    // Loaded before the rename (the seeds would otherwise be built from the renamed vehicles).
+    const keyed = [
+      ...salaryRangeRepository.all(),
+      ...cogsRepository.all(),
+      ...fixedCostSummaryRepository.all(),
+    ].filter((r) => r.vehicleType.includes("5 tấn")).length;
+    expect(keyed).toBeGreaterThan(0);
+    variableCostMappingRepository.all();
     rename(CC.TRUCK_TYPE, "5 tấn", "5 Tons");
     expect(vehicleMasterRepository.all().filter((v) => v.truckType === "5 tấn")).toHaveLength(0);
     expect(vehicleMasterRepository.all().filter((v) => v.truckType === "5 Tons")).toHaveLength(
       trucksBefore,
     );
-    expect(lastSyncedRecords).toBe(trucksBefore);
+    // The vehicle-type keys of the cost setups, mappings and COGS follow ("TRUCK · 5 tấn" → "TRUCK · 5 Tons").
+    expect(salaryRangeRepository.all().some((r) => r.vehicleType === "TRUCK · 5 Tons")).toBe(true);
+    expect(cogsRepository.all().some((c) => c.vehicleType.includes("5 tấn"))).toBe(false);
+    expect(
+      variableCostMappingRepository
+        .all()
+        .every((m) => !m.vehicleTypes.some((t) => t.includes("5 tấn"))),
+    ).toBe(true);
+    expect(lastSyncedRecords).toBeGreaterThan(trucksBefore);
 
     // Other vehicle lists and BP categories (a list field) too.
     rename(CC.VEHICLE_GROUP, "Group 02", "Group 2");

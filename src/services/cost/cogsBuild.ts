@@ -1,5 +1,5 @@
 // COGS of one trip: the Fixed Costs of the Fixed Cost Mappings picked + the variable costs of the route
-// × vehicle type (Trip Salary and Road Support Fee from its Salary Range, Fuel Cost from its Fuel Cost,
+// × vehicle type (Trip Salary from its Salary Range, Fuel Cost from its Fuel Cost,
 // Toll Fee from the Toll Stations of the route) + other Fare Codes added by hand.
 // Pure (no storage), so the screen, the save, the Reference Trip and the demo seed agree.
 import type {
@@ -27,7 +27,7 @@ import {
   type TollMaster,
 } from "./salaryRange";
 import { routeTotals } from "./costMath";
-import { coversVehicle, type CogsVehicleType } from "./cogsVehicle";
+import { coversVehicle, isoFitsVehicle, type CogsVehicleType } from "./cogsVehicle";
 import { coversCogsVehicle } from "@/services/fixedCostVehicle";
 
 /** Fixed cost of one day (a trip is counted as one day). */
@@ -39,56 +39,65 @@ export const fixedCostPerDay = (f: FixedCostRecord) =>
     days: f.allocationDays,
   }).day ?? 0;
 
-/** Fare Code mappings a COGS of this vehicle type can pick: live, and made for that vehicle type. */
+/** Fare Code mappings a COGS of this vehicle type loads: live, active, and made for that vehicle type. */
 export const mappingsFor = (mappings: readonly FixedCostSummaryRecord[], vt: CogsVehicleType) =>
-  mappings.filter((m) => !m.deleted && !!m.vehicleType && coversCogsVehicle(m.vehicleType, vt));
-
-/** Vehicle types a setup is made for (a Salary Range has several, a Fuel Cost one). */
-export const setupTypes = (r: { vehicleType?: string; vehicleTypes?: readonly string[] }) =>
-  r.vehicleTypes ?? (r.vehicleType ? [r.vehicleType] : []);
+  mappings.filter(
+    (m) =>
+      !m.deleted &&
+      m.status === "Active" &&
+      !!m.vehicleType &&
+      coversCogsVehicle(m.vehicleType, vt),
+  );
 
 /**
  * Live, active Salary Ranges / Fuel Costs that apply to a vehicle type: the ones made for it (its brand)
- * first, then the all-brands ones, each by code. The first one is used unless another is picked.
+ * first, then the all-brands ones (a "HEADER" Salary Range: every header), each by code. The first one is
+ * used unless another is picked. A Draft is never used.
  */
 export function setupsFor<
   T extends {
     deleted?: boolean;
     status: string;
     code: string;
-    vehicleType?: string;
-    vehicleTypes?: readonly string[];
+    vehicleType: string;
   },
 >(xs: readonly T[], vehicleType: string): T[] {
-  const exact = (r: T) => setupTypes(r).includes(vehicleType);
+  const exact = (r: T) => r.vehicleType === vehicleType;
   return xs
     .filter(
       (r) =>
         !r.deleted &&
         r.status === "Active" &&
-        setupTypes(r).some((t) => coversVehicle(t, vehicleType)),
+        !!r.vehicleType &&
+        coversVehicle(r.vehicleType, vehicleType),
     )
     .sort((a, b) => Number(exact(b)) - Number(exact(a)) || a.code.localeCompare(b.code));
 }
 
 /**
- * Variable Cost Mapping of a route and vehicle type: the one made for that vehicle type, else one made
- * for every brand of it.
+ * Variable Cost Mapping a variable cost of a vehicle type is booked by: the one made for that vehicle type
+ * (its brand) first, else one for every brand of it.
  */
-export const variableMappingFor = (
+export function variableMappingOf(
   mappings: readonly VariableCostMappingRecord[],
-  routeId: string,
   vehicleType: string,
-) => {
+  component: VariableComponent,
+) {
   const ok = mappings.filter(
     (m) =>
       !m.deleted &&
       m.status === "Active" &&
-      m.routeId === routeId &&
-      coversVehicle(m.vehicleType, vehicleType),
+      m.component === component &&
+      m.vehicleTypes.some((t) => coversVehicle(t, vehicleType)),
   );
-  return ok.find((m) => m.vehicleType === vehicleType) ?? ok[0];
-};
+  return ok.find((m) => m.vehicleTypes.includes(vehicleType)) ?? ok[0];
+}
+
+/** The active Fuel Cost (price) of a Fuel Type. */
+export const fuelCostFor = (fuelCosts: readonly FuelCostRecord[], fuelType: string) =>
+  fuelCosts.find((f) => !f.deleted && f.status === "Active" && f.fuelType === fuelType);
+const unitOf = (fuelType: string) =>
+  /electric/i.test(fuelType) ? "kWh" : /cng/i.test(fuelType) ? "kg" : "l";
 
 /** What the variable costs are read from. */
 export interface VariableSetups {
@@ -101,7 +110,7 @@ export interface VariableSetups {
 export function variableItemOf(
   item: VariableItem,
   route: RouteRecord,
-  vt: Pick<CogsVehicleType, "group" | "reefer">,
+  vt: Pick<CogsVehicleType, "group" | "key" | "fuelNorm" | "fuelRates">,
   s: VariableSetups,
 ): { code: string; basis: string; amount: number } {
   const t = routeTotals(route);
@@ -126,12 +135,17 @@ export function variableItemOf(
   if (item.component === "Fuel Cost") {
     const f = s.fuelCosts.find((x) => x.id === item.refId && !x.deleted);
     if (!f) return { code: "", basis: "Fuel Cost not found", amount: 0 };
-    const litres = Math.round(((km * f.fuelRate) / 100) * 10) / 10;
-    const unit = /electric/i.test(f.fuelType) ? "kWh" : /cng/i.test(f.fuelType) ? "kg" : "l";
+    // The vehicles' average Fuel Rate on that fuel (Vehicle › Fuel Rate).
+    const r = vt.fuelRates[f.fuelType];
+    const rate = r?.avg || vt.fuelNorm;
+    const unit = unitOf(f.fuelType);
+    if (!(rate > 0))
+      return { code: f.code, basis: "No Fuel Rate on the vehicles (Vehicle › Fuel)", amount: 0 };
+    const litres = Math.round(((km * rate) / 100) * 10) / 10;
     return {
       code: f.code,
-      basis: `${f.fuelRate} ${unit}/100km × ${formatNumber(km)} km = ${litres} ${unit} × ${formatNumber(f.fuelPrice)} ₫`,
-      amount: fuelCostOf(km, f.fuelRate, f.fuelPrice),
+      basis: `${rate} ${unit}/100km (average of ${r?.vehicles ?? 0} vehicles) × ${formatNumber(km)} km = ${litres} ${unit} × ${formatNumber(f.fuelPrice)} ₫`,
+      amount: fuelCostOf(km, rate, f.fuelPrice),
     };
   }
   const r = s.salaryRanges.find((x) => x.id === item.refId && !x.deleted);
@@ -139,12 +153,11 @@ export function variableItemOf(
   const sal = tripSalaryOf(r.tiers, km, undefined, undefined, {
     rule: ruleOf(r.rule),
     terrain: route.terrain ?? "Plain",
-    reefer: vt.reefer,
+    // A header pulling a container with a column (its ISO length and reefer / dry): that column's rates.
+    container: (r.containers ?? []).find((c) => isoFitsVehicle(c.container, vt.key)),
   });
   if (!sal) return { code: r.code, basis: `Out of range (${formatNumber(km)} km)`, amount: 0 };
-  return item.component === "Trip Salary"
-    ? { code: r.code, basis: sal.basis, amount: sal.base }
-    : { code: r.code, basis: sal.roadSupportBasis, amount: sal.roadSupportFee };
+  return { code: r.code, basis: sal.basis, amount: sal.base };
 }
 
 export interface TripVariable {
@@ -155,24 +168,33 @@ export interface TripVariable {
 }
 
 /**
- * Variable costs of a trip: Trip Salary and Road Support Fee from the vehicle type's Salary Range,
+ * Variable costs of a trip: Trip Salary from the vehicle type's Salary Range,
  * Fuel Cost from its Fuel Cost (the ones picked, else the first that applies), Toll Fee of the route.
  * A cost without a setup is left out.
  */
 export function tripVariable(
   route: RouteRecord,
   vt: CogsVehicleType,
-  s: VariableSetups & { salaryRangeId?: string; fuelCostId?: string },
+  s: VariableSetups & { salaryRangeId?: string },
 ): TripVariable {
   const salaryRanges = setupsFor(s.salaryRanges, vt.key);
-  const fuelCosts = setupsFor(s.fuelCosts, vt.key);
   const salaryRange = salaryRanges.find((x) => x.id === s.salaryRangeId) ?? salaryRanges[0];
-  const fuelCost = fuelCosts.find((x) => x.id === s.fuelCostId) ?? fuelCosts[0];
+  // Fuel: the price of the fuel the vehicle type runs on.
+  const fuelCost = fuelCostFor(s.fuelCosts, vt.fuelType);
   const refOf = (c: VariableComponent) =>
     c === "Toll Fee" ? route.id : c === "Fuel Cost" ? fuelCost?.id : salaryRange?.id;
-  const lines = VARIABLE_COMPONENTS.flatMap((component) => {
+  // A variable cost without its setup stays in, at 0, saying what is missing.
+  const missing = (c: VariableComponent) =>
+    c === "Fuel Cost"
+      ? vt.fuelType
+        ? `No Fuel Cost (price) for ${vt.fuelType} — add it in Variable Cost › Fuel Cost`
+        : "No Fuel Type on the vehicles (Vehicle › Fuel)"
+      : `No active Salary Range for ${vt.key} — add it in Variable Cost › Salary Range`;
+  const lines = VARIABLE_COMPONENTS.map((component) => {
     const refId = refOf(component);
-    return refId ? [{ component, ...variableItemOf({ component, refId }, route, vt, s) }] : [];
+    return refId
+      ? { component, ...variableItemOf({ component, refId }, route, vt, s) }
+      : { component, code: "", basis: missing(component), amount: 0 };
   });
   return { salaryRange, fuelCost, lines, total: lines.reduce((sum, l) => sum + l.amount, 0) };
 }
@@ -184,7 +206,7 @@ export interface CogsBuildInput extends VariableSetups {
   mappings: FixedCostSummaryRecord[];
   /** Mappings picked on the COGS. */
   mappingIds: readonly string[];
-  /** Variable Cost Mappings: the one of the route and vehicle type is used. */
+  /** Variable Cost Mappings: the Fare Code each variable cost is booked to. */
   variableMappings: readonly VariableCostMappingRecord[];
   /** Trips per day (hệ số khai thác): Fixed Cost per trip = per day ÷ factor. */
   utilizationFactor: number;
@@ -199,8 +221,6 @@ export interface CogsBuild {
   /** Standard distance of the route (km); 0 when not calculated. */
   stdKm: number;
   calculated: boolean;
-  /** Variable Cost Mapping of the route and vehicle type (none: no variable cost). */
-  variableMapping: VariableCostMappingRecord | undefined;
   variable: TripVariable;
   /** Every Fixed / Variable cost that applies, before removal or edits. */
   autoLines: CogsLine[];
@@ -212,51 +232,71 @@ export interface CogsBuild {
 export function buildCogs(i: CogsBuildInput): CogsBuild {
   const t = routeTotals(i.route);
 
-  // Fixed Cost: the fixed costs of each mapping picked, in order (a cost in two mappings counts once),
-  // per day shared by the trips of the day (Utilization Factor).
+  // Fixed Cost: every Internal Cost mapped to each Fare Code picked, as mapped (one mapped to two Fare
+  // Codes shows under both), per day shared by the trips of the day (Utilization Factor). An inactive
+  // Internal Cost is listed but not counted.
   const factor = i.utilizationFactor > 0 ? i.utilizationFactor : 1;
-  const seen = new Set<string>();
   const fixedLines: CogsLine[] = [];
   for (const id of i.mappingIds) {
     const m = i.mappings.find((x) => x.id === id && !x.deleted);
     if (!m) continue;
-    const fare = i.costs.find((c) => c.id === m.assignCostId);
     for (const fid of m.fixedCostIds) {
-      const f = i.fixedCosts.find((x) => x.id === fid && !x.deleted && x.status === "Active");
-      if (!f || seen.has(f.id)) continue;
-      seen.add(f.id);
+      const f = i.fixedCosts.find((x) => x.id === fid && !x.deleted);
+      if (!f) continue;
+      const active = f.status === "Active";
       fixedLines.push({
-        key: `F:${f.id}`,
+        key: `F:${m.id}:${f.id}`,
         group: "Fixed Cost",
         code: f.code,
         name: f.name,
-        basis:
-          `${fare ? `Fare Code ${fare.code} · ` : ""}${formatNumber(f.costValue)} ${f.currency} per ${f.allocationBase} ${f.allocationUnit} → per day ${formatNumber(Math.round(fixedCostPerDay(f)))}` +
-          (factor !== 1 ? ` ÷ ${factor} trips/day` : ""),
-        amount: Math.round(fixedCostPerDay(f) / factor),
+        basis: active
+          ? `${formatNumber(f.costValue)} ${f.currency} per ${f.allocationBase} ${f.allocationUnit} → per day ${formatNumber(Math.round(fixedCostPerDay(f)))}` +
+            (factor !== 1 ? ` ÷ ${factor} trips/day` : "")
+          : "Internal Cost is Inactive — not counted",
+        amount: active ? Math.round(fixedCostPerDay(f) / factor) : 0,
         mappingId: m.id,
       });
     }
   }
 
-  // Variable Cost: the Variable Cost Mapping of the route and vehicle type, worked out for the route.
-  const variableMapping = variableMappingFor(i.variableMappings, i.route.id, i.vehicle.key);
-  const variable: TripVariable = variableMapping
-    ? tripVariable(i.route, i.vehicle, {
-        ...i,
-        salaryRangeId: variableMapping.salaryRangeId,
-        fuelCostId: variableMapping.fuelCostId,
-      })
-    : { salaryRange: undefined, fuelCost: undefined, lines: [], total: 0 };
-  const variableLines: CogsLine[] = variable.lines.map((v) => ({
-    key: `V:${v.component}`,
-    group: "Variable Cost",
-    code: v.code,
-    name: v.component,
-    basis: v.basis,
-    amount: v.amount,
-    fareCode: i.costs.find((c) => c.id === variableMapping?.assignCostId)?.code ?? "",
-  }));
+  // Variable Cost: worked out for the route from the Salary Range / Fuel Cost of the vehicle type and
+  // the Toll Stations of the route.
+  const variable: TripVariable = tripVariable(i.route, i.vehicle, i);
+  // Each variable cost on its own; the Toll Fee one line per toll station of the route.
+  const fareOf = (c: VariableComponent) =>
+    i.costs.find(
+      (x) => x.id === variableMappingOf(i.variableMappings, i.vehicle.key, c)?.assignCostId,
+    )?.code ?? "";
+  const stations = t.calculated ? routeTollStations(i.route, i.tollMasters) : [];
+  const variableLines: CogsLine[] = variable.lines.flatMap((v): CogsLine[] =>
+    v.component === "Toll Fee" && stations.length
+      ? stations.map((s, k) => ({
+          key: `V:Toll Fee:${k}:${s.code}`,
+          group: "Variable Cost",
+          component: "Toll Fee",
+          code: s.code,
+          name: s.name,
+          basis: `${s.leg} · Group ${i.vehicle.group}`,
+          amount: s.fees[i.vehicle.group - 1] ?? 0,
+          fareCode: fareOf("Toll Fee"),
+        }))
+      : [
+          {
+            key: `V:${v.component}`,
+            group: "Variable Cost",
+            component: v.component,
+            code: v.code,
+            // The fuel line names its fuel: "Fuel Cost · Diesel".
+            name:
+              v.component === "Fuel Cost" && i.vehicle.fuelType
+                ? `Fuel Cost · ${i.vehicle.fuelType}`
+                : v.component,
+            basis: v.basis,
+            amount: v.amount,
+            fareCode: fareOf(v.component),
+          },
+        ],
+  );
 
   const autoLines = [...fixedLines, ...variableLines];
   const kept = autoLines
@@ -284,7 +324,6 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
   return {
     stdKm: t.calculated ? Math.round(t.distanceKm) : 0,
     calculated: t.calculated,
-    variableMapping,
     variable,
     autoLines,
     lines,

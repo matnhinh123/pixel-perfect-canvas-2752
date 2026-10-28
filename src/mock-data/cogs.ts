@@ -26,7 +26,7 @@ export function seedCogs(): CogsRecord[] {
   const vehicles = cogsVehicleTypes([...seedVehicleMasters(), ...seedFiveTonTrucks()]);
   const picks: [number, string][] = [
     [0, "TRUCK · 5 tấn"],
-    [1, "HEADER · 40 ft"],
+    [1, "HEADER · 42GP"],
     [2, "TRUCK · 2 tấn"],
   ];
   return picks
@@ -54,7 +54,10 @@ export function seedCogs(): CogsRecord[] {
       });
       return {
         id: `COGS-${n + 1}`,
-        code: `COGS-${String(n + 1).padStart(4, "0")}`,
+        // Route code + vehicle type, as the COGS created automatically ("RT-HCM-DN-T5").
+        code: `${route.code}-${vehicle.kind === "TRUCK" ? `T${/(\d+)/.exec(vehicle.spec)?.[1] ?? ""}` : `H${vehicle.spec}`}`.slice(
+          -20,
+        ),
         name: `${route.name} · ${vehicleType}`,
         routeId: route.id,
         routeCode: route.code,
@@ -62,7 +65,6 @@ export function seedCogs(): CogsRecord[] {
         vehicleType,
         mappingIds,
         utilizationFactor: 1,
-        variableMappingId: b.variableMapping?.id ?? "",
         excluded: [],
         overrides: {},
         others: [],

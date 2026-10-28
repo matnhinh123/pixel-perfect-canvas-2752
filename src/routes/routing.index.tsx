@@ -22,7 +22,7 @@ import {
 } from "@/types";
 
 const ROUTE_TYPES: RouteType[] = ["Single Trip", "Round Trip"];
-const TERRAINS: Terrain[] = ["Plain", "Highland"];
+const TERRAINS: Terrain[] = ["Plain", "Other"];
 
 export const Route = createFileRoute("/routing/")({
   head: () => ({

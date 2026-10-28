@@ -19,6 +19,14 @@ export interface CommonCodeOption {
   attribute: string;
   remark: string;
   active: boolean;
+  /** Extra data of a list with its own fields (`CommonCodeRecord.fields`), by field key. */
+  values?: Record<string, string>;
+}
+
+/** An extra column of the options of a list (e.g. the ISO data of a Container Type). */
+export interface CommonCodeField {
+  key: string;
+  label: string;
 }
 
 /** Where a code list is used (read-only, defined by the system). */
@@ -39,6 +47,10 @@ export interface CommonCodeRecord extends BaseRecord {
   /** Attributes an option can carry (DEFAULT, or the parent values of a dependent list). */
   attributes: CommonCodeAttribute[];
   options: CommonCodeOption[];
+  /** Header of the Name column when it holds a code (e.g. "ISO Group Code"). */
+  nameLabel?: string;
+  /** Extra columns of the options, after Name / Attribute. */
+  fields?: CommonCodeField[];
   /**
    * Option codes the system relies on inside a Customizable list: they cannot be renamed, given
    * another attribute or removed (only deactivated). E.g. TRUCK / HEAD / TRAILER of Vehicle Type.

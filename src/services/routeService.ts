@@ -7,13 +7,14 @@ import {
   type Terrain,
   type VehicleProfile,
 } from "@/types";
-import { costRepository, routeRepository, uid } from "@/repositories";
+import { cogsRepository, costRepository, routeRepository, uid } from "@/repositories";
 import { activeLocations, findLocationByName } from "@/services/routing/locationStore";
 import { findVehicle, routeVehicleFields, vehicleLabel, VEHICLES } from "@/mock-data/vehicles";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { syncRouteTollsToMaster } from "./routing/tollMasterSync";
 import { vehicleGroupFor } from "./routing/RouteProvider";
+import { autoCogsForRoute, clearAutoCogs, routeGroupOf } from "./cost/cogsService";
 import { formatDate, formatVnd, todayYmd } from "@/lib/format";
 
 /** An editor action (recalculate, pick an alternative…) recorded in the audit trail on Save. */
@@ -23,7 +24,9 @@ export const formatDeparture = (s: string) => (s ? `${formatDate(s)} ${s.slice(1
 import { pick, type ImportEntityConfig } from "./importExportService";
 
 const ROUTE_TYPES: readonly RouteType[] = ["Single Trip", "Round Trip"];
-const TERRAINS: readonly Terrain[] = ["Plain", "Highland"];
+const TERRAINS: readonly Terrain[] = ["Plain", "Other"];
+/** Import: "Highland" (the old name) is read as Other. */
+const terrainCell = (v: string | undefined) => (/^\s*highland\s*$/i.test(v ?? "") ? "Other" : v);
 
 const costRefs = (routeId: string) =>
   costRepository.all().filter((c) => !c.deleted && c.routeId === routeId);
@@ -34,7 +37,9 @@ export const routeCrud = makeCrud<RouteRecord>({
   labelOf: (r) => r.code,
   references: (r) => {
     const n = costRefs(r.id).length;
-    return n ? `is currently referenced by ${n} Cost record${n > 1 ? "s" : ""}` : null;
+    if (n) return `is currently referenced by ${n} Cost record${n > 1 ? "s" : ""}`;
+    const c = cogsRepository.all().filter((x) => !x.deleted && x.routeId === r.id).length;
+    return c ? `is used by ${c} COGS` : null;
   },
 });
 
@@ -121,6 +126,7 @@ function diffRoute(prev: RouteRecord, next: RouteRecord): AuditInput[] {
   };
   upd("CHANGE_VEHICLE", "Vehicle", veh(prev.vehicleId), veh(next.vehicleId));
   upd("CHANGE_VEHICLE", "Vehicle Group", prev.vehicleGroup ?? "—", next.vehicleGroup ?? "—");
+  upd("CHANGE_VEHICLE", "Truck Type", prev.truckType || "—", next.truckType || "—");
   upd("UPDATE", "Terrain", prev.terrain ?? "Plain", next.terrain ?? "Plain");
   upd(
     "CHANGE_DEPARTURE_TIME",
@@ -210,6 +216,8 @@ export const routeService = {
       name: draft.name.trim(),
       // Vehicle Group always follows the vehicle chosen on the route map (no separate input).
       vehicleGroup: vehicleGroupFor(draft.vehicleProfile, draft.vehicleClass, draft.capacityKg),
+      // Truck Type belongs to a truck only.
+      truckType: draft.vehicleProfile === "Truck" ? draft.truckType : undefined,
     };
     if (!existing) {
       const rec: RouteRecord = { ...clean, id: uid("R-"), ...stampCreate() };
@@ -231,7 +239,10 @@ export const routeService = {
           newValue: `${m.reason} +${formatVnd(m.amount)}`,
         })),
       ]);
-      return syncTolls(rec);
+      const saved = syncTolls(rec);
+      // A new route gets its COGS (once it is calculated).
+      autoCogsForRoute(saved);
+      return saved;
     }
     const next = stampUpdate({
       ...existing,
@@ -250,7 +261,13 @@ export const routeService = {
         entityLabel: next.code,
       })),
     ]);
-    return syncTolls(next);
+    const saved = syncTolls(next);
+    // Calculated for the first time, or opened to a higher toll group: COGS of the vehicle types that
+    // can run it now and have none yet.
+    if ((!existing.outbound && saved.outbound) || routeGroupOf(saved) > routeGroupOf(existing))
+      autoCogsForRoute(saved);
+    else clearAutoCogs();
+    return saved;
   },
 };
 
@@ -326,8 +343,8 @@ export const routeImportConfig: ImportEntityConfig = {
       e.push({ field: "vehicleProfile", error: `Use one of: ${VEHICLE_PROFILES.join(", ")}` });
     if (pick(r["type"], ROUTE_TYPES) === undefined)
       e.push({ field: "type", error: "Single Trip or Round Trip (empty = Single Trip)" });
-    if (pick(r["terrain"], TERRAINS) === undefined)
-      e.push({ field: "terrain", error: "Plain or Highland (empty = Plain)" });
+    if (pick(terrainCell(r["terrain"]), TERRAINS) === undefined)
+      e.push({ field: "terrain", error: "Plain or Other (empty = Plain)" });
     const kg = Number(r["capacityKg"] || 0);
     if (profile && profileNeedsCapacity(profile) && !(kg > 0))
       e.push({ field: "capacityKg", error: "Capacity is required for Truck / Container" });
@@ -349,7 +366,7 @@ export const routeImportConfig: ImportEntityConfig = {
         name: r["name"]!,
         description: r["description"] ?? "",
         type: pick(r["type"], ROUTE_TYPES) || "Single Trip",
-        terrain: pick(r["terrain"], TERRAINS) || "Plain",
+        terrain: pick(terrainCell(r["terrain"]), TERRAINS) || "Plain",
         origin: { name: o.name, address: o.address, lat: o.lat, lng: o.lng, locationId: o.id },
         destination: { name: d.name, address: d.address, lat: d.lat, lng: d.lng, locationId: d.id },
         vehicleProfile: profile,
@@ -386,7 +403,7 @@ export const routeImportConfig: ImportEntityConfig = {
         container ? "Container" : "Truck",
         container ? "28000" : i % 2 ? "3000" : "6000",
         i % 3 === 0 ? "Round Trip" : "Single Trip",
-        i % 5 === 0 ? "Highland" : "Plain",
+        i % 5 === 0 ? "Other" : "Plain",
         "",
       ]);
     }

@@ -108,13 +108,17 @@ export function fcVehicleErrors(
  */
 export function coversCogsVehicle(
   label: string,
-  cogs: { kind: "TRUCK" | "HEADER"; spec: string; brand?: string },
+  cogs: { kind: "TRUCK" | "HEADER"; spec: string; brand?: string; size?: string },
 ): boolean {
   const v = parseFcVehicle(label);
   if (!v) return false;
   const brandOk = !v.brand || v.brand === (cogs.brand ?? "");
   if (cogs.kind === "TRUCK") return v.kind === "TRUCK" && v.spec === cogs.spec && brandOk;
-  return (v.kind === "HEADER" && brandOk) || (v.kind === "TRAILER" && v.spec === cogs.spec);
+  // A header's trailer row: the length of its container ("HEADER · 42RT" → 40 ft).
+  return (
+    (v.kind === "HEADER" && brandOk) ||
+    (v.kind === "TRAILER" && v.spec === (cogs.size || cogs.spec))
+  );
 }
 
 /** Vehicle types a Summary / list filter can pick: Vehicle Type + Truck Type / Trailer Size (no brand). */

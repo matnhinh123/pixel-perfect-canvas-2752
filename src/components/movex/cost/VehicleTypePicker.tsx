@@ -1,6 +1,7 @@
 // Vehicle Type of the Variable Cost setups and the COGS, picked as in Master Data › Vehicle:
-// TRUCK → Truck Type (load), or HEADER → Container (trailer size) + Reefer (cont lạnh); then the Brand
-// (“All brands” = a setup that applies to every brand).
+// TRUCK → Truck Type (load), or HEADER → Container Type (Common Code, ISO); then the Brand
+// (“All brands” = a setup that applies to every brand). A Salary Range (`salary`) is picked as TRUCK →
+// Truck Type, or HEADER alone (its tiers have a column per container instead).
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect } from "@/components/movex/common";
 import {
@@ -20,12 +21,15 @@ export function VehicleTypePicker({
   types,
   invalid,
   className,
+  salary,
 }: {
   value: string;
   onChange: (key: string) => void;
   types: readonly CogsVehicleType[];
   invalid?: boolean;
   className?: string;
+  /** Salary Range: Truck → Truck Type (no brand), or Header alone. */
+  salary?: boolean;
 }) {
   const cur = parseVehicleKey(value);
   const kinds = [...new Set(types.map((t) => t.kind))];
@@ -41,41 +45,48 @@ export function VehicleTypePicker({
         .map((t) => t.brand),
     ),
   ];
-  const vt = types.find((t) => t.key === value);
+  const vt =
+    salary && value === "HEADER"
+      ? types.find((t) => t.kind === "HEADER" && !t.brand)
+      : types.find((t) => t.key === value);
   const set = (k: VariableVehicleKind | "", s: string, r: boolean, b: string) =>
-    onChange(k && s ? vehicleKey({ kind: k, spec: s, reefer: r, brand: b }) : k ? `${k} · ` : "");
+    onChange(
+      salary && k === "HEADER"
+        ? "HEADER"
+        : k && s
+          ? vehicleKey({ kind: k, spec: s, reefer: r, brand: b })
+          : k
+            ? `${k} · `
+            : "",
+    );
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
       <NativeSelect
         value={kind}
         onChange={(k) => set(k as VariableVehicleKind | "", "", false, "")}
-        options={["", ...kinds, ...(kind && !kinds.includes(kind) ? [kind] : [])]}
-        labels={{ "": "Select Vehicle", TRUCK: "Truck", HEADER: "Header (đầu kéo)" }}
+        options={[...kinds, ...(kind && !kinds.includes(kind) ? [kind] : [])]}
+        labels={{ TRUCK: "Truck", HEADER: "Header" }}
+        placeholder="Select Vehicle"
         invalid={!!invalid && !kind}
-        className="h-10 w-44"
+        className={salary ? "h-10 min-w-0 flex-1" : "h-10 w-44"}
       />
-      {kind && (
+      {kind && !(salary && kind === "HEADER") && (
         <NativeSelect
           value={spec}
           onChange={(s) => set(kind, s, reefer, "")}
-          options={["", ...specs, ...(spec && !specs.includes(spec) ? [spec] : [])]}
-          labels={{ "": `Select ${specLabel(kind)}` }}
+          options={[...specs, ...(spec && !specs.includes(spec) ? [spec] : [])]}
+          labels={Object.fromEntries(
+            types
+              .filter((t) => t.kind === kind && !t.brand && t.specName)
+              .map((t) => [t.spec, `${t.spec} · ${t.specName}`]),
+          )}
+          placeholder={`Select ${specLabel(kind)}`}
           invalid={!!invalid && !spec}
-          className="h-10 w-40"
+          className={salary ? "h-10 min-w-0 flex-1" : "h-10 w-40"}
         />
       )}
-      {kind === "HEADER" && (
-        <label className="flex h-10 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm">
-          <Checkbox
-            checked={reefer}
-            disabled={!spec}
-            onCheckedChange={(v) => set(kind, spec, v === true, brand)}
-          />
-          Reefer (cont lạnh)
-        </label>
-      )}
-      {kind && spec && (
+      {kind && spec && !salary && (
         <NativeSelect
           value={brand || ALL}
           onChange={(b) => set(kind, spec, reefer, b === ALL ? "" : b)}
@@ -85,12 +96,15 @@ export function VehicleTypePicker({
         />
       )}
       {vt ? (
-        <span className="text-xs text-muted-foreground">
-          {vt.vehicleCount} vehicle{vt.vehicleCount === 1 ? "" : "s"} · Group {vt.group}
+        <span className={cn("text-xs text-muted-foreground", salary && "w-full")}>
+          {vt.vehicleCount} vehicle{vt.vehicleCount === 1 ? "" : "s"}
+          {salary && kind === "HEADER" ? " · every container" : ` · Group ${vt.group}`}
         </span>
       ) : (
         value &&
-        spec && <span className="text-xs text-destructive">No active vehicle of this type</span>
+        (spec || value === "HEADER") && (
+          <span className="text-xs text-destructive">No active vehicle of this type</span>
+        )
       )}
     </div>
   );

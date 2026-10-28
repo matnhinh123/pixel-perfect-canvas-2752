@@ -1,5 +1,5 @@
 // COGS records: one per route × vehicle type, saved with a snapshot of the costs picked.
-import type { CogsOtherCost, CogsRecord } from "@/types";
+import type { CogsOtherCost, CogsRecord, RouteRecord } from "@/types";
 import {
   cogsRepository,
   costItemRepository,
@@ -17,11 +17,16 @@ import { auditService } from "@/services/auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "@/services/crudService";
 import { formatNumber } from "@/lib/format";
 import { buildCogs } from "./cogsBuild";
-import { cogsVehicleTypes } from "./cogsVehicle";
+import { cogsVehicleTypes, type CogsVehicleType } from "./cogsVehicle";
+import { liveContainerTypes } from "./containerTypes";
+import { vehicleClassFor } from "@/services/routing/RouteProvider";
 import { mappingsFor } from "./cogsBuild";
 
 /** Vehicle types of the current Vehicle master. */
-export const currentCogsVehicleTypes = () => cogsVehicleTypes(vehicleMasterRepository.all());
+/** Vehicle types worked out once for a whole sync run (instead of once per COGS). */
+let typesInSync: CogsVehicleType[] | null = null;
+export const currentCogsVehicleTypes = () =>
+  typesInSync ?? cogsVehicleTypes(vehicleMasterRepository.all(), liveContainerTypes());
 
 export const cogsCrud = makeCrud<CogsRecord>({
   entityType: "COGS",
@@ -41,6 +46,8 @@ export interface CogsDraft {
   excluded: string[];
   overrides: Record<string, number>;
   others: CogsOtherCost[];
+  /** Remark per cost line, by line key. */
+  remarks: Record<string, string>;
   remark: string;
   status: "Active" | "Inactive";
 }
@@ -55,6 +62,7 @@ export const newCogsDraft = (): CogsDraft => ({
   excluded: [],
   overrides: {},
   others: [],
+  remarks: {},
   remark: "",
   status: "Active",
 });
@@ -69,6 +77,7 @@ export const draftOfCogs = (c: CogsRecord): CogsDraft => ({
   excluded: [...c.excluded],
   overrides: { ...(c.overrides ?? {}) },
   others: c.others.map((o) => ({ ...o })),
+  remarks: { ...(c.remarks ?? {}) },
   remark: c.remark,
   status: c.status === "Inactive" ? "Inactive" : "Active",
 });
@@ -102,6 +111,12 @@ export function validateCogs(d: CogsDraft, id?: string): Record<string, string> 
   if (!d.vehicleType) e["vehicleType"] = "Vehicle Type is required.";
   else if (!currentCogsVehicleTypes().some((t) => t.key === d.vehicleType))
     e["vehicleType"] = `No active vehicle of type ${d.vehicleType} in Vehicle.`;
+  // A COGS keeps its route and vehicle type: it is worked out from them (create another one instead).
+  const saved = id ? cogsRepository.get(id) : undefined;
+  if (saved && saved.routeId !== d.routeId)
+    e["routeId"] = "The route of a COGS cannot be changed once it is created.";
+  if (saved && saved.vehicleType !== d.vehicleType)
+    e["vehicleType"] = "The vehicle type of a COGS cannot be changed once it is created.";
   if (route && d.vehicleType) {
     const dup = live().find(
       (c) => c.id !== id && c.routeId === d.routeId && c.vehicleType === d.vehicleType,
@@ -151,6 +166,109 @@ export const buildCogsOf = (d: CogsDraft) => {
   });
 };
 
+/** Toll group (1..5) of the vehicle picked on a route. */
+export const routeGroupOf = (r: RouteRecord) =>
+  vehicleClassFor(r.vehicleProfile, r.vehicleClass, r.capacityKg);
+
+/** "RT-HCM-DN-T5", "RT-HCM-DN-H42RT": route code + vehicle type, unique, max 20 characters. */
+function autoCogsCode(routeCode: string, vt: CogsVehicleType) {
+  // Truck: T + its load ("T5"); header: H + its Container Type ("H42RT").
+  const suffix =
+    vt.kind === "TRUCK"
+      ? `T${/(\d+)/.exec(vt.spec)?.[1] ?? ""}`
+      : `H${vt.spec.replace(/[^A-Z0-9]/gi, "")}`;
+  const base = sanitizeCogsCode(routeCode);
+  const taken = new Set(live().map((c) => c.code.toUpperCase()));
+  for (let n = 1; ; n++) {
+    const tail = `-${suffix}${n === 1 ? "" : n}`;
+    const code = `${base.slice(0, 20 - tail.length)}${tail}`;
+    if (!taken.has(code)) return code;
+  }
+}
+
+/** COGS created automatically by the last route save (for the screen message). */
+export let lastAutoCogs: CogsRecord[] = [];
+export const clearAutoCogs = () => {
+  lastAutoCogs = [];
+};
+
+/**
+ * A calculated route gets a COGS for every vehicle type that can run it: the toll group of the route's
+ * vehicle and every lower group (a road open to a higher group is open to the lower ones), each under
+ * its own code. Vehicle types that have a COGS for the route already are left as they are.
+ */
+export function autoCogsForRoute(route: RouteRecord): CogsRecord[] {
+  lastAutoCogs = createMissingCogs(route);
+  return lastAutoCogs;
+}
+
+/** COGS code and name of a route × vehicle type: "RT-HCM-DN-T5", "HCM → Đà Nẵng · TRUCK · 5 tấn". */
+function createMissingCogs(route: RouteRecord): CogsRecord[] {
+  if (route.deleted || route.status !== "Active" || !route.outbound) return [];
+  const group = routeGroupOf(route);
+  const made: CogsRecord[] = [];
+  for (const vt of currentCogsVehicleTypes()) {
+    if (vt.brand || vt.group > group) continue;
+    if (live().some((c) => c.routeId === route.id && c.vehicleType === vt.key)) continue;
+    try {
+      made.push(
+        cogsService.save({
+          ...newCogsDraft(),
+          code: autoCogsCode(route.code, vt),
+          name: `${route.name} · ${vt.key}`.slice(0, 200),
+          routeId: route.id,
+          vehicleType: vt.key,
+          remark: `Created automatically with route ${route.code} (toll group ${group} and below).`,
+        }),
+      );
+    } catch (e) {
+      console.error(`Auto COGS ${route.code} · ${vt.key} failed`, e);
+    }
+  }
+  return made;
+}
+
+/**
+ * Keeps the COGS in step with the setup: every calculated, active route gets the COGS of the vehicle
+ * types that can run it, and every COGS is worked out again from the current Route / Fixed Cost /
+ * Variable Cost / Fare Code setup. What the user set on a COGS (Utilization Factor, edited amounts,
+ * removed costs, other costs, remarks) is kept. Only COGS whose figures changed are written.
+ */
+export function syncAllCogs(): { created: number; updated: number } {
+  typesInSync = cogsVehicleTypes(vehicleMasterRepository.all(), liveContainerTypes());
+  try {
+    return syncWith();
+  } finally {
+    typesInSync = null;
+  }
+}
+
+function syncWith(): { created: number; updated: number } {
+  let created = 0;
+  let updated = 0;
+  for (const r of routeRepository.all()) created += createMissingCogs(r).length;
+  for (const c of live()) {
+    const route = routeRepository.get(c.routeId);
+    if (!route || route.deleted || !route.outbound) continue;
+    const d = draftOfCogs(c);
+    const b = buildCogsOf(d);
+    if (!b) continue;
+    const same =
+      c.total === b.total &&
+      c.routeCode === route.code &&
+      c.routeName === route.name &&
+      JSON.stringify(c.lines) === JSON.stringify(b.lines);
+    if (same) continue;
+    try {
+      cogsService.save(d, c.id);
+      updated++;
+    } catch (e) {
+      console.error(`COGS ${c.code} could not be worked out again`, e);
+    }
+  }
+  return { created, updated };
+}
+
 export const cogsService = {
   save(d: CogsDraft, id?: string): CogsRecord {
     const errors = validateCogs(d, id);
@@ -167,12 +285,18 @@ export const cogsService = {
       vehicleType: d.vehicleType,
       mappingIds: [...new Set(b.lines.flatMap((l) => (l.mappingId ? [l.mappingId] : [])))],
       utilizationFactor: factorOf(d),
-      variableMappingId: b.variableMapping?.id ?? "",
       excluded: d.excluded,
       overrides: d.overrides,
       others: d.others,
       lines: b.lines,
       total: b.total,
+      // Remarks of the lines kept only.
+      remarks: Object.fromEntries(
+        b.lines.flatMap((l) => {
+          const r = d.remarks[l.key]?.trim();
+          return r ? [[l.key, r]] : [];
+        }),
+      ),
       remark: d.remark.trim(),
       status: d.status,
     };

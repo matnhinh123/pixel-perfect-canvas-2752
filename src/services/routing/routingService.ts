@@ -96,14 +96,14 @@ const reconcileCalc = (c: RouteCalculation): RouteCalculation => ({
   tollStations: reconcile(c.tollStations),
 });
 
-/** Highland (cao nguyên) roads are slower: add 25% to the estimated time. */
-const HIGHLAND_TIME_FACTOR = 1.25;
+/** Other terrain (e.g. highland) roads are slower: add 25% to the estimated time. */
+const OTHER_TERRAIN_TIME_FACTOR = 1.25;
 const applyTerrain = (c: RouteCalculation, terrain?: RouteRecord["terrain"]): RouteCalculation =>
-  terrain === "Highland"
+  terrain === "Other"
     ? {
         ...c,
-        estimatedTime: Math.round(c.estimatedTime * HIGHLAND_TIME_FACTOR),
-        warnings: [...c.warnings, "Highland terrain — estimated time increased by 25%."],
+        estimatedTime: Math.round(c.estimatedTime * OTHER_TERRAIN_TIME_FACTOR),
+        warnings: [...c.warnings, "Other terrain — estimated time increased by 25%."],
       }
     : c;
 

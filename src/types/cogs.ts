@@ -1,4 +1,5 @@
 import type { BaseRecord } from "./common";
+import type { VariableComponent } from "./variableCost";
 
 export type CogsLineGroup = "Fixed Cost" | "Variable Cost" | "Other Cost";
 
@@ -17,6 +18,8 @@ export interface CogsLine {
   mappingId?: string;
   /** Variable cost: the Fare Code it is booked to (in its Variable Cost Mapping). */
   fareCode?: string;
+  /** Variable cost: which one (Trip Salary, Fuel Cost, Toll Fee — a Toll Fee line per toll station). */
+  component?: VariableComponent;
 }
 
 /** An extra Cost Detail added to a COGS by hand. */
@@ -44,13 +47,13 @@ export interface CogsRecord extends BaseRecord {
    * shared by them: Fixed Cost per trip = per day ÷ factor. 1 when not set.
    */
   utilizationFactor?: number;
-  /** Variable Cost Mapping of the route and vehicle type the variable costs were read from. */
-  variableMappingId: string;
   /** Fixed / Variable cost keys left out of the COGS. */
   excluded: string[];
   others: CogsOtherCost[];
   /** Amounts edited by hand, by line key (Fixed / Variable cost). */
   overrides: Record<string, number>;
+  /** Remark typed on a cost line, by line key (Fixed / Variable cost key, or "O:" + other cost rid). */
+  remarks?: Record<string, string>;
   /** Snapshot of the costs included, and their total. */
   lines: CogsLine[];
   total: number;

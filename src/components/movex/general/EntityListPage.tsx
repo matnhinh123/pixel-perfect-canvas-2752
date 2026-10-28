@@ -89,6 +89,8 @@ export interface EntityListPageProps<T extends BaseRecord> {
   above?: ReactNode;
   /** Render without its own PageHeader (when embedded below an existing header). */
   embedded?: boolean;
+  /** The table runs to the bottom of the window and scrolls inside (column headers stay on top). */
+  fillHeight?: boolean;
   auditable?: boolean;
   /** Prefill quick search, e.g. when navigating from a related record. */
   initialSearch?: string;
@@ -848,6 +850,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
             page={treeOn ? 1 : Math.min(page, pages)}
             pageSize={treeOn ? Math.max(1, treeRows.length) : pageSize}
             hidePager={treeOn}
+            fillHeight={p.fillHeight}
             bordered={p.bordered ?? true}
             onPage={setPage}
             onPageSize={setPageSize}

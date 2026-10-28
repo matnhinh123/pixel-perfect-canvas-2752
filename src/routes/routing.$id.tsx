@@ -32,8 +32,16 @@ import {
 import { TollStationTable, type TollRow } from "@/components/movex/routing/TollStationTable";
 import { AddTollDialog, type TollLeg } from "@/components/movex/routing/AddTollDialog";
 import { TollDetailsSheet } from "@/components/movex/routing/TollDetailsSheet";
-import { vehicleClassFor, vehicleGroupFor } from "@/services/routing/RouteProvider";
-import { VehicleClassPicker } from "@/components/movex/routing/VehicleClassPicker";
+import {
+  CONTAINER_LABEL,
+  vehicleClassFor,
+  vehicleGroupFor,
+} from "@/services/routing/RouteProvider";
+import {
+  VehicleClassPicker,
+  type RouteTruckType,
+} from "@/components/movex/routing/VehicleClassPicker";
+import { cogsVehicleTypes } from "@/services/cost/cogsVehicle";
 import { useCollection } from "@/hooks/use-store";
 import {
   emptyPoint,
@@ -50,9 +58,15 @@ import {
   validateRouteInput,
 } from "@/services/routing/routingService";
 import { auditService } from "@/services/auditService";
+import { lastAutoCogs } from "@/services/cost/cogsService";
 import { BusinessRuleError } from "@/services/crudService";
 import { routeLegs, routeTotals } from "@/services/cost/costMath";
-import { costRepository, locationRepository, routeRepository } from "@/repositories";
+import {
+  costRepository,
+  locationRepository,
+  routeRepository,
+  vehicleMasterRepository,
+} from "@/repositories";
 import { formatDuration, parseDurationText } from "@/lib/format";
 import {
   type RouteCalculation,
@@ -154,7 +168,7 @@ const altName = (alts: RouteCalculation[], id: string | null) => {
 function RouteEditor({ source }: { source: RouteRecord | null }) {
   const navigate = useNavigate();
   const routeTypes = useCodeOptions(CC.ROUTE_TYPE, ["Single Trip", "Round Trip"]);
-  const terrains = useCodeOptions(CC.TERRAIN, ["Plain", "Highland"]);
+  const terrains = useCodeOptions(CC.TERRAIN, ["Plain", "Other"]);
   const isNew = !source;
   const initial = useMemo(() => normalize(source ?? newRouteDraft()), [source]);
   const [r, setR] = useState<RouteRecord>(() => structuredClone(initial));
@@ -356,15 +370,36 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
   };
 
   /** Google-Maps-style travel mode: switch the routing profile and re-route when the inputs are complete. */
-  /** Truck (class 1–5) / Container (class 3–5): sets the toll class Vietmap prices by, then re-routes. */
+  /**
+   * Truck → a Truck Type of the Vehicle master (its trucks' Vehicle Group is the toll class) / Container
+   * → header only, ≤ 20 ft, > 20 ft (class 3–5): sets the toll class Vietmap prices by, then re-routes.
+   */
   const vehicleClass = vehicleClassFor(r.vehicleProfile, r.vehicleClass, r.capacityKg);
-  const changeVehicle = (profile: VehicleProfile, cls: number) => {
-    if (profile === r.vehicleProfile && cls === vehicleClass) return;
-    const next = {
-      ...r,
+  const vehiclesAll = useCollection(vehicleMasterRepository);
+  const truckTypes = useMemo<RouteTruckType[]>(
+    () =>
+      cogsVehicleTypes(vehiclesAll)
+        .filter((t) => t.kind === "TRUCK" && !t.brand)
+        .map((t) => ({
+          truckType: t.spec,
+          group: Math.min(Math.max(t.group, 1), 5),
+          vehicleCount: t.vehicleCount,
+        })),
+    [vehiclesAll],
+  );
+  const vehicleText = (x: Pick<RouteRecord, "vehicleProfile" | "truckType">, cls: number) =>
+    x.vehicleProfile === "Container"
+      ? `Container · ${CONTAINER_LABEL[cls] ?? `Group ${cls}`}`
+      : `${PROFILE_LABEL[x.vehicleProfile]} · ${x.truckType || `Group ${cls}`}`;
+  const changeVehicle = (profile: VehicleProfile, cls: number, truckType?: string) => {
+    if (profile === r.vehicleProfile && cls === vehicleClass && truckType === r.truckType) return;
+    const { truckType: _old, ...rest } = r;
+    const next: RouteRecord = {
+      ...rest,
       vehicleProfile: profile,
       vehicleClass: cls,
       vehicleGroup: vehicleGroupFor(profile, cls),
+      ...(truckType ? { truckType } : {}),
     };
     setR(next);
     setPending((q) => [
@@ -372,11 +407,13 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       {
         action: "CHANGE_VEHICLE",
         field: "Vehicle",
-        oldValue: `${PROFILE_LABEL[r.vehicleProfile]} · Group ${vehicleClass}`,
-        newValue: `${PROFILE_LABEL[profile]} · Group ${cls}`,
+        oldValue: vehicleText(r, vehicleClass),
+        newValue: vehicleText(next, cls),
       },
     ]);
-    if (r.outbound && !validateRouteInput(next)) void calculate(next);
+    // The toll class decides the prices: re-route only when it changed.
+    if (cls !== vehicleClass || profile !== r.vehicleProfile)
+      if (r.outbound && !validateRouteInput(next)) void calculate(next);
   };
 
   const dragPoint = (ll: { lat: number; lng: number }): RoutePoint => ({
@@ -505,6 +542,10 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
       setPending([]);
       guard.allowNext();
       toast.success(isNew ? `Route ${saved.code} created` : `Route ${saved.code} saved`);
+      if (lastAutoCogs.length)
+        toast.info(
+          `${lastAutoCogs.length} COGS created: ${lastAutoCogs.map((c) => c.code).join(", ")}`,
+        );
       if (isNew) void navigate({ to: "/routing/$id", params: { id: saved.id } });
       else setR(structuredClone(saved));
     } catch (err) {
@@ -806,6 +847,8 @@ function RouteEditor({ source }: { source: RouteRecord | null }) {
               <VehicleClassPicker
                 profile={r.vehicleProfile}
                 vehicleClass={vehicleClass}
+                truckType={r.truckType}
+                truckTypes={truckTypes}
                 disabled={loading}
                 onChange={changeVehicle}
               />

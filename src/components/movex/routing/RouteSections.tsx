@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { GripVertical, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/movex/general/MoneyInput";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -668,11 +669,9 @@ export function ManualCostDialog({
             />
           </Field>
           <Field label="Amount (₫)" required error={errors["amount"]}>
-            <Input
-              type="number"
-              min={0}
-              value={f.amount}
-              onChange={(e) => setF({ ...f, amount: e.target.value })}
+            <MoneyInput
+              value={f.amount === "" ? NaN : Number(f.amount)}
+              onChange={(v) => setF({ ...f, amount: Number.isFinite(v) ? String(v) : "" })}
             />
           </Field>
           <Field label="Reason" required error={errors["reason"]} className="col-span-2">

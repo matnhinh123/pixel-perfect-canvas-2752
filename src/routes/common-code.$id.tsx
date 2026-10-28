@@ -60,6 +60,8 @@ const ATTRIBUTE_MEANING: Record<string, string> = {
     "Attribute = base type (TRUCK / HEADER / TRAILER): decides which fields the Vehicle form shows for this type.",
   [CC.UOM]:
     "Attribute = UoM Category: the unit is offered only under its category on the Cost form.",
+  [CC.CONTAINER_TYPE]:
+    "Attribute = container length (20 ft / 40 ft / 45 ft): a Header COGS pulling a trailer of that size reads the matching container column of its Salary Range.",
 };
 
 function CommonCodeForm({ rec }: { rec: CommonCodeRecord }) {
@@ -78,6 +80,14 @@ function CommonCodeForm({ rec }: { rec: CommonCodeRecord }) {
   // Attribute only means something for lists that group or classify their options (UoM → its
   // category, Vehicle Type → the base type); elsewhere it is the placeholder DEFAULT and stays hidden.
   const usesAttribute = rec.attributes.some((a) => a.code !== "DEFAULT");
+  const fields = rec.fields ?? [];
+  const setValue = (code: string, key: string, v: string) =>
+    setD((x) => ({
+      ...x,
+      options: x.options.map((o) =>
+        o.code === code ? { ...o, values: { ...o.values, [key]: v } } : o,
+      ),
+    }));
 
   const setOption = (code: string, p: Partial<CommonCodeDraft["options"][number]>) => {
     setD((x) => ({ ...x, options: x.options.map((o) => (o.code === code ? { ...o, ...p } : o)) }));
@@ -246,11 +256,18 @@ function CommonCodeForm({ rec }: { rec: CommonCodeRecord }) {
           }
         >
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full border-collapse">
+            <table className={cn("w-full border-collapse", fields.length > 0 && "min-w-[1500px]")}>
               <thead className="bg-muted/60">
                 <tr>
-                  <th className={cn(th, "w-72")}>Name</th>
+                  <th className={cn(th, fields.length ? "min-w-28" : "w-72")}>
+                    {rec.nameLabel ?? "Name"}
+                  </th>
                   {usesAttribute && <th className={cn(th, "w-40")}>Attribute</th>}
+                  {fields.map((f) => (
+                    <th key={f.key} className={cn(th, "min-w-44")}>
+                      {f.label}
+                    </th>
+                  ))}
                   <th className={th}>Remark</th>
                   <th className={cn(th, "w-24 text-center")}>Active</th>
                   {!fixed && <th className="w-10" />}
@@ -286,6 +303,16 @@ function CommonCodeForm({ rec }: { rec: CommonCodeRecord }) {
                           />
                         </td>
                       )}
+                      {fields.map((f) => (
+                        <td key={f.key} className="px-3 py-1.5">
+                          <Input
+                            className="h-8"
+                            value={o.values?.[f.key] ?? ""}
+                            aria-label={`${o.name || o.code} ${f.label}`}
+                            onChange={(e) => setValue(o.code, f.key, e.target.value)}
+                          />
+                        </td>
+                      ))}
                       <td className="px-3 py-1.5">
                         <Input
                           className="h-8"

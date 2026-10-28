@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/movex/general/MoneyInput";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
@@ -143,19 +144,12 @@ function RatesTable({
             <TableCell className="py-2 text-muted-foreground">{applied}</TableCell>
             <TableCell className="py-1.5 text-right">
               {onChange ? (
-                <Input
-                  type="number"
-                  min={0}
-                  step={1000}
+                <MoneyInput
                   aria-label={`Group ${group} toll fee`}
-                  className="h-8 text-right font-medium"
-                  value={Number.isFinite(prices[i]) ? prices[i] : ""}
-                  onChange={(e) =>
-                    onChange(
-                      prices.map((p, j) =>
-                        j === i ? (e.target.value === "" ? NaN : Number(e.target.value)) : p,
-                      ) as TollGateRecord["prices"],
-                    )
+                  className="h-8 font-medium"
+                  value={prices[i] ?? NaN}
+                  onChange={(v) =>
+                    onChange(prices.map((p, j) => (j === i ? v : p)) as TollGateRecord["prices"])
                   }
                 />
               ) : (

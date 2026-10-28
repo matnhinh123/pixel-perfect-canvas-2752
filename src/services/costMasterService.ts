@@ -1,6 +1,14 @@
 // Master Data > Cost: Cost Group CRUD (create/edit/status) and Cost items (read + status only for now).
 import type { CostGroupRecord, CostItemRecord } from "@/types";
-import { costGroupRepository, costItemRepository, serviceRepository, uid } from "@/repositories";
+import {
+  cogsRepository,
+  costGroupRepository,
+  costItemRepository,
+  fixedCostSummaryRepository,
+  serviceRepository,
+  uid,
+  variableCostMappingRepository,
+} from "@/repositories";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { draftImportConfig, listCell, pick, type ImportEntityConfig } from "./importExportService";
@@ -169,11 +177,29 @@ export const costGroupImportConfig: ImportEntityConfig = {
 
 // ---------------------------------------------------------------- Cost (items)
 
+/** Mappings and COGS booking to a Fare Code (it cannot be deleted while they do; it can be deactivated). */
+const fareRefs = (id: string) => {
+  const live = <T extends { deleted?: boolean }>(xs: T[]) => xs.filter((x) => !x.deleted);
+  const fixed = live(fixedCostSummaryRepository.all()).filter((m) => m.assignCostId === id).length;
+  const variable = live(variableCostMappingRepository.all()).filter(
+    (m) => m.assignCostId === id,
+  ).length;
+  const cogs = live(cogsRepository.all()).filter((c) =>
+    c.others.some((o) => o.costId === id),
+  ).length;
+  const parts = [
+    fixed && `${fixed} Fixed Cost Mapping${fixed > 1 ? "s" : ""}`,
+    variable && `${variable} Variable Cost Mapping${variable > 1 ? "s" : ""}`,
+    cogs && `${cogs} COGS`,
+  ].filter(Boolean);
+  return parts.length ? `is used by ${parts.join(", ")}` : null;
+};
+
 export const costItemCrud = makeCrud<CostItemRecord>({
   entityType: "Cost",
   repo: costItemRepository,
   labelOf: (c) => c.code,
-  references: () => null,
+  references: (c) => fareRefs(c.id),
 });
 
 export type CostItemDraft = Pick<

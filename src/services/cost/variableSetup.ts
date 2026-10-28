@@ -1,10 +1,12 @@
 // Variable Cost setups, each under its own code: Salary Range (driver salary tiers of a vehicle type and
-// how they are read) and Fuel Cost (fuel of a vehicle type). A COGS reads the ones of its vehicle type.
+// how they are read) and Fuel Cost (price of a fuel type). A COGS reads the ones of its vehicle type.
 import type {
   CalcRule,
+  ContainerColumn,
   FuelCostRecord,
   SalaryRangeRecord,
   SalaryTier,
+  VariableComponent,
   VariableCostMappingRecord,
 } from "@/types";
 import {
@@ -21,8 +23,15 @@ import {
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "@/services/crudService";
 import type { Collection } from "@/repositories/storage";
-import type { BaseRecord, EntityType } from "@/types";
-import { cogsVehicleTypes } from "./cogsVehicle";
+import type { BaseRecord, EntityType, Status } from "@/types";
+import { cogsVehicleTypes, parseVehicleKey, salaryVehicleChoices } from "./cogsVehicle";
+import { liveContainerTypes } from "./containerTypes";
+import { codeOptions } from "@/services/commonCodeService";
+import { CC } from "@/mock-data/commonCodes";
+import { FUEL_TYPES } from "@/mock-data/vehicleMaster";
+
+/** Vehicle types of the current Vehicle master and Container Types. */
+const currentTypes = () => cogsVehicleTypes(vehicleMasterRepository.all(), liveContainerTypes());
 import { ruleOf, validateTiers } from "./salaryRange";
 import { setupsFor } from "./cogsBuild";
 import { routeTotals } from "./costMath";
@@ -38,7 +47,7 @@ export const sanitizeSetupCode = (v: string) =>
 const vehicleError = (key: string) =>
   !key
     ? "Vehicle Type is required."
-    : cogsVehicleTypes(vehicleMasterRepository.all()).some((t) => t.key === key)
+    : currentTypes().some((t) => t.key === key)
       ? null
       : `No active vehicle of type ${key} in Vehicle.`;
 
@@ -83,64 +92,104 @@ function saveRecord<T extends BaseRecord & { code: string }>(
 export interface SalaryRangeDraft {
   code: string;
   name: string;
-  vehicleTypes: string[];
+  vehicleType: string;
   tiers: SalaryTier[];
-  reeferPct: number;
+  containers: ContainerColumn[];
   rule: CalcRule;
   remark: string;
-  status: "Active" | "Inactive";
+  status: Status;
 }
 
-/** The Salary Range a vehicle type is in already (each vehicle type is in one), other than `exceptId`. */
+const isHeader = (key: string) => parseVehicleKey(key)?.kind === "HEADER";
+
+/** The Salary Range a vehicle type has already (one per vehicle type; Drafts aside), other than `exceptId`. */
 export const salaryRangeOfVehicle = (vehicleType: string, exceptId?: string) =>
   salaryRangeRepository
     .all()
-    .find((r) => !r.deleted && r.id !== exceptId && r.vehicleTypes.includes(vehicleType));
+    .find(
+      (r) =>
+        !r.deleted &&
+        r.status !== "Draft" &&
+        r.id !== exceptId &&
+        !!vehicleType &&
+        r.vehicleType === vehicleType,
+    );
+
+/** Vehicle Type of a Salary Range: Truck + Truck Type, or Header; required unless Draft. */
+function salaryVehicleError(key: string, status: Status) {
+  if (!key)
+    return status === "Draft" ? null : "Vehicle Type is required (a Draft can leave it empty).";
+  return salaryVehicleChoices(currentTypes()).includes(key)
+    ? null
+    : `No active vehicle of type ${key} in Vehicle.`;
+}
 
 export function validateSalaryRange(d: SalaryRangeDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
   const code = codeError(salaryRangeRepository, d.code, "Salary Range", id);
   if (code) e["code"] = code;
   if (!d.name.trim()) e["name"] = "Salary Range Name is required.";
-  if (!d.vehicleTypes.length) e["vehicleTypes"] = "Add at least one Vehicle Type.";
-  for (const [i, key] of d.vehicleTypes.entries()) {
-    const v = vehicleError(key);
-    const dup = v ? undefined : salaryRangeOfVehicle(key, id);
-    const msg = v
-      ? v
-      : d.vehicleTypes.indexOf(key) !== i
-        ? `${key} is listed twice.`
-        : dup
-          ? `${key} already has a Salary Range: ${dup.code}.`
-          : "";
-    if (msg) {
-      e["vehicleTypes"] = `Vehicle Type row ${i + 1}: ${msg}`;
-      break;
-    }
-  }
+  const v = salaryVehicleError(d.vehicleType, d.status);
+  const dup = v || d.status === "Draft" ? undefined : salaryRangeOfVehicle(d.vehicleType, id);
+  if (v) e["vehicleType"] = v;
+  else if (dup) e["vehicleType"] = `${d.vehicleType} already has a Salary Range: ${dup.code}.`;
   const t = validateTiers(d.tiers);
   if (!t.ok) e["tiers"] = t.message;
-  if (!(d.reeferPct >= 0)) e["reeferPct"] = "CNTR lạnh %: a number of 0 or more.";
+  if (isHeader(d.vehicleType))
+    for (const [i, c] of d.containers.entries()) {
+      const msg = !c.container
+        ? "pick a Container Type"
+        : d.containers.findIndex((x) => x.container === c.container) !== i
+          ? `${c.container} has two columns`
+          : !(c.pct >= 0)
+            ? "the % must be a number of 0 or more"
+            : "";
+      if (msg) {
+        e["containers"] = `Container column ${i + 1}: ${msg}.`;
+        break;
+      }
+    }
   if (!(d.rule.roundStep >= 0)) e["roundStep"] = "Round up to must be a number of 0 or more.";
   if (d.rule.regionOn && !(d.rule.regionAmount >= 0))
-    e["regionAmount"] = "Highland surcharge must be a number of 0 or more.";
+    e["regionAmount"] = "Other terrain surcharge must be a number of 0 or more.";
   return e;
 }
 
-/** Variable Cost Mappings that read a setup (it cannot be deleted while they do; it can be deactivated). */
-const refReason = (id: string) => {
-  const n = variableCostMappingRepository
-    .all()
-    .filter((m) => !m.deleted && (m.salaryRangeId === id || m.fuelCostId === id)).length;
-  return n ? `is used by ${n} Variable Cost Mapping${n === 1 ? "" : "s"}` : null;
-};
-
-export const salaryRangeCrud = makeCrud<SalaryRangeRecord>({
+const salaryRangeBase = makeCrud<SalaryRangeRecord>({
   entityType: "Salary Range",
   repo: salaryRangeRepository,
   labelOf: (r) => r.code,
-  references: (r) => refReason(r.id),
+  references: () => null,
 });
+/** As the base, but a Draft without a vehicle type (or with one taken) is not activated from the list. */
+export const salaryRangeCrud: typeof salaryRangeBase = {
+  ...salaryRangeBase,
+  setStatus(ids, status) {
+    const ok =
+      status === "Active"
+        ? ids.filter((id) => {
+            const r = salaryRangeRepository.get(id);
+            return !!r?.vehicleType && !salaryRangeOfVehicle(r.vehicleType, r.id);
+          })
+        : ids;
+    return salaryRangeBase.setStatus(ok, status);
+  },
+};
+
+/** A free code for a copy: CODE-COPY, CODE-COPY2… (max 20 characters). */
+function copyCode(code: string) {
+  const taken = new Set(
+    salaryRangeRepository
+      .all()
+      .filter((r) => !r.deleted)
+      .map((r) => r.code.toUpperCase()),
+  );
+  for (let n = 1; ; n++) {
+    const tail = `-COPY${n === 1 ? "" : n}`;
+    const c = `${code.slice(0, 20 - tail.length)}${tail}`;
+    if (!taken.has(c)) return c;
+  }
+}
 
 export const salaryRangeService = {
   save(d: SalaryRangeDraft, id?: string): SalaryRangeRecord {
@@ -154,9 +203,22 @@ export const salaryRangeService = {
       {
         code: d.code.trim().toUpperCase(),
         name: d.name.trim(),
-        vehicleTypes: d.vehicleTypes,
-        tiers: d.tiers,
-        reeferPct: d.reeferPct,
+        vehicleType: d.vehicleType,
+        // Container columns are a Header's only; a tier keeps the rates of the columns there are.
+        containers: isHeader(d.vehicleType) ? d.containers : [],
+        tiers: d.tiers.map(({ containerRates, ...t }) => {
+          const keep = isHeader(d.vehicleType)
+            ? d.containers.filter((c) => containerRates && c.container in containerRates)
+            : [];
+          return keep.length
+            ? {
+                ...t,
+                containerRates: Object.fromEntries(
+                  keep.map((c) => [c.container, containerRates![c.container]!]),
+                ),
+              }
+            : t;
+        }),
         rule: ruleOf(d.rule),
         remark: d.remark.trim(),
         status: d.status,
@@ -164,42 +226,53 @@ export const salaryRangeService = {
       id,
     );
   },
+  /**
+   * A copy of a Salary Range to set up for another vehicle type: Draft (not used anywhere until it is
+   * made Active) and no vehicle type; tiers, container columns, rule and remark copied.
+   */
+  duplicate(id: string): SalaryRangeRecord {
+    const src = salaryRangeRepository.get(id);
+    if (!src || src.deleted) throw new BusinessRuleError("Salary Range not found.");
+    return saveRecord<SalaryRangeRecord>(salaryRangeRepository, "Salary Range", "SR-", {
+      code: copyCode(src.code),
+      name: `${src.name} (copy)`.slice(0, 200),
+      vehicleType: "",
+      tiers: src.tiers.map((t) => ({
+        ...t,
+        ...(t.containerRates ? { containerRates: { ...t.containerRates } } : {}),
+      })),
+      containers: (src.containers ?? []).map((c) => ({ ...c })),
+      rule: ruleOf(src.rule),
+      remark: src.remark,
+      status: "Draft",
+    });
+  },
 };
 
 // ---------------------------------------------------------------- Fuel Cost
 
 export interface FuelCostDraft {
-  code: string;
-  name: string;
-  vehicleType: string;
   fuelType: string;
-  fuelRate: number;
   fuelPrice: number;
   remark: string;
   status: "Active" | "Inactive";
 }
 
-/** Fuel Types the vehicles of a vehicle type run on (Vehicle › Fuel). */
-export const fuelTypesOf = (key: string) =>
-  cogsVehicleTypes(vehicleMasterRepository.all()).find((t) => t.key === key)?.fuelTypes ?? [];
+/** Fuel Types that can be priced: Common Code › Fuel Type (the list Vehicle › Fuel Type picks from). */
+export const fuelTypeChoices = () => codeOptions(CC.FUEL_TYPE, FUEL_TYPES);
+/** "FU-DIESEL": the code of a Fuel Type's price. */
+export const fuelCodeOf = (fuelType: string) => sanitizeSetupCode(`FU-${fuelType}`);
 
+/** One price per Fuel Type, of a fuel the vehicles run on. */
 export function validateFuelCost(d: FuelCostDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
-  const code = codeError(fuelCostRepository, d.code, "Fuel Cost", id);
-  if (code) e["code"] = code;
-  if (!d.name.trim()) e["name"] = "Fuel Cost Name is required.";
-  const v = vehicleError(d.vehicleType);
-  if (v) e["vehicleType"] = v;
-  if (!v) {
-    const types = fuelTypesOf(d.vehicleType);
-    if (!types.length)
-      e["fuelType"] =
-        `No Fuel Type on the vehicles of ${d.vehicleType} in Vehicle: set it there first.`;
-    else if (!d.fuelType) e["fuelType"] = "Fuel Type is required.";
-    else if (!types.includes(d.fuelType))
-      e["fuelType"] = `No vehicle of ${d.vehicleType} runs on ${d.fuelType} in Vehicle.`;
-  }
-  if (!(d.fuelRate > 0)) e["fuelRate"] = "Fuel Rate must be above 0.";
+  if (!d.fuelType) e["fuelType"] = "Fuel Type is required.";
+  else if (!fuelTypeChoices().includes(d.fuelType))
+    e["fuelType"] = `${d.fuelType} is not a Fuel Type of Common Code.`;
+  else if (
+    fuelCostRepository.all().some((r) => !r.deleted && r.id !== id && r.fuelType === d.fuelType)
+  )
+    e["fuelType"] = `${d.fuelType} has a Fuel Cost already — edit that one.`;
   if (!(d.fuelPrice > 0)) e["fuelPrice"] = "Fuel Price must be above 0.";
   return e;
 }
@@ -208,7 +281,7 @@ export const fuelCostCrud = makeCrud<FuelCostRecord>({
   entityType: "Fuel Cost",
   repo: fuelCostRepository,
   labelOf: (r) => r.code,
-  references: (r) => refReason(r.id),
+  references: () => null,
 });
 
 export const fuelCostService = {
@@ -221,11 +294,8 @@ export const fuelCostService = {
       "Fuel Cost",
       "FU-",
       {
-        code: d.code.trim().toUpperCase(),
-        name: d.name.trim(),
-        vehicleType: d.vehicleType,
+        code: fuelCodeOf(d.fuelType),
         fuelType: d.fuelType,
-        fuelRate: d.fuelRate,
         fuelPrice: d.fuelPrice,
         remark: d.remark.trim(),
         status: d.status,
@@ -238,76 +308,73 @@ export const fuelCostService = {
 // ---------------------------------------------------------------- Variable Cost Mapping
 
 export interface VariableCostMappingDraft {
-  routeId: string;
-  vehicleType: string;
-  salaryRangeId: string;
-  fuelCostId: string;
   assignCostId: string;
-  remark: string;
-  status: "Active" | "Inactive";
+  vehicleTypes: string[];
+  component: VariableComponent;
 }
 
-/** Fare Codes of the Fixed Cost Mappings: not offered for a variable cost. */
-export const fixedFareIds = () =>
-  new Set(
-    fixedCostSummaryRepository
-      .all()
-      .filter((m) => !m.deleted)
-      .map((m) => m.assignCostId),
-  );
+/** The other live mappings of the same vehicle type holding a variable cost. */
+export const mappingsHolding = (
+  vehicleType: string,
+  component: VariableComponent,
+  exceptId?: string,
+) =>
+  variableCostMappingRepository
+    .all()
+    .filter(
+      (m) =>
+        !m.deleted &&
+        m.id !== exceptId &&
+        m.vehicleTypes.includes(vehicleType) &&
+        m.component === component,
+    );
 
-const fareCodeOf = (id: string) => costItemRepository.get(id)?.code ?? id;
+const fareLabel = (id: string) => costItemRepository.get(id)?.code ?? id;
 
+/**
+ * One mapping per Fare Code, one variable cost per mapping; a variable cost of a vehicle type is booked to
+ * one Fare Code only (it would be counted twice).
+ */
 export function validateVariableCostMapping(
   d: VariableCostMappingDraft,
   id?: string,
 ): Record<string, string> {
   const e: Record<string, string> = {};
-  const route = d.routeId ? routeRepository.get(d.routeId) : undefined;
-  if (!route || route.deleted) e["routeId"] = "Route is required.";
-  else if (!routeTotals(route).calculated)
-    e["routeId"] = "This route has not been calculated: open it and click Calculate Route.";
-  const v = vehicleError(d.vehicleType);
-  if (v) e["vehicleType"] = v;
-  if (route && !v) {
-    const dup = variableCostMappingRepository
-      .all()
-      .find(
-        (m) =>
-          !m.deleted && m.id !== id && m.routeId === d.routeId && m.vehicleType === d.vehicleType,
-      );
-    if (dup)
-      e["routeId"] = `${route.code} · ${d.vehicleType} is mapped already: edit that mapping.`;
-    if (
-      !setupsFor(salaryRangeRepository.all(), d.vehicleType).some((r) => r.id === d.salaryRangeId)
-    )
-      e["salaryRangeId"] =
-        `Pick the Salary Range of ${d.vehicleType} (add one first if there is none).`;
-    if (!setupsFor(fuelCostRepository.all(), d.vehicleType).some((r) => r.id === d.fuelCostId))
-      e["fuelCostId"] = `Pick the Fuel Cost of ${d.vehicleType} (add one first if there is none).`;
-  }
   if (!d.assignCostId) e["assignCost"] = "Fare Code is required.";
-  else if (fixedFareIds().has(d.assignCostId))
-    e["assignCost"] = `${fareCodeOf(d.assignCostId)} is a Fixed Cost Fare Code: pick another one.`;
+  else if (
+    variableCostMappingRepository
+      .all()
+      .some((m) => !m.deleted && m.id !== id && m.assignCostId === d.assignCostId)
+  )
+    e["assignCost"] =
+      `${fareLabel(d.assignCostId)} already has a Variable Cost Mapping — edit that one.`;
+  if (!d.vehicleTypes.length) e["vehicleTypes"] = "Add at least one Vehicle Type.";
+  for (const [i, key] of d.vehicleTypes.entries()) {
+    const msg =
+      vehicleError(key) ?? (d.vehicleTypes.indexOf(key) !== i ? `${key} is listed twice.` : "");
+    if (msg) {
+      e["vehicleTypes"] = `Vehicle Type row ${i + 1}: ${msg}`;
+      break;
+    }
+  }
+  if (!d.component) e["component"] = "Variable Cost is required.";
+  else
+    for (const key of d.vehicleTypes) {
+      const other = mappingsHolding(key, d.component, id)[0];
+      if (other) {
+        const fare = costItemRepository.get(other.assignCostId)?.code ?? "another Fare Code";
+        e["vehicleTypes"] = `${d.component} of ${key} is already mapped to ${fare} — remove it.`;
+        break;
+      }
+    }
   return e;
 }
-
-/** COGS that read a mapping (it cannot be deleted while they do; it can be deactivated). */
-const mappingRefReason = (id: string) => {
-  const by = cogsRepository
-    .all()
-    .filter((c) => !c.deleted && c.variableMappingId === id)
-    .map((c) => c.code);
-  return by.length ? `is used by COGS ${by.join(", ")}` : null;
-};
-const mappingLabel = (m: Pick<VariableCostMappingRecord, "routeId" | "vehicleType">) =>
-  `${routeRepository.get(m.routeId)?.code ?? m.routeId} · ${m.vehicleType}`;
 
 export const variableCostMappingCrud = makeCrud<VariableCostMappingRecord>({
   entityType: "Variable Cost Mapping",
   repo: variableCostMappingRepository,
-  labelOf: mappingLabel,
-  references: (m) => mappingRefReason(m.id),
+  labelOf: (m) => `${fareLabel(m.assignCostId)} · ${m.component}`,
+  references: () => null,
 });
 
 export const variableCostMappingService = {
@@ -315,35 +382,56 @@ export const variableCostMappingService = {
     const errors = validateVariableCostMapping(d, id);
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please check the highlighted fields.", errors);
-    const body = {
-      routeId: d.routeId,
-      vehicleType: d.vehicleType,
-      salaryRangeId: d.salaryRangeId,
-      fuelCostId: d.fuelCostId,
-      assignCostId: d.assignCostId,
-      remark: d.remark.trim(),
-      status: d.status,
-    };
     const existing = id ? variableCostMappingRepository.get(id) : undefined;
+    const label = `${fareLabel(d.assignCostId)} · ${d.component}`;
     if (!existing) {
-      const rec: VariableCostMappingRecord = { id: uid("VM-"), ...body, ...stampCreate() };
+      const rec: VariableCostMappingRecord = {
+        id: uid("VM-"),
+        ...d,
+        status: "Active",
+        ...stampCreate(),
+      };
       variableCostMappingRepository.insert(rec);
       auditService.log({
         action: "CREATE",
         entityType: "Variable Cost Mapping",
         entityId: rec.id,
-        entityLabel: mappingLabel(rec),
+        entityLabel: label,
+        note: d.vehicleTypes.join(", "),
       });
       return rec;
     }
-    const next = stampUpdate({ ...existing, ...body });
+    const next = stampUpdate({ ...existing, ...d });
     variableCostMappingRepository.update(existing.id, () => next);
-    auditService.log({
-      action: "UPDATE",
-      entityType: "Variable Cost Mapping",
+    const base = {
+      action: "UPDATE" as const,
+      entityType: "Variable Cost Mapping" as const,
       entityId: next.id,
-      entityLabel: mappingLabel(next),
-    });
+      entityLabel: label,
+    };
+    const out: Parameters<typeof auditService.logMany>[0] = [];
+    if (existing.assignCostId !== next.assignCostId)
+      out.push({
+        ...base,
+        field: "Fare Code",
+        oldValue: fareLabel(existing.assignCostId),
+        newValue: fareLabel(next.assignCostId),
+      });
+    if (existing.vehicleTypes.join(", ") !== next.vehicleTypes.join(", "))
+      out.push({
+        ...base,
+        field: "Vehicle Types",
+        oldValue: existing.vehicleTypes.join(", ") || "—",
+        newValue: next.vehicleTypes.join(", ") || "—",
+      });
+    if (existing.component !== next.component)
+      out.push({
+        ...base,
+        field: "Variable Cost",
+        oldValue: existing.component,
+        newValue: next.component,
+      });
+    auditService.logMany(out);
     return next;
   },
 };

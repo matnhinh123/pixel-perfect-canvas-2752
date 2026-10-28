@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -52,6 +52,7 @@ export function DataTable<T extends { id: string }>({
   loading,
   empty,
   hidePager,
+  fillHeight,
   bordered = true,
 }: {
   columns: ListColumn<T>[];
@@ -76,6 +77,8 @@ export function DataTable<T extends { id: string }>({
   empty: ReactNode;
   /** Tree view shows every row on one page: only the row count is rendered in the footer. */
   hidePager?: boolean;
+  /** The table runs to the bottom of the window and scrolls inside (column headers stay on top). */
+  fillHeight?: boolean | undefined;
   /** Grey lines between every column and row (on by default, as on every list). */
   bordered?: boolean;
 }) {
@@ -123,6 +126,21 @@ export function DataTable<T extends { id: string }>({
     else onSort(null);
   };
 
+  // fillHeight: the table's height = from its top to the bottom of the window, less the pager.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [fillPx, setFillPx] = useState(0);
+  useLayoutEffect(() => {
+    if (!fillHeight) return;
+    const fit = () => {
+      const top = cardRef.current?.getBoundingClientRect().top ?? 0;
+      setFillPx(Math.max(280, Math.round(window.innerHeight - top - 32 - 76)));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [fillHeight]);
+  const stickyHead = fillHeight ? "sticky top-0 z-10" : "";
+
   const colSpan = columns.length + (selected ? 1 : 0) + (actions ? 1 : 0);
   const first = totalRows === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(totalRows, page * pageSize);
@@ -130,8 +148,9 @@ export function DataTable<T extends { id: string }>({
   return (
     <div>
       {/* HeroUI table inside a card: grey header band, borderless rows with a hover band. */}
-      <div className="overflow-x-auto rounded-[14px] bg-card p-4 shadow-hu-sm">
+      <div ref={cardRef} className="overflow-x-auto rounded-[14px] bg-card p-4 shadow-hu-sm">
         <Table
+          {...(fillHeight && fillPx ? { containerStyle: { height: fillPx } } : {})}
           className={cn(
             "border-separate border-spacing-0",
             bordered && cn(gridCellsClass, "border-l border-t border-border"),
@@ -142,7 +161,7 @@ export function DataTable<T extends { id: string }>({
           >
             <TableRow className="hover:bg-transparent">
               {selected && (
-                <TableHead className={cn(thClass, CHECK_CELL)}>
+                <TableHead className={cn(thClass, CHECK_CELL, stickyHead)}>
                   <Checkbox
                     checked={allOn ? true : someOn ? "indeterminate" : false}
                     onCheckedChange={(v) => onToggleAll?.(ids, v === true)}
@@ -161,6 +180,7 @@ export function DataTable<T extends { id: string }>({
                     className={cn(
                       thClass,
                       "group relative select-none",
+                      stickyHead,
                       !w && "whitespace-nowrap",
                       onReorder && "cursor-grab active:cursor-grabbing",
                       moving === c.key && "opacity-40",
@@ -231,7 +251,13 @@ export function DataTable<T extends { id: string }>({
                 );
               })}
               {actions && (
-                <TableHead className={cn(thClass, "sticky right-0 z-10 w-16 bg-muted text-right")}>
+                <TableHead
+                  className={cn(
+                    thClass,
+                    "sticky right-0 z-10 w-16 bg-muted text-right",
+                    fillHeight && "top-0 z-20",
+                  )}
+                >
                   {t("Thao tác", "Actions")}
                 </TableHead>
               )}

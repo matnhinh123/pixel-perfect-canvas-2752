@@ -6,6 +6,7 @@ import { History, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/movex/general/MoneyInput";
 import { EmptyState, Field, NativeSelect, Panel, StatusBadge } from "@/components/movex/common";
 import { AuditHistoryDrawer } from "@/components/movex/AuditDrawer";
 import {
@@ -334,8 +335,9 @@ function FixedCostForm({
                 <MoneyInput
                   value={d.costValue}
                   decimals={d.currency === "VND" ? 0 : 2}
-                  onChange={(costValue) => patch({ costValue })}
-                  className="h-full rounded-none border-0 shadow-none focus-visible:border-0"
+                  emptyZero
+                  onChange={(v) => patch({ costValue: Number.isFinite(v) ? v : 0 })}
+                  className="h-full min-w-0 flex-1 rounded-none border-0 text-left shadow-none focus-visible:border-0"
                 />
                 <select
                   aria-label="Currency"
@@ -420,57 +422,5 @@ function FixedCostForm({
         />
       )}
     </div>
-  );
-}
-
-/** "1200000,5" → "1.200.000,5" while typing (vi-VN grouping), and its number. */
-const groupMoney = (s: string, decimals: number) => {
-  const [int = "", ...rest] = s.replace(/[^\d,]/g, "").split(",");
-  const comma = decimals > 0 && s.includes(",");
-  const dec = rest.join("").slice(0, decimals);
-  const n = Number(int || "0");
-  return {
-    text: (int ? n.toLocaleString("vi-VN") : comma ? "0" : "") + (comma ? `,${dec}` : ""),
-    value: Number(`${n}.${dec || "0"}`),
-  };
-};
-const moneyText = (v: number, decimals: number) =>
-  v ? v.toLocaleString("vi-VN", { maximumFractionDigits: decimals }) : "";
-
-/** Amount input with a dot every 3 digits (decimals after a comma for foreign currencies). */
-function MoneyInput({
-  value,
-  onChange,
-  decimals,
-  invalid,
-  disabled,
-  className,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  decimals: number;
-  invalid?: boolean;
-  disabled?: boolean;
-  className?: string;
-}) {
-  const [text, setText] = useState(() => moneyText(value, decimals));
-  useEffect(() => {
-    if (groupMoney(text, decimals).value !== value) setText(moneyText(value, decimals));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, decimals]);
-  return (
-    <Input
-      inputMode="decimal"
-      placeholder="0"
-      value={text}
-      aria-invalid={invalid || undefined}
-      disabled={disabled}
-      onChange={(e) => {
-        const g = groupMoney(e.target.value, decimals);
-        setText(g.text);
-        onChange(g.value);
-      }}
-      className={cn("min-w-0 flex-1", NUM, className)}
-    />
   );
 }

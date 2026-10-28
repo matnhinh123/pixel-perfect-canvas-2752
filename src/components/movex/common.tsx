@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Info } from "lucide-react";
@@ -183,6 +183,20 @@ export function Panel({
   );
 }
 
+/** Width of the label column when the Fields inside lay out "Label: value" on one line. */
+const InlineFieldsContext = createContext<string | null>(null);
+
+/** The Fields inside show their label on the left of the value, on one line (label column `labelWidth`). */
+export function InlineFields({
+  labelWidth = "9rem",
+  children,
+}: {
+  labelWidth?: string;
+  children: ReactNode;
+}) {
+  return <InlineFieldsContext.Provider value={labelWidth}>{children}</InlineFieldsContext.Provider>;
+}
+
 export function Field({
   label,
   children,
@@ -207,6 +221,34 @@ export function Field({
   error?: string | undefined;
   hint?: ReactNode;
 }) {
+  const labelWidth = useContext(InlineFieldsContext);
+  if (labelWidth)
+    return (
+      <label
+        className={cn("grid min-w-0 items-start gap-x-3 gap-y-1", className)}
+        style={{ gridTemplateColumns: `${labelWidth} minmax(0, 1fr)` }}
+      >
+        <span className="whitespace-nowrap pt-2.5 text-sm leading-5 text-muted-foreground">
+          {label}
+          {required && <span className="ml-0.5 text-destructive">*</span>}
+          {info && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="ml-1.5 inline h-3.5 w-3.5 cursor-help align-[-2px] text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">{info}</TooltipContent>
+            </Tooltip>
+          )}
+          {labelAside}
+        </span>
+        <div className="min-w-0">{children}</div>
+        {error ? (
+          <span className="col-start-2 text-xs font-medium text-destructive">{error}</span>
+        ) : hint ? (
+          <span className="col-start-2 text-xs text-muted-foreground">{hint}</span>
+        ) : null}
+      </label>
+    );
   return (
     <label className={cn("flex min-w-0 flex-col gap-1.5", className)}>
       <span className="text-sm font-normal text-foreground">
@@ -258,6 +300,7 @@ export function NativeSelect({
   labels,
   disabled,
   invalid,
+  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -266,6 +309,8 @@ export function NativeSelect({
   labels?: Record<string, string>;
   disabled?: boolean;
   invalid?: boolean;
+  /** Shown while nothing is picked; not an option of the list. */
+  placeholder?: string;
 }) {
   return (
     <select
@@ -279,6 +324,11 @@ export function NativeSelect({
         className,
       )}
     >
+      {placeholder !== undefined && (
+        <option value="" disabled hidden>
+          {placeholder}
+        </option>
+      )}
       {options.map((o) => (
         <option key={o} value={o}>
           {labels?.[o] ?? o}

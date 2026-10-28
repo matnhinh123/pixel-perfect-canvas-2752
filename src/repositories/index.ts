@@ -17,8 +17,8 @@ import type {
   VehicleMasterRecord,
   TenantTemplateConfig,
   SalaryRangeRecord,
-  FuelCostRecord,
   VariableCostMappingRecord,
+  FuelCostRecord,
 } from "@/types";
 import {
   seedAudit,
@@ -64,19 +64,19 @@ export const costGroupRepository = createCollection<CostGroupRecord>(
 );
 export const costItemRepository = createCollection<CostItemRecord>("cost-items.v6", seedCostItems);
 /** COGS of a trip (route × vehicle type) built on the Cost screens. */
-export const cogsRepository = createCollection<CogsRecord>("cogs.v12", seedCogs);
-/** Variable Cost Mapping: the Fare Code each variable cost is booked to. */
+export const cogsRepository = createCollection<CogsRecord>("cogs.v22", seedCogs);
+/** Variable Cost Mapping: the Fare Code each variable cost of a vehicle type is booked to. */
 export const variableCostMappingRepository = createCollection<VariableCostMappingRecord>(
-  "variable-cost-mappings.v8",
+  "variable-cost-mappings.v14",
   seedVariableCostMappings,
 );
 /** Salary Range: driver salary tiers of a vehicle type, under a code. */
 export const salaryRangeRepository = createCollection<SalaryRangeRecord>(
-  "salary-range-records.v6",
+  "salary-range-records.v8",
   seedSalaryRangeRecords,
 );
 /** Fuel Cost: fuel of a vehicle type (type, rate, price), under a code. */
-export const fuelCostRepository = createCollection<FuelCostRecord>("fuel-costs.v1", seedFuelCosts);
+export const fuelCostRepository = createCollection<FuelCostRecord>("fuel-costs.v4", seedFuelCosts);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
 export const fixedCostRepository = createCollection<FixedCostRecord>(
   "fixed-costs.v13",
@@ -171,6 +171,11 @@ for (const id of [CC.FIXED_COST_VEHICLE_TYPE, CC.FIXED_COST_TYPE]) {
   if (t?.deleted) commonCodeRepository.update(t.id, (p) => ({ ...p, deleted: false }));
   if (!t && seed) commonCodeRepository.insert(seed);
 }
+// Container Type (ISO groups) added to Common Code: inserted once into existing storage.
+{
+  const seed = seedCommonCodes().find((x) => x.id === CC.CONTAINER_TYPE);
+  if (seed && !commonCodeRepository.get(CC.CONTAINER_TYPE)) commonCodeRepository.insert(seed);
+}
 // Country list (Business Partner) added to Common Code: inserted once into existing storage.
 {
   const seed = seedCommonCodes().find((x) => x.id === CC.COUNTRY);
@@ -255,6 +260,23 @@ for (const s of tollStationRepository.all())
   for (const v of vehicleMasterRepository.all())
     if (v.vehicleType === "HEAD")
       vehicleMasterRepository.update(v.id, (p) => ({ ...p, vehicleType: "HEADER" }));
+}
+// Terrain "Highland" was renamed "Other": stored option + stored routes follow once.
+{
+  const t = commonCodeRepository.get(CC.TERRAIN);
+  if (t?.options.some((o) => o.name === "Highland"))
+    commonCodeRepository.update(t.id, (p) => ({
+      ...p,
+      remark: "Other (e.g. highland) adds 25% to the estimated time.",
+      options: p.options.map((o) => (o.name === "Highland" ? { ...o, name: "Other" } : o)),
+    }));
+  // Read the stored routes only (loading the collection here would seed it too early).
+  const stored = readJson<RouteRecord[] | null>(routeRepository.key, null);
+  if (stored?.some((r) => (r.terrain as string) === "Highland"))
+    writeJson(
+      routeRepository.key,
+      stored.map((r) => ((r.terrain as string) === "Highland" ? { ...r, terrain: "Other" } : r)),
+    );
 }
 // Location Type "Port" was renamed "Seaport": stored option + stored locations follow once.
 {

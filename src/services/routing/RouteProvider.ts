@@ -81,6 +81,13 @@ export const VEHICLE_CLASSES: Record<
   ],
 };
 
+/** Container options of the route map: the header alone, or towing a container up to / over 20 ft. */
+export const CONTAINER_LABEL: Record<number, string> = {
+  3: "Header only",
+  4: "Container ≤ 20 ft",
+  5: "Container > 20 ft",
+};
+
 /**
  * Vehicle Group (cost norms, list / Cost screens) follows the vehicle picked on the route map:
  * Truck by its weight class, any Container → Tractor / Container Truck.
