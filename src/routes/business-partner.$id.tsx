@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { History, Info, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { fetchTaxPayer, isActiveTaxPayer } from "@/services/taxPayerApi";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,6 @@ import {
   newBusinessPartnerDraft,
   normalizeBusinessPartner,
   sanitizeBpCode,
-  lookupTaxPayer,
   hasOperationalTransactions,
   identityNoRequired,
   taxCodeRequired,
@@ -202,16 +202,27 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
   /** Role is locked once the partner has operational transactions. */
   const roleLocked = hasOperationalTransactions(source?.id);
 
-  /** Company "Get Info": tax-authority lookup by MST (mock registry in the demo) fills Local Name and Local Address. */
-  const getTaxInfo = () => {
-    const res = lookupTaxPayer(d.taxCode);
+  /**
+   * Company "Get Info": looks the MST up at the tax authority (xInvoice API) and fills Local Name and
+   * Local Address with the registered name and address.
+   */
+  const [taxLoading, setTaxLoading] = useState(false);
+  const getTaxInfo = async () => {
+    setTaxLoading(true);
+    const res = await fetchTaxPayer(d.taxCode);
+    setTaxLoading(false);
     if ("error" in res) {
       toast.error(res.error);
       return;
     }
-    const { localName, localAddress } = res.info;
-    patch({ localName, localAddress });
-    toast.success(t("Đã lấy thông tin doanh nghiệp.", "Company information retrieved."));
+    const { name, address, orgType, status, taxDepartment } = res.info;
+    patch({ localName: name, localAddress: address });
+    const line = [orgType, status, taxDepartment].filter(Boolean).join(" · ");
+    if (isActiveTaxPayer(status))
+      toast.success(t("Đã lấy thông tin doanh nghiệp.", "Company information retrieved."), {
+        description: line,
+      });
+    else toast.warning(t(`${name}: ${status}`, `${name}: ${status}`), { description: line });
   };
 
   /** Cancel: an edited record goes back to its view page, a new one to the list. */
@@ -381,9 +392,10 @@ function BpForm({ source, readOnly }: { source: BusinessPartnerRecord | null; re
                     type="button"
                     variant="outline"
                     className="h-9 shrink-0 px-2.5"
-                    onClick={getTaxInfo}
+                    onClick={() => void getTaxInfo()}
+                    disabled={taxLoading}
                   >
-                    Get Info
+                    {taxLoading ? t("Đang tra…", "Looking up…") : "Get Info"}
                   </Button>
                 )}
               </div>
