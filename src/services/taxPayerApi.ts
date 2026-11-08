@@ -20,15 +20,33 @@ export interface TaxPayerInfo {
 
 export type TaxPayerResult = { info: TaxPayerInfo } | { error: string };
 
-/** 10 digits, or 10 + 3 for a branch ("0316794479-001"; "0316794479001" is read the same). */
+/**
+ * A Tax Code (MST) comes in three forms (Circular 86/2024/TT-BTC):
+ * - 10 digits: an enterprise or organisation;
+ * - 10 + 3 digits: a branch or dependent unit ("0316794479-001"; "0316794479001" is read the same);
+ * - 12 digits: an individual or household business, whose personal ID number is the MST since 01/07/2025.
+ */
 const MST = /^(\d{10})(?:-?(\d{3}))?$/;
+const PERSONAL_MST = /^\d{12}$/;
 
 /** The tax code as the API wants it ("0316794479-001"), or null when it is not one. */
 export function normalizeTaxCode(v: string): string | null {
-  const m = MST.exec(v.replace(/\s+/g, ""));
+  const s = v.replace(/\s+/g, "");
+  if (PERSONAL_MST.test(s)) return s;
+  const m = MST.exec(s);
   if (!m) return null;
   return m[2] ? `${m[1]}-${m[2]}` : m[1]!;
 }
+
+/** Is it a Tax Code in one of its three forms? */
+export const isTaxCode = (v: string) => normalizeTaxCode(v) !== null;
+
+/** The error for a Tax Code in none of its forms. */
+export const taxCodeFormatError = () =>
+  tr(
+    "Mã số thuế gồm 10 số, 10 + 3 số với chi nhánh, hoặc 12 số (số định danh cá nhân).",
+    "Tax Code should be 10 digits, 10 + 3 digits for a branch, or 12 digits (personal ID number).",
+  );
 
 /** Is the tax payer still running ("NNT đang hoạt động…")? */
 export const isActiveTaxPayer = (status: string) => /đang hoạt động/i.test(status);
@@ -42,13 +60,7 @@ export async function fetchTaxPayer(
   fetchFn: typeof fetch = fetch,
 ): Promise<TaxPayerResult> {
   const code = normalizeTaxCode(taxCode);
-  if (!code)
-    return {
-      error: tr(
-        "Mã số thuế gồm 10 số, hoặc 10 + 3 số với chi nhánh.",
-        "Tax Code should be 10 digits, or 10 + 3 digits for a branch.",
-      ),
-    };
+  if (!code) return { error: taxCodeFormatError() };
   const headers: Record<string, string> = { Accept: "application/json" };
   const clientId = env("VITE_XINVOICE_CLIENT_ID");
   const apiKey = env("VITE_XINVOICE_API_KEY");
@@ -74,8 +86,8 @@ export async function fetchTaxPayer(
   if (res.status === 429)
     return {
       error: tr(
-        "Tra cứu quá nhanh (tối đa 10 lần / 30 giây). Đợi một chút rồi thử lại.",
-        "Too many lookups (10 per 30 seconds at most). Wait a moment and try again.",
+        "Tra cứu quá nhanh. Đợi một chút rồi thử lại.",
+        "Too many lookups. Wait a moment and try again.",
       ),
     };
   if (res.status === 401 || res.status === 403)

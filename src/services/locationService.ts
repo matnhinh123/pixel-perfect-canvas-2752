@@ -1,5 +1,5 @@
 // Location master: add / edit / deactivate / delete. Routing stop pickers read active locations.
-import { locationRepository, routeRepository, tollStationRepository, uid } from "@/repositories";
+import { locationRepository, routeRepository, uid } from "@/repositories";
 import {
   locationOrigin,
   normalizeLocation,
@@ -36,9 +36,6 @@ const routesUsing = (id: string) =>
         ].some((p) => p.locationId === id),
     ).length;
 
-const tollStationsUsing = (id: string) =>
-  tollStationRepository.all().filter((g) => !g.deleted && g.locationId === id).length;
-
 const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
 export const locationCrud = makeCrud<LocationMasterRecord>({
@@ -49,8 +46,6 @@ export const locationCrud = makeCrud<LocationMasterRecord>({
     const parts: string[] = [];
     const routes = routesUsing(l.id);
     if (routes) parts.push(plural(routes, "route"));
-    const gates = tollStationsUsing(l.id);
-    if (gates) parts.push(plural(gates, "toll station"));
     return parts.length ? `is used by ${parts.join(" and ")}` : null;
   },
 });

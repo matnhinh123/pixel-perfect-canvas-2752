@@ -13,11 +13,15 @@ const json = (status: number, body: unknown) =>
   });
 
 describe("Tax payer lookup (xInvoice API)", () => {
-  it("reads 10 digits, or 10 + 3 for a branch", () => {
+  it("reads 10 digits, 10 + 3 for a branch, or 12 for an individual / household business", () => {
     expect(normalizeTaxCode(" 0101248141 ")).toBe("0101248141");
     expect(normalizeTaxCode("0316794479001")).toBe("0316794479-001");
     expect(normalizeTaxCode("0316794479-001")).toBe("0316794479-001");
+    expect(normalizeTaxCode("079085001234")).toBe("079085001234");
     expect(normalizeTaxCode("abc")).toBeNull();
+    expect(normalizeTaxCode("12")).toBeNull();
+    expect(normalizeTaxCode("01012481411")).toBeNull();
+    expect(normalizeTaxCode("0790850012345")).toBe("0790850012-345");
   });
 
   it("calls GET /gdt-api/tax-payer/:taxCode and returns the registered name and address", async () => {
@@ -52,7 +56,7 @@ describe("Tax payer lookup (xInvoice API)", () => {
       "0101248141",
       as(async () => json(429, {})),
     );
-    expect("error" in limited && limited.error).toMatch(/10/);
+    expect("error" in limited && limited.error).toMatch(/Too many|quá nhanh/);
     const offline = await fetchTaxPayer(
       "0101248141",
       as(async () => {

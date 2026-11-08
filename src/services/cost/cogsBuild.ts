@@ -27,7 +27,13 @@ import {
   type TollMaster,
 } from "./salaryRange";
 import { routeTotals } from "./costMath";
-import { coversVehicle, isoFitsVehicle, type CogsVehicleType } from "./cogsVehicle";
+import {
+  coversVehicle,
+  isoFitsVehicle,
+  salaryVehiclesOf,
+  type CogsVehicleType,
+} from "./cogsVehicle";
+import { fuelRateFor } from "./fuelRates";
 import { coversCogsVehicle } from "@/services/fixedCostVehicle";
 
 /** Fixed cost of one day (a trip is counted as one day). */
@@ -60,16 +66,16 @@ export function setupsFor<
     status: string;
     code: string;
     vehicleType: string;
+    vehicleTypes?: string[] | undefined;
   },
 >(xs: readonly T[], vehicleType: string): T[] {
-  const exact = (r: T) => r.vehicleType === vehicleType;
+  const exact = (r: T) => salaryVehiclesOf(r).includes(vehicleType);
   return xs
     .filter(
       (r) =>
         !r.deleted &&
         r.status === "Active" &&
-        !!r.vehicleType &&
-        coversVehicle(r.vehicleType, vehicleType),
+        salaryVehiclesOf(r).some((k) => coversVehicle(k, vehicleType)),
     )
     .sort((a, b) => Number(exact(b)) - Number(exact(a)) || a.code.localeCompare(b.code));
 }
@@ -110,7 +116,7 @@ export interface VariableSetups {
 export function variableItemOf(
   item: VariableItem,
   route: RouteRecord,
-  vt: Pick<CogsVehicleType, "group" | "key" | "fuelNorm" | "fuelRates">,
+  vt: Pick<CogsVehicleType, "group" | "key" | "brand" | "fuelNorm" | "fuelRates">,
   s: VariableSetups,
 ): { code: string; basis: string; amount: number } {
   const t = routeTotals(route);
@@ -135,16 +141,26 @@ export function variableItemOf(
   if (item.component === "Fuel Cost") {
     const f = s.fuelCosts.find((x) => x.id === item.refId && !x.deleted);
     if (!f) return { code: "", basis: "Fuel Cost not found", amount: 0 };
-    // The vehicles' average Fuel Rate on that fuel (Vehicle › Fuel Rate).
-    const r = vt.fuelRates[f.fuelType];
-    const rate = r?.avg || vt.fuelNorm;
+    // The Fuel Rate of the vehicle type in the Fuel Cost (set there, or its vehicles' average).
+    const use = fuelRateFor(f, vt);
+    if (!use)
+      return {
+        code: f.code,
+        basis: `${vt.key} is not a vehicle type of Fuel Cost ${f.code}`,
+        amount: 0,
+      };
+    const rate = use.rate;
     const unit = unitOf(f.fuelType);
     if (!(rate > 0))
       return { code: f.code, basis: "No Fuel Rate on the vehicles (Vehicle › Fuel)", amount: 0 };
     const litres = Math.round(((km * rate) / 100) * 10) / 10;
+    const source =
+      use.source === "set" ? "set in Fuel Cost" : `average of ${use.vehicles} vehicles`;
+    // Estimate = (K1 empty + K2 loaded) ÷ 2; one figure when both are the same.
+    const estimate = use.k1 === use.k2 ? `${rate}` : `(K1 ${use.k1} + K2 ${use.k2}) ÷ 2 = ${rate}`;
     return {
       code: f.code,
-      basis: `${rate} ${unit}/100km (average of ${r?.vehicles ?? 0} vehicles) × ${formatNumber(km)} km = ${litres} ${unit} × ${formatNumber(f.fuelPrice)} ₫`,
+      basis: `${estimate} ${unit}/100km (${source}) × ${formatNumber(km)} km = ${litres} ${unit} × ${formatNumber(f.fuelPrice)} VND`,
       amount: fuelCostOf(km, rate, f.fuelPrice),
     };
   }
@@ -267,6 +283,12 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
     i.costs.find(
       (x) => x.id === variableMappingOf(i.variableMappings, i.vehicle.key, c)?.assignCostId,
     )?.code ?? "";
+  const setupNameOf = (c: VariableComponent) =>
+    c === "Toll Fee"
+      ? i.route.name
+      : c === "Fuel Cost"
+        ? variable.fuelCost && (variable.fuelCost.name || `${variable.fuelCost.fuelType} Fuel Cost`)
+        : variable.salaryRange?.name;
   const stations = t.calculated ? routeTollStations(i.route, i.tollMasters) : [];
   const variableLines: CogsLine[] = variable.lines.flatMap((v): CogsLine[] =>
     v.component === "Toll Fee" && stations.length
@@ -286,11 +308,8 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
             group: "Variable Cost",
             component: v.component,
             code: v.code,
-            // The fuel line names its fuel: "Fuel Cost · Diesel".
-            name:
-              v.component === "Fuel Cost" && i.vehicle.fuelType
-                ? `Fuel Cost · ${i.vehicle.fuelType}`
-                : v.component,
+            // The name of its setup (Salary Range, Fuel Cost, the route); none: the cost itself.
+            name: setupNameOf(v.component) || v.component,
             basis: v.basis,
             amount: v.amount,
             fareCode: fareOf(v.component),

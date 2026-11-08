@@ -28,6 +28,7 @@ import { Route as CostIndexRouteImport } from './routes/cost.index'
 import { Route as CostIdRouteImport } from './routes/cost.$id'
 import { Route as FixedCostIndexRouteImport } from './routes/fixed-cost.index'
 import { Route as FixedCostIdRouteImport } from './routes/fixed-cost.$id'
+import { Route as FuelCostIdRouteImport } from './routes/fuel-cost.$id'
 import { Route as LocationIndexRouteImport } from './routes/location.index'
 import { Route as LocationIdRouteImport } from './routes/location.$id'
 import { Route as RoutingIndexRouteImport } from './routes/routing.index'
@@ -136,6 +137,11 @@ const FixedCostIdRoute = FixedCostIdRouteImport.update({
   path: '/fixed-cost/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FuelCostIdRoute = FuelCostIdRouteImport.update({
+  id: '/fuel-cost/$id',
+  path: '/fuel-cost/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LocationIndexRoute = LocationIndexRouteImport.update({
   id: '/location/',
   path: '/location/',
@@ -211,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
   '/fixed-cost/$id': typeof FixedCostIdRoute
+  '/fuel-cost/$id': typeof FuelCostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/salary-range/$id': typeof SalaryRangeIdRoute
@@ -244,6 +251,7 @@ export interface FileRoutesByTo {
   '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
   '/fixed-cost/$id': typeof FixedCostIdRoute
+  '/fuel-cost/$id': typeof FuelCostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/salary-range/$id': typeof SalaryRangeIdRoute
@@ -278,6 +286,7 @@ export interface FileRoutesById {
   '/cost-group/$id': typeof CostGroupIdRoute
   '/cost/$id': typeof CostIdRoute
   '/fixed-cost/$id': typeof FixedCostIdRoute
+  '/fuel-cost/$id': typeof FuelCostIdRoute
   '/location/$id': typeof LocationIdRoute
   '/routing/$id': typeof RoutingIdRoute
   '/salary-range/$id': typeof SalaryRangeIdRoute
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | '/cost-group/$id'
     | '/cost/$id'
     | '/fixed-cost/$id'
+    | '/fuel-cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/salary-range/$id'
@@ -346,6 +356,7 @@ export interface FileRouteTypes {
     | '/cost-group/$id'
     | '/cost/$id'
     | '/fixed-cost/$id'
+    | '/fuel-cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/salary-range/$id'
@@ -379,6 +390,7 @@ export interface FileRouteTypes {
     | '/cost-group/$id'
     | '/cost/$id'
     | '/fixed-cost/$id'
+    | '/fuel-cost/$id'
     | '/location/$id'
     | '/routing/$id'
     | '/salary-range/$id'
@@ -413,6 +425,7 @@ export interface RootRouteChildren {
   CostGroupIdRoute: typeof CostGroupIdRoute
   CostIdRoute: typeof CostIdRoute
   FixedCostIdRoute: typeof FixedCostIdRoute
+  FuelCostIdRoute: typeof FuelCostIdRoute
   LocationIdRoute: typeof LocationIdRoute
   RoutingIdRoute: typeof RoutingIdRoute
   SalaryRangeIdRoute: typeof SalaryRangeIdRoute
@@ -568,6 +581,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FixedCostIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fuel-cost/$id': {
+      id: '/fuel-cost/$id'
+      path: '/fuel-cost/$id'
+      fullPath: '/fuel-cost/$id'
+      preLoaderRoute: typeof FuelCostIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/location/': {
       id: '/location/'
       path: '/location'
@@ -669,6 +689,7 @@ const rootRouteChildren: RootRouteChildren = {
   CostGroupIdRoute: CostGroupIdRoute,
   CostIdRoute: CostIdRoute,
   FixedCostIdRoute: FixedCostIdRoute,
+  FuelCostIdRoute: FuelCostIdRoute,
   LocationIdRoute: LocationIdRoute,
   RoutingIdRoute: RoutingIdRoute,
   SalaryRangeIdRoute: SalaryRangeIdRoute,

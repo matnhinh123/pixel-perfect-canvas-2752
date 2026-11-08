@@ -38,6 +38,8 @@ import {
   type FixedCostType,
 } from "@/types";
 import { cn } from "@/lib/utils";
+import { useDisplayCurrency } from "@/lib/displayCurrency";
+import { CurrencySelect, CurrencyTag, EditLink } from "@/components/movex/general/Amount";
 
 type Mode = "view" | "edit";
 
@@ -58,6 +60,8 @@ export const Route = createFileRoute("/fixed-cost/$id")({
 function FixedCostPage() {
   const { id } = Route.useParams();
   const { mode } = Route.useSearch();
+  // USD picked (next to History): amounts converted, view only.
+  const { usd } = useDisplayCurrency();
   const all = useCollection(fixedCostRepository);
   const source = id === "new" ? null : (all.find((r) => r.id === id && !r.deleted) ?? null);
   if (id !== "new" && !source)
@@ -76,9 +80,9 @@ function FixedCostPage() {
     );
   return (
     <FixedCostForm
-      key={`${source?.id ?? "new"}:${mode ?? "view"}`}
+      key={`${source?.id ?? "new"}:${mode ?? "view"}:${usd ? "USD" : "VND"}`}
       source={source}
-      readOnly={!!source && mode !== "edit"}
+      readOnly={!!source && (mode !== "edit" || usd)}
     />
   );
 }
@@ -96,6 +100,9 @@ function FixedCostForm({
   const units = useCodeOptions(CC.ALLOCATION_UNIT, ALLOCATION_UNITS);
   const countries = tenantCountries();
   const isNew = !source;
+  /** The currency picked (next to History); amounts are typed in VND, so an editable form stays in VND. */
+  const dc = useDisplayCurrency();
+  const usd = dc.usd && readOnly;
   const initial = useMemo<FixedCostDraft>(
     () => (source ? draftOfFixedCost(source) : newFixedCostDraft()),
     [], // eslint-disable-line react-hooks/exhaustive-deps
@@ -193,10 +200,10 @@ function FixedCostForm({
   const unitLabel = d.allocationUnit;
   const rate = rateOf(d.currency);
   const preview = [
-    `Allocation Value = ${fmtMoney(d.costValue, 2)} ${d.currency}${rate !== 1 ? ` × ${fmtMoney(rate)}` : ""} ÷ ${d.allocationBase || 0} = ${fmtMoney(calc.allocation, 2)} ₫ / ${unitLabel}`,
-    ...(unitLabel === "Year" ? [`Month = Year ÷ 12 = ${fmtMoney(calc.month, 2)} ₫`] : []),
+    `Allocation Value = ${fmtMoney(d.costValue, 2)} ${d.currency}${rate !== 1 ? ` × ${fmtMoney(rate)}` : ""} ÷ ${d.allocationBase || 0} = ${fmtMoney(calc.allocation, 2)} VND / ${unitLabel}`,
+    ...(unitLabel === "Year" ? [`Month = Year ÷ 12 = ${fmtMoney(calc.month, 2)} VND`] : []),
     ...(unitLabel !== "Day"
-      ? [`Day = Month ÷ ${d.allocationDays || 0} days = ${fmtMoney(calc.day, 2)} ₫`]
+      ? [`Day = Month ÷ ${d.allocationDays || 0} days = ${fmtMoney(calc.day, 2)} VND`]
       : []),
   ];
 
@@ -233,17 +240,18 @@ function FixedCostForm({
             )}
             {source && (
               <>
+                {readOnly && <CurrencySelect />}
                 <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
                   <History className="h-4 w-4" />
                   History
                 </Button>
                 {readOnly && source.status === "Active" && (
-                  <Button asChild size="lg">
+                  <EditLink usd={usd}>
                     <Link to="/fixed-cost/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
                       <Pencil className="h-4 w-4" />
                       Edit
                     </Link>
-                  </Button>
+                  </EditLink>
                 )}
               </>
             )}
@@ -253,7 +261,7 @@ function FixedCostForm({
       <FormErrorBanner message={formError} errors={errors} />
 
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
-        <CollapsiblePanel title="Internal Cost Detail">
+        <CollapsiblePanel title="Internal Cost Detail" accent>
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
               label="Code"
@@ -320,7 +328,7 @@ function FixedCostForm({
               className={S4}
               hint={
                 d.currency !== "VND"
-                  ? `1 ${d.currency} = ${fmtMoney(rate)} ₫ (exchange rate)`
+                  ? `1 ${d.currency} = ${fmtMoney(rate)} VND (exchange rate)`
                   : undefined
               }
             >
@@ -392,8 +400,8 @@ function FixedCostForm({
                   >
                     <div className="text-xs font-medium text-muted-foreground">{label}</div>
                     <div className={cn("mt-0.5 text-lg font-semibold", NUM)}>
-                      {fmtMoney(v, 0)}
-                      {v != null && <span className="ml-1 text-xs font-normal">₫</span>}
+                      {usd ? dc.money(v) : fmtMoney(v, 0)}
+                      {v != null && <CurrencyTag cur={usd ? "USD" : "VND"} />}
                     </div>
                   </div>
                 ))}

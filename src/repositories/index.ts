@@ -19,6 +19,7 @@ import type {
   SalaryRangeRecord,
   VariableCostMappingRecord,
   FuelCostRecord,
+  ExchangeRateRecord,
 } from "@/types";
 import {
   seedAudit,
@@ -32,13 +33,18 @@ import {
 import { seedCostGroups, seedCostItems } from "@/mock-data/costMaster";
 import { seedFixedCosts, seedFixedCostSummaries } from "@/mock-data/fixedCost";
 import { seedCogs } from "@/mock-data/cogs";
+import { seedExchangeRates } from "@/mock-data/exchangeRates";
 import {
   seedFuelCosts,
   seedSalaryRangeRecords,
   seedVariableCostMappings,
 } from "@/mock-data/variableSetup";
 import { seedTollStations, type TollGateRecord } from "@/mock-data/tollCatalog";
-import { seedFiveTonTrucks, seedVehicleMasters } from "@/mock-data/vehicleMaster";
+import {
+  seedFiveTonTrucks,
+  seedOtherFuelFleet,
+  seedVehicleMasters,
+} from "@/mock-data/vehicleMaster";
 import { seedBusinessPartners, seedPetrolimexTienGiang } from "@/mock-data/businessPartners";
 import {
   SEED_CODE_FIXES,
@@ -76,7 +82,12 @@ export const salaryRangeRepository = createCollection<SalaryRangeRecord>(
   seedSalaryRangeRecords,
 );
 /** Fuel Cost: fuel of a vehicle type (type, rate, price), under a code. */
-export const fuelCostRepository = createCollection<FuelCostRecord>("fuel-costs.v4", seedFuelCosts);
+export const fuelCostRepository = createCollection<FuelCostRecord>("fuel-costs.v5", seedFuelCosts);
+/** Exchange rates to VND, as fetched (the API sample is loaded when there is none yet). */
+export const exchangeRateRepository = createCollection<ExchangeRateRecord>(
+  "exchange-rates.v1",
+  seedExchangeRates,
+);
 // ".v2": vehicle types became codes (TRUCK, 5T, 20DC…) — load the new demo seed.
 export const fixedCostRepository = createCollection<FixedCostRecord>(
   "fixed-costs.v13",
@@ -116,10 +127,27 @@ export const vehicleMasterRepository = createCollection<VehicleMasterRecord>(
   "vehicle-masters.v5",
   seedVehicleMasters,
 );
-// Demo fleet of 5-ton trucks: added once when missing (a deleted one stays deleted).
+// CNG / LPG / Hybrid were dropped from the Fuel Types: their demo vehicles go once.
+{
+  const dropped = [
+    "51D-603.19",
+    "51R-212.84",
+    "51C-778.40",
+    "60C-341.26",
+    "51C-560.92",
+    "51D-487.13",
+  ].map((p) => `VH-${p.replace(/[^A-Z0-9]/g, "")}`);
+  const stored = readJson<VehicleMasterRecord[] | null>(vehicleMasterRepository.key, null);
+  if (stored?.some((v) => dropped.includes(v.id)))
+    writeJson(
+      vehicleMasterRepository.key,
+      stored.filter((v) => !dropped.includes(v.id)),
+    );
+}
+// Demo fleets (5-ton trucks; trucks on the other fuels): added once when missing (a deleted one stays deleted).
 {
   const have = new Set(vehicleMasterRepository.all().map((v) => v.id));
-  const add = seedFiveTonTrucks().filter((v) => !have.has(v.id));
+  const add = [...seedFiveTonTrucks(), ...seedOtherFuelFleet()].filter((v) => !have.has(v.id));
   if (add.length) vehicleMasterRepository.insertMany(add);
 }
 /** Business Partner master (customers and vendors — one partner, several roles). */
@@ -138,6 +166,19 @@ export const commonCodeRepository = createCollection<CommonCodeRecord>(
   "common-codes",
   seedCommonCodes,
 );
+// CNG / LPG / Hybrid were dropped from the Fuel Types: stored options and their Fuel Costs go once.
+{
+  const dropped = ["CNG", "LPG", "Hybrid"];
+  const t = commonCodeRepository.get(CC.FUEL_TYPE);
+  if (t?.options.some((o) => dropped.includes(o.name)))
+    commonCodeRepository.update(t.id, (p) => ({
+      ...p,
+      options: p.options.filter((o) => !dropped.includes(o.name)),
+    }));
+  for (const f of fuelCostRepository.all())
+    if (!f.deleted && dropped.includes(f.fuelType))
+      fuelCostRepository.update(f.id, (p) => ({ ...p, deleted: true }));
+}
 // Location Sub-Type was removed: retire the stored type once.
 {
   const t = commonCodeRepository.get(CC.LOCATION_SUB_TYPE);

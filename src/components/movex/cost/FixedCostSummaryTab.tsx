@@ -39,13 +39,14 @@ import {
 } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
 import {
+  fixedCostMappingImportConfig,
   fixedCostSummaryCrud,
   fixedCostSummaryService,
   periodsOf,
   sumPeriods,
   type FixedCostSummaryDraft,
 } from "@/services/fixedCostService";
-import { fmtMoney } from "@/services/fixedCostMath";
+import { Amount } from "@/components/movex/general/Amount";
 import { cn } from "@/lib/utils";
 import type { FixedCostRecord, FixedCostSummaryRecord } from "@/types";
 
@@ -146,7 +147,7 @@ export function FixedCostSummaryTab() {
         value: (s) => totalOf(s)[k],
         render: (s) => (
           <span className={cn("tabular-nums", k === "day" && "font-semibold")}>
-            {fmtMoney(totalOf(s)[k])}
+            <Amount vnd={totalOf(s)[k]} />
           </span>
         ),
         className: "text-right",
@@ -205,7 +206,7 @@ export function FixedCostSummaryTab() {
           statusFilter,
         ]}
         crud={fixedCostSummaryCrud}
-        readOnlyReason="Import is not available for mappings yet"
+        importConfig={fixedCostMappingImportConfig}
         bordered
         addLabel="Add Mapping"
         onAdd={() => setOpen("new")}
@@ -461,8 +462,12 @@ function MappingDialog({
                     <td className="px-3 py-2 text-xs text-muted-foreground">
                       {otherOf(f.id) || "—"}
                     </td>
-                    <td className={num}>{fmtMoney(dayOf(f))}</td>
-                    <td className={num}>{fmtMoney(monthOf(f))}</td>
+                    <td className={num}>
+                      <Amount vnd={dayOf(f)} />
+                    </td>
+                    <td className={num}>
+                      <Amount vnd={monthOf(f)} />
+                    </td>
                     <td className="px-2 py-2 text-center">
                       <button
                         type="button"
@@ -494,7 +499,7 @@ function MappingDialog({
                 <span key={k} className={cn(k === "Day" && "font-semibold")}>
                   <span className="text-muted-foreground">Total / {k}: </span>
                   <span className={cn("tabular-nums", k === "Day" && "text-primary")}>
-                    {fmtMoney(v)} ₫
+                    <Amount vnd={v} />
                   </span>
                 </span>
               ))}

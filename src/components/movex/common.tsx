@@ -134,7 +134,7 @@ export function PageHeader({
               onClick={onBack}
               aria-label={t("Quay lại", "Back")}
               title={t("Quay lại", "Back")}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border-2 border-border-strong bg-transparent text-foreground transition-[opacity,transform] duration-200 hover:opacity-80 active:scale-[0.97]"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border-2 border-border-strong bg-card text-foreground transition-[opacity,transform] duration-200 hover:opacity-80 active:scale-[0.97]"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
@@ -156,25 +156,42 @@ export function PageHeader({
   );
 }
 
-/** HeroUI card: radius 14, soft shadow; header row with a 16px title over a divider. */
+/**
+ * HeroUI card: radius 14, soft shadow; header row with a 16px title over a divider. `accent`: the
+ * title in primary on a light primary band, so the sections stand apart.
+ */
 export function Panel({
   title,
   actions,
   children,
   className,
   bodyClassName,
+  accent,
 }: {
   title?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string | undefined;
   bodyClassName?: string | undefined;
+  accent?: boolean;
 }) {
   return (
     <section className={cn("overflow-hidden rounded-[14px] bg-card shadow-hu-sm", className)}>
       {title && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
-          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-3 border-b px-5",
+            accent ? "bg-primary/5 py-3.5" : "py-4",
+          )}
+        >
+          <h2
+            className={cn(
+              "text-base font-semibold",
+              accent ? "text-lg text-primary" : "text-foreground",
+            )}
+          >
+            {title}
+          </h2>
           {actions}
         </div>
       )}
@@ -320,7 +337,7 @@ export function NativeSelect({
       aria-invalid={invalid || undefined}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "select-chevron h-10 cursor-pointer rounded-[12px] border-2 border-input bg-transparent pl-3 text-sm text-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] outline-none transition-colors hover:border-border-strong focus:border-primary disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-destructive",
+        "select-chevron h-10 cursor-pointer rounded-[12px] border-2 border-input bg-card pl-3 text-sm text-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] outline-none transition-colors hover:border-border-strong focus:border-primary disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-destructive",
         className,
       )}
     >

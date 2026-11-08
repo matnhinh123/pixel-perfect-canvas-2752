@@ -15,12 +15,13 @@ import {
   vehicleMasterRepository,
 } from "@/repositories";
 import { FIXED_COST_RATES } from "@/mock-data/fixedCost";
+import { vndRateOf } from "@/services/exchangeRateService";
 import { tenantCountries } from "@/mock-data/offices";
 import { COST_CURRENCIES } from "@/mock-data/costMaster";
 import { CC } from "@/mock-data/commonCodes";
 import { codeOptions } from "./commonCodeService";
-import { fcVehicleErrors } from "./fixedCostVehicle";
-import { draftImportConfig, numCell, pick } from "./importExportService";
+import { fcVehicleErrors, fcVehicleLabel, parseFcVehicle } from "./fixedCostVehicle";
+import { draftImportConfig, numCell, pick, type ImportEntityConfig } from "./importExportService";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
 import { allocate, type AllocationResult } from "./fixedCostMath";
@@ -37,7 +38,8 @@ export const fixedCostCrud = makeCrud<FixedCostRecord>({
   },
 });
 
-export const rateOf = (currency: string) => FIXED_COST_RATES[currency] ?? 1;
+/** VND per 1 unit of a currency, from Master Data › Exchange Rate (the demo rates if it has none). */
+export const rateOf = (currency: string) => vndRateOf(currency) ?? FIXED_COST_RATES[currency] ?? 1;
 
 type Calcable = Pick<
   FixedCostRecord,
@@ -447,3 +449,146 @@ export const fixedCostImportConfig = draftImportConfig<FixedCostDraft>({
     return rows;
   },
 });
+
+// ---------------------------------------------------------------- Mapping import
+// One row = one Internal Cost of a mapping; rows with the same Country + Fare Code + Vehicle Type
+// form one mapping. A mapping that already exists gets its Internal Costs replaced by the file's.
+
+const byCode = <T extends { code: string }>(rows: T[], code: string | undefined) => {
+  const c = (code ?? "").trim().toLowerCase();
+  return c ? rows.find((x) => x.code.toLowerCase() === c) : undefined;
+};
+/** "truck · 5 tấn" → "TRUCK · 5 tấn" (the stored label). */
+const vehicleCell = (v: string | undefined) => {
+  const p = parseFcVehicle(v ?? "");
+  return p ? fcVehicleLabel(p) : (v ?? "").trim();
+};
+/** The mapping a row belongs to (no Internal Costs yet). */
+const mappingOfRow = (r: Record<string, string>): FixedCostSummaryDraft => ({
+  country: pick(r["country"], tenantCountries()) || "",
+  assignCostId: byCode(activeCostItems(), r["fareCode"])?.id ?? "",
+  vehicleType: vehicleCell(r["vehicleType"]),
+  fixedCostIds: [],
+});
+const sameMapping = (a: FixedCostSummaryDraft, b: FixedCostSummaryDraft) =>
+  a.country === b.country &&
+  a.assignCostId === b.assignCostId &&
+  a.vehicleType.toLowerCase() === b.vehicleType.toLowerCase();
+
+/** Mappings an import replaced, as they were before it: Rollback puts them back. */
+const replacedByImport = new Map<string, FixedCostSummaryDraft>();
+
+export const fixedCostMappingImportConfig: ImportEntityConfig = {
+  entityType: "Fixed Cost Summary",
+  screen: "fixed-cost-mapping",
+  // No unique column: Country / Fare Code / Vehicle Type repeat on every row of a mapping.
+  keyColumn: "",
+  columns: [
+    { key: "country", header: "Country", required: true, example: "Vietnam" },
+    { key: "fareCode", header: "Fare Code", required: true, example: "MGT" },
+    { key: "vehicleType", header: "Vehicle Type", required: true, example: "TRUCK · 5 tấn" },
+    {
+      key: "internalCost",
+      header: "Internal Cost Code",
+      required: true,
+      aliases: ["Internal Cost", "Fixed Cost Code"],
+      example: "FC_MANAGEMENT",
+    },
+  ],
+  existingKeys: () => new Set(),
+  rowCheck: (r) => {
+    const e: { field: string; error: string }[] = [];
+    const country = pick(r["country"], tenantCountries());
+    if (!country)
+      e.push({
+        field: "country",
+        error: `Use a country of a tenant office: ${tenantCountries().join(", ")}`,
+      });
+    if (!byCode(activeCostItems(), r["fareCode"]))
+      e.push({ field: "fareCode", error: "No active Fare Code has this code." });
+    const vErr = fcVehicleErrors([vehicleCell(r["vehicleType"])], vehicleMasterRepository.all());
+    if (vErr) e.push({ field: "vehicleType", error: vErr.replace("Vehicle Type row 1: ", "") });
+    const f = byCode(all(), r["internalCost"]);
+    if (!f) e.push({ field: "internalCost", error: "No Internal Cost has this code." });
+    else if (f.status !== "Active")
+      e.push({
+        field: "internalCost",
+        error: `${f.code} is inactive — only active ones can be mapped.`,
+      });
+    else if (country && f.country !== country)
+      e.push({
+        field: "internalCost",
+        error: `${f.code} belongs to ${f.country}, not ${country}.`,
+      });
+    return e;
+  },
+  commit: (rows) => {
+    const drafts: FixedCostSummaryDraft[] = [];
+    for (const r of rows) {
+      const row = mappingOfRow(r);
+      const d = drafts.find((x) => sameMapping(x, row)) ?? (drafts.push(row), row);
+      const id = byCode(all(), r["internalCost"])?.id;
+      if (id && !d.fixedCostIds.includes(id)) d.fixedCostIds.push(id);
+    }
+    const ids: string[] = [];
+    for (const d of drafts) {
+      const existing = fixedCostSummaryRepository
+        .all()
+        .find((s) => !s.deleted && sameMapping(s, d));
+      try {
+        const saved = fixedCostSummaryService.save(d, existing?.id);
+        if (existing)
+          replacedByImport.set(existing.id, {
+            country: existing.country,
+            assignCostId: existing.assignCostId,
+            vehicleType: existing.vehicleType,
+            fixedCostIds: [...existing.fixedCostIds],
+          });
+        ids.push(saved.id);
+      } catch {
+        /* skipped */
+      }
+    }
+    return ids;
+  },
+  importedRows: (ids, rows) => {
+    const saved = ids.map((id) => fixedCostSummaryRepository.get(id)).filter((s) => !!s);
+    return rows.filter((r) => saved.some((s) => sameMapping(s, mappingOfRow(r)))).length;
+  },
+  rollback: (ids) => {
+    fixedCostSummaryCrud.removeMany(ids.filter((id) => !replacedByImport.has(id)));
+    for (const id of ids) {
+      const before = replacedByImport.get(id);
+      if (!before) continue;
+      replacedByImport.delete(id);
+      try {
+        fixedCostSummaryService.save(before, id);
+      } catch {
+        /* an Internal Cost of the old mapping is no longer active */
+      }
+    }
+  },
+  sampleFile: () => [
+    fixedCostMappingImportConfig.columns.map((c) => c.header),
+    ["Vietnam", "MGT", "TRUCK · 5 tấn", "FC_MANAGEMENT"],
+    ["Vietnam", "MGT", "TRUCK · 5 tấn", "FC_GPS"],
+    ["Vietnam", "MGT", "TRUCK · 5 tấn", "FC_INSURANCE"],
+    ["Vietnam", "MGT", "TRUCK · 8 tấn", "FC_MANAGEMENT"],
+    ["Vietnam", "MGT", "TRUCK · 8 tấn", "FC_GPS"],
+    ["Vietnam", "MGT", "TRUCK · 8 tấn", "FC_INSURANCE"],
+    ["Vietnam", "MGT", "HEADER", "FC_MANAGEMENT"],
+    ["Vietnam", "MGT", "HEADER", "FC_LICENSE"],
+    ["Vietnam", "DEP", "HEADER", "FC_DEP_HEAD"],
+    ["Vietnam", "DEP", "HEADER", "FC_FIN_HEAD"],
+    ["Vietnam", "ADP", "TRAILER · 40 ft", "FC_DEP_TRAILER"],
+    ["Vietnam", "ADP", "TRAILER · 40 ft", "FC_FIN_TRAILER"],
+    ["Vietnam", "INU", "TRUCK · 2 tấn", "FC_INSURANCE"],
+    ["Vietnam", "INU", "TRUCK · 2 tấn", "FC_GPS"],
+    ["Vietnam", "IFR", "TRUCK · 5 tấn", "FC_LICENSE"],
+    ["Vietnam", "IFR", "TRUCK · 5 tấn", "FC_MANAGEMENT"],
+    ["Vietnam", "GPS", "HEADER", "FC_GPS"],
+    ["Vietnam", "GPS", "HEADER", "FC_TARP"], // inactive Internal Cost
+    ["Vietnam", "GPS", "TRAILER · 40 ft", "FC_GPS"],
+    ["Vietnam", "GPS", "TRAILER · 40 ft", "FC_SG_INSURANCE"], // Singapore cost
+  ],
+};

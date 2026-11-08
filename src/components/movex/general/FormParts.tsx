@@ -68,12 +68,15 @@ export function CollapsiblePanel({
   title,
   defaultOpen = true,
   forceOpen = false,
+  accent,
   children,
 }: {
   title: string;
   defaultOpen?: boolean;
   /** Unfolds the panel when it turns true (e.g. a validation error is inside it). */
   forceOpen?: boolean;
+  /** The title in primary on a light primary band (as Panel `accent`). */
+  accent?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -87,11 +90,19 @@ export function CollapsiblePanel({
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex w-full items-center justify-between gap-3 px-5 py-4 text-left",
+          "flex w-full items-center justify-between gap-3 px-5 text-left",
+          accent ? "bg-primary/5 py-3.5" : "py-4",
           open && "border-b",
         )}
       >
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        <h2
+          className={cn(
+            "font-semibold",
+            accent ? "text-lg text-primary" : "text-base text-foreground",
+          )}
+        >
+          {title}
+        </h2>
         <ChevronUp
           className={cn(
             "h-5 w-5 text-muted-foreground transition-transform",

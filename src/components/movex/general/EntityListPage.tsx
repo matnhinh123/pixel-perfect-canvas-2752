@@ -99,6 +99,11 @@ export interface EntityListPageProps<T extends BaseRecord> {
    * under its parent with expand/collapse; search/filter keep the ancestors of every match.
    */
   tree?: { parentOf: (row: T) => string | null; column: string };
+  /**
+   * Detail rows under a record (Tree View children that are not records themselves): no checkbox and
+   * no row menu; a click still goes to `onView`.
+   */
+  subRow?: (row: T) => boolean;
   /** Hide the Delete row action (master data that is deactivated rather than deleted). */
   allowDelete?: boolean;
   /** Lists that mix entities: the entity whose Change History a row opens. */
@@ -180,7 +185,7 @@ function QuickFilterSelect({
       aria-label={filter.allLabel}
       title={filter.allLabel}
       onChange={(e) => onChange(e.target.value === ALL ? "" : e.target.value)}
-      className="select-chevron h-10 cursor-pointer rounded-[12px] border-2 border-input bg-transparent pl-3 text-sm text-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] outline-none transition-colors hover:border-border-strong focus:border-primary"
+      className="select-chevron h-10 cursor-pointer rounded-[12px] border-2 border-input bg-card pl-3 text-sm text-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] outline-none transition-colors hover:border-border-strong focus:border-primary"
     >
       <option value="" hidden>
         {filter.allLabel}
@@ -584,68 +589,69 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
     </DisabledWithReason>
   );
 
-  const rowMenu = (r: T) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Row actions">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {p.onView && (
-          <DropdownMenuItem onClick={() => p.onView!(r)}>
-            <Eye className="h-4 w-4" />
-            View
-          </DropdownMenuItem>
-        )}
-        {p.onEdit && (
-          <DropdownMenuItem onClick={() => p.onEdit!(r)}>
-            <Pencil className="h-4 w-4" />
-            Edit
-          </DropdownMenuItem>
-        )}
-        {p.auditable !== false && crud && (
-          <DropdownMenuItem onClick={() => setAuditRow(r)}>
-            <History className="h-4 w-4" />
-            {t("Lịch sử thay đổi", "Change History")}
-          </DropdownMenuItem>
-        )}
-        {p.extraRowActions
-          ?.filter((a) => !a.hidden?.(r))
-          .map((a) => (
-            <DropdownMenuItem key={a.label} onClick={() => a.onClick(r)}>
-              {a.icon}
-              {a.label}
+  const rowMenu = (r: T) =>
+    p.subRow?.(r) ? null : (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Row actions">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {p.onView && (
+            <DropdownMenuItem onClick={() => p.onView!(r)}>
+              <Eye className="h-4 w-4" />
+              View
             </DropdownMenuItem>
-          ))}
-        {crud && (
-          <>
-            <DropdownMenuSeparator />
-            {r.status === "Inactive" ? (
-              <DropdownMenuItem onClick={() => void actions.setStatus([r], "Active")}>
-                <CheckCircle2 className="h-4 w-4" />
-                Activate
+          )}
+          {p.onEdit && (
+            <DropdownMenuItem onClick={() => p.onEdit!(r)}>
+              <Pencil className="h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+          )}
+          {p.auditable !== false && crud && (
+            <DropdownMenuItem onClick={() => setAuditRow(r)}>
+              <History className="h-4 w-4" />
+              {t("Lịch sử thay đổi", "Change History")}
+            </DropdownMenuItem>
+          )}
+          {p.extraRowActions
+            ?.filter((a) => !a.hidden?.(r))
+            .map((a) => (
+              <DropdownMenuItem key={a.label} onClick={() => a.onClick(r)}>
+                {a.icon}
+                {a.label}
               </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onClick={() => void actions.setStatus([r], "Inactive")}>
-                <XCircle className="h-4 w-4" />
-                Deactivate
-              </DropdownMenuItem>
-            )}
-            {p.allowDelete !== false && (
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => void actions.requestDelete(r)}
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            )}
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+            ))}
+          {crud && (
+            <>
+              <DropdownMenuSeparator />
+              {r.status === "Inactive" ? (
+                <DropdownMenuItem onClick={() => void actions.setStatus([r], "Active")}>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Activate
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => void actions.setStatus([r], "Inactive")}>
+                  <XCircle className="h-4 w-4" />
+                  Deactivate
+                </DropdownMenuItem>
+              )}
+              {p.allowDelete !== false && (
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => void actions.requestDelete(r)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              )}
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
 
   return (
     <ListLangProvider value={lang}>
@@ -875,6 +881,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                 return n;
               })
             }
+            selectable={p.subRow ? (r: T) => !p.subRow!(r) : undefined}
             {...(p.onView ? { onRowClick: p.onView } : {})}
             {...(p.onView || p.onEdit || crud || p.extraRowActions?.length
               ? { actions: rowMenu }

@@ -27,7 +27,7 @@ export const TRAILER_BODY_TYPES = [
   "Dump",
   "Tank",
 ];
-export const FUEL_TYPES = ["Diesel", "Gasoline", "CNG", "LPG", "Electric", "Hybrid"];
+export const FUEL_TYPES = ["Diesel", "Gasoline", "Electric"];
 export const ACQUISITION_CURRENCIES = ["VND", "USD", "EUR", "JPY"];
 
 const BLANK: Omit<
@@ -203,6 +203,55 @@ export const seedVehicleMasters = (): VehicleMasterRecord[] => [
     authorizedPayload: "26000",
   }),
 ];
+
+/**
+ * Demo fleet on the other fuels (the rest of the demo runs on Diesel), so every Fuel Cost has vehicles.
+ * Fuel Rate / Fuel Capacity are in the fuel's unit: liters (Gasoline), kWh (Electric).
+ */
+export const seedOtherFuelFleet = (): VehicleMasterRecord[] => {
+  // plate, type, truck type, brand, fuel, rate per 100 km, capacity
+  const rows: [string, string, string, string, string, string, string][] = [
+    ["51C-412.08", "TRUCK", "1 tấn", "THACO", "Gasoline", "9", "45"],
+    ["50H-236.71", "TRUCK", "1 tấn", "HYUNDAI", "Gasoline", "10", "60"],
+    ["61C-155.32", "TRUCK", "2 tấn", "ISUZU", "Gasoline", "12", "70"],
+    ["51D-905.63", "TRUCK", "2 tấn", "FUSO", "Electric", "28", "83"],
+    ["29H-660.45", "TRUCK", "2 tấn", "HYUNDAI", "Electric", "26", "76"],
+    ["51D-918.27", "TRUCK", "5 tấn", "FUSO", "Electric", "35", "124"],
+  ];
+  return rows.map(([plate, type, truckType, brand, fuelType, fuelRate, fuelCapacity], i) =>
+    v(
+      plate,
+      type,
+      `RLF${fuelType.slice(0, 3).toUpperCase()}${String(400000000 + i * 52817).slice(-9)}`,
+      `KD-2026-${String(3100 + i)}`,
+      `2026-09-${String(1 + i).padStart(2, "0")}T09:${String(10 + i).padStart(2, "0")}:00`,
+      {
+        ...(type === "TRUCK"
+          ? {
+              truckType,
+              vehicleGroup: "Group 02",
+              authorizedPayload:
+                truckType === "1 tấn"
+                  ? "990"
+                  : truckType === "2 tấn"
+                    ? "1990"
+                    : truckType === "5 tấn"
+                      ? "4950"
+                      : "7950",
+            }
+          : { authorizedTowedMass: "30000" }),
+        tradeMark: brand,
+        productionYear: String(2021 + (i % 5)),
+        fuelType,
+        fuelRate,
+        fuelCapacity,
+        registrationExpiry: "2027-09-30",
+        inspectionExpiry: "2027-03-31",
+        lifetimeLimit: "2050-12-31",
+      },
+    ),
+  );
+};
 
 /** Demo fleet: 15 five-ton trucks (made-up but valid data), added after the first seed. */
 export const seedFiveTonTrucks = (): VehicleMasterRecord[] => {

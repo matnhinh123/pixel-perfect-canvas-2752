@@ -309,7 +309,7 @@ export const cogsService = {
         entityType: "COGS",
         entityId: rec.id,
         entityLabel: rec.code,
-        note: `${rec.routeCode} · ${rec.vehicleType} · ${formatNumber(rec.total)} ₫`,
+        note: `${rec.routeCode} · ${rec.vehicleType} · ${formatNumber(rec.total)} VND`,
       });
       return rec;
     }

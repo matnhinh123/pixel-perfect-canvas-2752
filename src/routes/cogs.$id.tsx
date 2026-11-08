@@ -5,6 +5,7 @@ import { EmptyState, Panel } from "@/components/movex/common";
 import { CogsForm } from "@/components/movex/cost/CogsForm";
 import { useCollection } from "@/hooks/use-store";
 import { cogsRepository } from "@/repositories";
+import { useDisplayCurrency } from "@/lib/displayCurrency";
 
 type Mode = "view" | "edit";
 
@@ -21,10 +22,18 @@ function CogsPage() {
   const { id } = Route.useParams();
   const { mode } = Route.useSearch();
   const all = useCollection(cogsRepository);
+  // USD picked (next to History): amounts converted, view only.
+  const { usd } = useDisplayCurrency();
   if (id === "new") return <CogsForm key="new" source={null} readOnly={false} />;
   const c = all.find((r) => r.id === id && !r.deleted);
   if (c)
-    return <CogsForm key={`${c.id}:${mode ?? "view"}`} source={c} readOnly={mode !== "edit"} />;
+    return (
+      <CogsForm
+        key={`${c.id}:${mode ?? "view"}:${usd ? "USD" : "VND"}`}
+        source={c}
+        readOnly={mode !== "edit" || usd}
+      />
+    );
   return (
     <Panel>
       <EmptyState

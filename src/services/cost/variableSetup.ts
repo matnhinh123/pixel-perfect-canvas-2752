@@ -4,6 +4,7 @@ import type {
   CalcRule,
   ContainerColumn,
   FuelCostRecord,
+  FuelVehicleRate,
   SalaryRangeRecord,
   SalaryTier,
   VariableComponent,
@@ -24,7 +25,12 @@ import { auditService } from "@/services/auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "@/services/crudService";
 import type { Collection } from "@/repositories/storage";
 import type { BaseRecord, EntityType, Status } from "@/types";
-import { cogsVehicleTypes, parseVehicleKey, salaryVehicleChoices } from "./cogsVehicle";
+import {
+  cogsVehicleTypes,
+  parseVehicleKey,
+  salaryVehicleChoices,
+  salaryVehiclesOf,
+} from "./cogsVehicle";
 import { liveContainerTypes } from "./containerTypes";
 import { codeOptions } from "@/services/commonCodeService";
 import { CC } from "@/mock-data/commonCodes";
@@ -35,6 +41,7 @@ const currentTypes = () => cogsVehicleTypes(vehicleMasterRepository.all(), liveC
 import { ruleOf, validateTiers } from "./salaryRange";
 import { setupsFor } from "./cogsBuild";
 import { routeTotals } from "./costMath";
+import { fuelVehiclesOf } from "./fuelRates";
 
 /** A–Z, 0–9, dot, hyphen, underscore; max 20 (as the COGS Code). */
 const SETUP_CODE = /^[A-Z0-9._-]{1,20}$/;
@@ -67,21 +74,66 @@ function codeError<T extends { id: string; code: string; deleted?: boolean }>(
 }
 
 /** Create / update a coded setup with its audit line. */
+/** JSON with the keys of every object sorted: equal values give equal text. */
+function stableJson(v: unknown): string {
+  return (
+    JSON.stringify(v, (_k, x: unknown) =>
+      x && typeof x === "object" && !Array.isArray(x)
+        ? Object.fromEntries(
+            Object.entries(x as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
+          )
+        : x,
+    ) ?? ""
+  );
+}
+
 function saveRecord<T extends BaseRecord & { code: string }>(
   repo: Collection<T>,
   entityType: EntityType,
   prefix: string,
   body: Omit<T, "id" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy">,
   id?: string,
+  /** Keep versions: 1 when created; a save that changes something adds 1 and keeps the one before. */
+  versioned = false,
+  /** Older records in today's shape, so that a save changing nothing is not a new version. */
+  normalize?: (r: T) => T,
 ): T {
   const existing = id ? repo.get(id) : undefined;
   if (!existing) {
-    const rec = { id: uid(prefix), ...body, ...stampCreate() } as unknown as T;
+    const rec = {
+      id: uid(prefix),
+      ...body,
+      ...(versioned ? { version: 1, history: [] } : {}),
+      ...stampCreate(),
+    } as unknown as T;
     repo.insert(rec);
     auditService.log({ action: "CREATE", entityType, entityId: rec.id, entityLabel: rec.code });
     return rec;
   }
-  const next = stampUpdate({ ...existing, ...body } as T);
+  const keys = Object.keys(body) as (keyof typeof body & keyof T)[];
+  const was = (normalize ? normalize(existing) : existing) as unknown as Record<string, unknown>;
+  const changed = keys.some(
+    (k) =>
+      stableJson(was[k as string]) !== stableJson((body as Record<string, unknown>)[k as string]),
+  );
+  // A new version keeps the one before (its content, and when / by whom it was saved).
+  const version = (was["version"] as number | undefined) ?? 1;
+  const bump =
+    versioned && changed
+      ? {
+          version: version + 1,
+          history: [
+            ...((was["history"] as unknown[] | undefined) ?? []),
+            {
+              version,
+              savedAt: existing.updatedAt || existing.createdAt,
+              savedBy: existing.updatedBy || existing.createdBy,
+              data: Object.fromEntries(keys.map((k) => [k, was[k as string]])),
+            },
+          ],
+        }
+      : {};
+  const next = stampUpdate({ ...existing, ...body, ...bump } as T);
   repo.update(existing.id, () => next);
   auditService.log({ action: "UPDATE", entityType, entityId: next.id, entityLabel: next.code });
   return next;
@@ -92,7 +144,8 @@ function saveRecord<T extends BaseRecord & { code: string }>(
 export interface SalaryRangeDraft {
   code: string;
   name: string;
-  vehicleType: string;
+  /** One or more Truck Types, or "HEADER" alone; empty on a Draft. */
+  vehicleTypes: string[];
   tiers: SalaryTier[];
   containers: ContainerColumn[];
   rule: CalcRule;
@@ -112,7 +165,7 @@ export const salaryRangeOfVehicle = (vehicleType: string, exceptId?: string) =>
         r.status !== "Draft" &&
         r.id !== exceptId &&
         !!vehicleType &&
-        r.vehicleType === vehicleType,
+        salaryVehiclesOf(r).includes(vehicleType),
     );
 
 /** Vehicle Type of a Salary Range: Truck + Truck Type, or Header; required unless Draft. */
@@ -129,13 +182,24 @@ export function validateSalaryRange(d: SalaryRangeDraft, id?: string): Record<st
   const code = codeError(salaryRangeRepository, d.code, "Salary Range", id);
   if (code) e["code"] = code;
   if (!d.name.trim()) e["name"] = "Salary Range Name is required.";
-  const v = salaryVehicleError(d.vehicleType, d.status);
-  const dup = v || d.status === "Draft" ? undefined : salaryRangeOfVehicle(d.vehicleType, id);
+  // One or more Truck Types, or Header alone; each vehicle type in one Salary Range only.
+  const keys = d.vehicleTypes;
+  const v = !keys.length
+    ? salaryVehicleError("", d.status)
+    : keys.some(isHeader) && keys.length > 1
+      ? "A Header Salary Range pays the headers only: no Truck Type with it."
+      : new Set(keys).size !== keys.length
+        ? "A vehicle type is picked twice."
+        : (keys.map((k) => salaryVehicleError(k, d.status)).find(Boolean) ?? null);
+  const taken =
+    v || d.status === "Draft"
+      ? undefined
+      : keys.map((k) => ({ k, r: salaryRangeOfVehicle(k, id) })).find((x) => x.r);
   if (v) e["vehicleType"] = v;
-  else if (dup) e["vehicleType"] = `${d.vehicleType} already has a Salary Range: ${dup.code}.`;
+  else if (taken) e["vehicleType"] = `${taken.k} already has a Salary Range: ${taken.r!.code}.`;
   const t = validateTiers(d.tiers);
   if (!t.ok) e["tiers"] = t.message;
-  if (isHeader(d.vehicleType))
+  if (d.vehicleTypes.some(isHeader))
     for (const [i, c] of d.containers.entries()) {
       const msg = !c.container
         ? "pick a Container Type"
@@ -169,7 +233,8 @@ export const salaryRangeCrud: typeof salaryRangeBase = {
       status === "Active"
         ? ids.filter((id) => {
             const r = salaryRangeRepository.get(id);
-            return !!r?.vehicleType && !salaryRangeOfVehicle(r.vehicleType, r.id);
+            const keys = r ? salaryVehiclesOf(r) : [];
+            return keys.length > 0 && keys.every((k) => !salaryRangeOfVehicle(k, r!.id));
           })
         : ids;
     return salaryRangeBase.setStatus(ok, status);
@@ -196,6 +261,7 @@ export const salaryRangeService = {
     const errors = validateSalaryRange(d, id);
     if (Object.keys(errors).length)
       throw new BusinessRuleError("Please check the highlighted fields.", errors);
+    const header = d.vehicleTypes.some(isHeader);
     return saveRecord<SalaryRangeRecord>(
       salaryRangeRepository,
       "Salary Range",
@@ -203,11 +269,12 @@ export const salaryRangeService = {
       {
         code: d.code.trim().toUpperCase(),
         name: d.name.trim(),
-        vehicleType: d.vehicleType,
+        vehicleType: d.vehicleTypes[0] ?? "",
+        vehicleTypes: [...d.vehicleTypes],
         // Container columns are a Header's only; a tier keeps the rates of the columns there are.
-        containers: isHeader(d.vehicleType) ? d.containers : [],
+        containers: header ? d.containers : [],
         tiers: d.tiers.map(({ containerRates, ...t }) => {
-          const keep = isHeader(d.vehicleType)
+          const keep = header
             ? d.containers.filter((c) => containerRates && c.container in containerRates)
             : [];
           return keep.length
@@ -224,6 +291,9 @@ export const salaryRangeService = {
         status: d.status,
       },
       id,
+      true,
+      // An older Salary Range: its one vehicle type as the list.
+      (r) => ({ ...r, vehicleTypes: salaryVehiclesOf(r) }),
     );
   },
   /**
@@ -233,39 +303,58 @@ export const salaryRangeService = {
   duplicate(id: string): SalaryRangeRecord {
     const src = salaryRangeRepository.get(id);
     if (!src || src.deleted) throw new BusinessRuleError("Salary Range not found.");
-    return saveRecord<SalaryRangeRecord>(salaryRangeRepository, "Salary Range", "SR-", {
-      code: copyCode(src.code),
-      name: `${src.name} (copy)`.slice(0, 200),
-      vehicleType: "",
-      tiers: src.tiers.map((t) => ({
-        ...t,
-        ...(t.containerRates ? { containerRates: { ...t.containerRates } } : {}),
-      })),
-      containers: (src.containers ?? []).map((c) => ({ ...c })),
-      rule: ruleOf(src.rule),
-      remark: src.remark,
-      status: "Draft",
-    });
+    return saveRecord<SalaryRangeRecord>(
+      salaryRangeRepository,
+      "Salary Range",
+      "SR-",
+      {
+        code: copyCode(src.code),
+        name: `${src.name} (copy)`.slice(0, 200),
+        vehicleType: "",
+        vehicleTypes: [],
+        tiers: src.tiers.map((t) => ({
+          ...t,
+          ...(t.containerRates ? { containerRates: { ...t.containerRates } } : {}),
+        })),
+        containers: (src.containers ?? []).map((c) => ({ ...c })),
+        rule: ruleOf(src.rule),
+        remark: src.remark,
+        status: "Draft",
+      },
+      undefined,
+      true,
+    );
   },
 };
 
 // ---------------------------------------------------------------- Fuel Cost
 
 export interface FuelCostDraft {
+  /** Its own code; a new one starts from the Fuel Type ("FU-DIESEL"). */
+  code: string;
+  name: string;
   fuelType: string;
   fuelPrice: number;
+  /** Its vehicle types (and brands), each with the Fuel Rate set, or null: its vehicles' average. */
+  vehicles: FuelVehicleRate[];
   remark: string;
   status: "Active" | "Inactive";
 }
 
 /** Fuel Types that can be priced: Common Code › Fuel Type (the list Vehicle › Fuel Type picks from). */
 export const fuelTypeChoices = () => codeOptions(CC.FUEL_TYPE, FUEL_TYPES);
-/** "FU-DIESEL": the code of a Fuel Type's price. */
+/** "FU-DIESEL": the code a new Fuel Cost starts with (it can be changed). */
 export const fuelCodeOf = (fuelType: string) => sanitizeSetupCode(`FU-${fuelType}`);
 
 /** One price per Fuel Type, of a fuel the vehicles run on. */
+/** Name of a Fuel Cost (older ones, without a name: "<Fuel Type> Fuel Cost"). */
+export const fuelCostNameOf = (r: Pick<FuelCostRecord, "name" | "fuelType">) =>
+  r.name || `${r.fuelType} Fuel Cost`;
+
 export function validateFuelCost(d: FuelCostDraft, id?: string): Record<string, string> {
   const e: Record<string, string> = {};
+  const code = codeError(fuelCostRepository, d.code, "Fuel Cost", id);
+  if (code) e["code"] = code;
   if (!d.fuelType) e["fuelType"] = "Fuel Type is required.";
   else if (!fuelTypeChoices().includes(d.fuelType))
     e["fuelType"] = `${d.fuelType} is not a Fuel Type of Common Code.`;
@@ -274,6 +363,18 @@ export function validateFuelCost(d: FuelCostDraft, id?: string): Record<string, 
   )
     e["fuelType"] = `${d.fuelType} has a Fuel Cost already — edit that one.`;
   if (!(d.fuelPrice > 0)) e["fuelPrice"] = "Fuel Price must be above 0.";
+  if (!d.name.trim()) e["name"] = "Fuel Cost Name is required.";
+  const seen = new Set<string>();
+  for (const v of d.vehicles) {
+    if (seen.has(v.vehicleType)) e[`vehicles.${v.vehicleType}`] = "Listed twice.";
+    seen.add(v.vehicleType);
+    for (const [k, r] of [
+      ["K1", v.rate],
+      ["K2", v.rateLoaded ?? null],
+    ] as const)
+      if (r !== null && (!(r > 0) || r >= 1000))
+        e[`vehicles.${v.vehicleType}`] = `${k} must be above 0 and below 1,000 per 100 km.`;
+  }
   return e;
 }
 
@@ -294,13 +395,22 @@ export const fuelCostService = {
       "Fuel Cost",
       "FU-",
       {
-        code: fuelCodeOf(d.fuelType),
+        code: d.code.trim().toUpperCase(),
+        name: d.name.trim(),
         fuelType: d.fuelType,
         fuelPrice: d.fuelPrice,
+        vehicles: d.vehicles.map((v) => ({
+          vehicleType: v.vehicleType,
+          rate: v.rate,
+          rateLoaded: v.rateLoaded ?? null,
+        })),
         remark: d.remark.trim(),
         status: d.status,
       },
       id,
+      true,
+      // An older Fuel Cost without its list: every vehicle type running on the fuel.
+      (r) => ({ ...r, name: fuelCostNameOf(r), vehicles: fuelVehiclesOf(r, currentTypes()) }),
     );
   },
 };

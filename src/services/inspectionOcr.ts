@@ -197,13 +197,9 @@ export function parseInspectionCertificate(text: string): ScanResult {
         ? "Diesel"
         : /xang|gasoline|petrol/.test(fuel)
           ? "Gasoline"
-          : /cng/.test(fuel)
-            ? "CNG"
-            : /lpg/.test(fuel)
-              ? "LPG"
-              : /dien|electric/.test(fuel)
-                ? "Electric"
-                : "",
+          : /dien|electric/.test(fuel)
+            ? "Electric"
+            : "",
     );
   put("overallDimension", dims(v("overallDimension")));
   put("containerDimension", dims(v("containerDimension")));

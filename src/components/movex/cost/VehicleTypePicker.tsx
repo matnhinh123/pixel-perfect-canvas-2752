@@ -22,6 +22,7 @@ export function VehicleTypePicker({
   invalid,
   className,
   salary,
+  hideCount,
 }: {
   value: string;
   onChange: (key: string) => void;
@@ -30,6 +31,8 @@ export function VehicleTypePicker({
   className?: string;
   /** Salary Range: Truck → Truck Type (no brand), or Header alone. */
   salary?: boolean;
+  /** No "15 vehicles · Group 3" line (a compact form). */
+  hideCount?: boolean;
 }) {
   const cur = parseVehicleKey(value);
   const kinds = [...new Set(types.map((t) => t.kind))];
@@ -95,7 +98,7 @@ export function VehicleTypePicker({
           className="h-10 w-40"
         />
       )}
-      {vt ? (
+      {hideCount ? null : vt ? (
         <span className={cn("text-xs text-muted-foreground", salary && "w-full")}>
           {vt.vehicleCount} vehicle{vt.vehicleCount === 1 ? "" : "s"}
           {salary && kind === "HEADER" ? " · every container" : ` · Group ${vt.group}`}

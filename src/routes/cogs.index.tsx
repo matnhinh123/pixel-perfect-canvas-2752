@@ -9,6 +9,7 @@ import { cogsRepository, vehicleMasterRepository } from "@/repositories";
 import { cogsCrud } from "@/services/cost/cogsService";
 import { cogsVehicleTypes } from "@/services/cost/cogsVehicle";
 import { formatNumber } from "@/lib/format";
+import { Amount } from "@/components/movex/general/Amount";
 import type { CogsLineGroup, CogsRecord } from "@/types";
 import { useVehicleTypes } from "@/components/movex/cost/useVehicleTypes";
 
@@ -19,7 +20,8 @@ export const Route = createFileRoute("/cogs/")({
 
 const sumOf = (c: CogsRecord, g: CogsLineGroup) =>
   c.lines.filter((l) => l.group === g).reduce((s, l) => s + l.amount, 0);
-const money = (n: number) => <span className="tabular-nums">{formatNumber(Math.round(n))}</span>;
+/** An amount kept in VND, in the currency picked, with the currency after it. */
+const money = (n: number) => <Amount vnd={n} />;
 
 function CogsListPage() {
   const all = useCollection(cogsRepository);

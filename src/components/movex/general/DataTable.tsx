@@ -49,6 +49,7 @@ export function DataTable<T extends { id: string }>({
   onToggleAll,
   onRowClick,
   actions,
+  selectable,
   loading,
   empty,
   hidePager,
@@ -73,6 +74,8 @@ export function DataTable<T extends { id: string }>({
   onToggleAll?: (ids: string[], on: boolean) => void;
   onRowClick?: (row: T) => void;
   actions?: (row: T) => ReactNode;
+  /** Rows that can be ticked (default: every row). */
+  selectable?: ((row: T) => boolean) | undefined;
   loading?: boolean;
   empty: ReactNode;
   /** Tree view shows every row on one page: only the row count is rendered in the footer. */
@@ -84,7 +87,7 @@ export function DataTable<T extends { id: string }>({
 }) {
   const { t } = useT();
   const pages = Math.max(1, Math.ceil(totalRows / pageSize));
-  const ids = rows.map((r) => r.id);
+  const ids = rows.filter((r) => !selectable || selectable(r)).map((r) => r.id);
   const allOn = !!selected && ids.length > 0 && ids.every((id) => selected.has(id));
   const someOn = !!selected && ids.some((id) => selected.has(id));
   const drag = useRef<{ key: string; x: number; w: number } | null>(null);
@@ -281,11 +284,13 @@ export function DataTable<T extends { id: string }>({
                   >
                     {selected && (
                       <TableCell className={CHECK_CELL} onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selected.has(r.id)}
-                          onCheckedChange={() => onToggle?.(r.id)}
-                          aria-label="Select row"
-                        />
+                        {(!selectable || selectable(r)) && (
+                          <Checkbox
+                            checked={selected.has(r.id)}
+                            onCheckedChange={() => onToggle?.(r.id)}
+                            aria-label="Select row"
+                          />
+                        )}
                       </TableCell>
                     )}
                     {columns.map((c) => {

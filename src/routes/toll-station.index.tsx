@@ -9,7 +9,7 @@ import { EntityListPage, type ExtraRowAction } from "@/components/movex/general/
 import { useConfirm } from "@/components/movex/general/ConfirmDialog";
 import type { ListColumn, QuickFilter } from "@/components/movex/general/types";
 import { useCollection } from "@/hooks/use-store";
-import { locationRepository, tollStationRepository } from "@/repositories";
+import { tollStationRepository } from "@/repositories";
 import type { TollGateRecord } from "@/mock-data/tollCatalog";
 import {
   FEE_TYPE_OPTIONS,
@@ -17,7 +17,7 @@ import {
   TOLL_STATION_STATUSES,
   archiveTollStations,
   feeTypeName,
-  locationLabel,
+  roadLabel,
   sourceOf,
   tollGroupTokens,
   tollStationCrud,
@@ -51,15 +51,12 @@ function TollStationList() {
   const feeTypes = useCodeOptions(CC.TOLL_FEE_TYPE, FEE_TYPE_OPTIONS);
   const { q } = Route.useSearch();
   const all = useCollection(tollStationRepository);
-  const locations = useCollection(locationRepository);
   const rows = useMemo(() => all.filter((g) => !g.deleted), [all]);
-  const locById = useMemo(() => new Map(locations.map((l) => [l.id, l])), [locations]);
-  const location = (g: Row) => (g.locationId ? locById.get(g.locationId) : undefined);
-  /** Area used by the filter: the linked location's province, else the station's own. */
-  const area = (g: Row) => location(g)?.province || g.province || "";
+  /** Area used by the filter: the station's province. */
+  const area = (g: Row) => g.province || "";
   const areas = useMemo(
     () => [...new Set(rows.map(area).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi")),
-    [rows, locById], // eslint-disable-line react-hooks/exhaustive-deps
+    [rows],
   );
 
   const columns = useMemo<ListColumn<Row>[]>(
@@ -87,10 +84,10 @@ function TollStationList() {
         value: (g) => feeTypeName(g.feeType),
       },
       {
-        key: "location",
-        label: "Location",
+        key: "road",
+        label: "Road · Province",
         type: "text",
-        value: (g) => locationLabel(g, location(g)?.name),
+        value: (g) => roadLabel(g),
         className: "text-muted-foreground",
       },
       {
@@ -157,7 +154,7 @@ function TollStationList() {
         ),
       },
     ],
-    [areas, locById], // eslint-disable-line react-hooks/exhaustive-deps
+    [areas],
   );
 
   const quickFilters: QuickFilter[] = [

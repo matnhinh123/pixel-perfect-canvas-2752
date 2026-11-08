@@ -197,6 +197,8 @@ export interface ImportEntityConfig {
   rowCheck?: (row: Record<string, string>) => { field: string; error: string }[];
   /** Persist valid rows, return created record ids (used for rollback). */
   commit: (rows: Record<string, string>[]) => string[];
+  /** Rows imported, when several rows make one record (default: one row per id). */
+  importedRows?: (ids: string[], rows: Record<string, string>[]) => number;
   rollback: (ids: string[]) => void;
   /** A ready-made 20-row demo file (2 rows invalid) so the flow can be shown without preparing data. */
   sampleFile: () => string[][];
@@ -410,6 +412,7 @@ export function draftImportConfig<D>(o: {
 
 export function commitImport(cfg: ImportEntityConfig, v: ImportValidation): ImportBatch {
   const ids = v.validRows.length ? cfg.commit(v.validRows) : [];
+  const imported = cfg.importedRows?.(ids, v.validRows) ?? ids.length;
   const status: ImportStatus =
     ids.length === 0 ? "Failed" : v.invalidRowCount > 0 ? "Partial Success" : "Success";
   const batch: ImportBatch = {
@@ -419,7 +422,7 @@ export function commitImport(cfg: ImportEntityConfig, v: ImportValidation): Impo
     importedBy: currentUser.name,
     importedAt: new Date().toISOString(),
     totalRows: v.totalRows,
-    successRows: ids.length,
+    successRows: imported,
     failedRows: v.invalidRowCount,
     status,
     createdIds: ids,
@@ -431,7 +434,7 @@ export function commitImport(cfg: ImportEntityConfig, v: ImportValidation): Impo
     entityType: cfg.entityType,
     entityId: batch.id,
     entityLabel: v.fileName,
-    note: `${status}: ${ids.length}/${v.totalRows} rows imported, ${v.invalidRowCount} rejected`,
+    note: `${status}: ${imported}/${v.totalRows} rows imported, ${v.invalidRowCount} rejected`,
   });
   return batch;
 }

@@ -236,7 +236,7 @@ export function CostDetailForm({
       <FormErrorBanner message={formError} errors={errors} />
 
       <ReadOnlyScope readOnly={readOnly} className="space-y-4">
-        <CollapsiblePanel title="Fare Code">
+        <CollapsiblePanel title="Fare Code" accent>
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-6 lg:grid-cols-12">
             <Field
               label="Fare Code"
@@ -311,7 +311,7 @@ export function CostDetailForm({
           </div>
         </CollapsiblePanel>
 
-        <CollapsiblePanel title="Service">
+        <CollapsiblePanel title="Service" accent>
           <Field label="Services" className={S12}>
             <ServiceMultiTree
               services={services}

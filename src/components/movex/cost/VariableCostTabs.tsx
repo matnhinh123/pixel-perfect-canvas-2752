@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Info } from "lucide-react";
 import { useVehicleTypes } from "@/components/movex/cost/useVehicleTypes";
 import { cn } from "@/lib/utils";
+import { moduleTabClass, moduleTablistClass } from "@/components/movex/cost/moduleTabs";
 
 export type VariableCostTab = "salary" | "fuel" | "mapping" | "reference";
 const TABS: { key: VariableCostTab; label: string }[] = [
@@ -28,7 +29,7 @@ export function VariableCostTabs({ active }: { active: VariableCostTab }) {
           </span>
         </div>
       )}
-      <div role="tablist" className="mb-4 flex gap-1 border-b">
+      <div role="tablist" className={cn("-mt-1", moduleTablistClass)}>
         {TABS.map((t) => (
           <Link
             key={t.key}
@@ -37,12 +38,7 @@ export function VariableCostTabs({ active }: { active: VariableCostTab }) {
             replace
             role="tab"
             aria-selected={active === t.key}
-            className={cn(
-              "-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors",
-              active === t.key
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground opacity-50 hover:text-foreground hover:opacity-100",
-            )}
+            className={moduleTabClass(active === t.key)}
           >
             {t.label}
           </Link>

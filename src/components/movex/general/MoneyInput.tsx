@@ -31,6 +31,7 @@ export function MoneyInput({
   emptyZero,
   invalid,
   className,
+  suffix,
   ...rest
 }: Omit<ComponentProps<typeof Input>, "value" | "onChange" | "type"> & {
   value: number;
@@ -39,6 +40,8 @@ export function MoneyInput({
   /** Show 0 as an empty box (the placeholder). */
   emptyZero?: boolean;
   invalid?: boolean;
+  /** The unit shown after the box (e.g. the currency). */
+  suffix?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(() => moneyText(value, decimals, emptyZero));
@@ -61,7 +64,7 @@ export function MoneyInput({
     el.setSelectionRange(pos, pos);
     caret.current = null;
   }, [text]);
-  return (
+  const input = (
     <Input
       ref={ref}
       inputMode={decimals > 0 ? "decimal" : "numeric"}
@@ -76,7 +79,17 @@ export function MoneyInput({
         setText(g.text);
         onChange(g.value);
       }}
-      className={cn("text-right tabular-nums", className)}
+      className={cn("text-right tabular-nums", suffix && "rounded-r-none", className)}
     />
+  );
+  return suffix ? (
+    <div className="flex">
+      {input}
+      <span className="flex shrink-0 items-center rounded-r-md border border-l-0 bg-muted px-2 text-xs font-medium text-muted-foreground">
+        {suffix}
+      </span>
+    </div>
+  ) : (
+    input
   );
 }

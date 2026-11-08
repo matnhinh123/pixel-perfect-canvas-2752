@@ -74,25 +74,49 @@ export const seedSalaryRangeRecords = (): SalaryRangeRecord[] => {
   ];
 };
 
-/** Demo fuel prices (đ per liter / kWh / kg). */
+/** Demo fuel prices (đ per liter / kWh). */
 const FUEL_PRICES: Record<string, number> = {
   Diesel: 18_500,
   Gasoline: 20_500,
-  CNG: 16_000,
-  LPG: 17_500,
   Electric: 3_500,
-  Hybrid: 20_500,
 };
 /** One Fuel Cost (price) per Fuel Type of Common Code: FU-DIESEL, FU-GASOLINE… */
 export const seedFuelCosts = (): FuelCostRecord[] =>
   FUEL_TYPES.map((fuelType) => ({
     id: `FU-${fuelType.toUpperCase()}`,
     code: `FU-${fuelType.toUpperCase()}`,
+    name: `${fuelType} Fuel Cost`,
     fuelType,
     fuelPrice: FUEL_PRICES[fuelType] ?? 18_500,
     remark: "",
     ...meta,
+    ...(fuelType === "Diesel" ? dieselHistory() : {}),
   }));
+
+/** Demo price history of Diesel: v1 17,800 (Aug), v2 18,200 (Sep), now v3 18,500 (Oct). */
+const dieselHistory = (): Partial<FuelCostRecord> => {
+  const was = (version: number, fuelPrice: number, savedAt: string, savedBy: string) => ({
+    version,
+    savedAt,
+    savedBy,
+    data: {
+      code: "FU-DIESEL",
+      name: "Diesel Fuel Cost",
+      fuelType: "Diesel",
+      fuelPrice,
+      remark: "",
+      status: "Active" as const,
+    },
+  });
+  return {
+    version: 3,
+    createdAt: "2026-08-01T02:00:00.000Z",
+    history: [
+      was(1, 17_800, "2026-08-01T02:00:00.000Z", "Nguyễn Minh Anh"),
+      was(2, 18_200, "2026-09-01T02:00:00.000Z", "Trần Quốc Bảo"),
+    ],
+  };
+};
 
 /**
  * Demo Variable Cost Mappings, one per Fare Code for every vehicle type (all brands): Trip Salary → TDS

@@ -8,15 +8,11 @@ import { statusFilter, updatedAtColumn } from "@/components/movex/cost/listParts
 import { FixedCostTabs, type FixedCostTab } from "@/components/movex/cost/FixedCostTabs";
 import { FixedCostSummaryTab } from "@/components/movex/cost/FixedCostSummaryTab";
 import { useCollection } from "@/hooks/use-store";
-import {
-  costItemRepository,
-  fixedCostRepository,
-  fixedCostSummaryRepository,
-  vehicleMasterRepository,
-} from "@/repositories";
+import { fixedCostRepository, vehicleMasterRepository } from "@/repositories";
 import { vehicleTypeChoices } from "@/services/fixedCostVehicle";
 import { calcFixedCost, fixedCostCrud, fixedCostImportConfig } from "@/services/fixedCostService";
 import { fmtMoney } from "@/services/fixedCostMath";
+import { Amount } from "@/components/movex/general/Amount";
 import { FIXED_COST_TYPES, type FixedCostRecord } from "@/types";
 import { tenantCountries } from "@/mock-data/offices";
 
@@ -38,24 +34,15 @@ function FixedCostPage() {
   return <FixedCostList />;
 }
 
-const money = (n: number | null) => <span className="tabular-nums">{fmtMoney(n)}</span>;
+/** An amount kept in VND, in the currency picked, with the currency after it. */
+const money = (n: number | null) => <Amount vnd={n} />;
 
 function FixedCostList() {
   const navigate = useNavigate();
   const vehiclesAll = useCollection(vehicleMasterRepository);
   const vehicleTypes = useMemo(() => vehicleTypeChoices(vehiclesAll), [vehiclesAll]);
-  const details = useCollection(costItemRepository);
   const rowsAll = useCollection(fixedCostRepository);
   const rows = useMemo(() => rowsAll.filter((f) => !f.deleted), [rowsAll]);
-  const mappings = useCollection(fixedCostSummaryRepository);
-  /** Fare Codes whose mappings use the fixed cost (Fixed Cost Summary). */
-  const mappedTo = (id: string) => [
-    ...new Set(
-      mappings
-        .filter((m) => !m.deleted && m.fixedCostIds.includes(id))
-        .map((m) => details.find((c) => c.id === m.assignCostId)?.code ?? "?"),
-    ),
-  ];
   const open = (f: FixedCostRecord, mode: "view" | "edit") => {
     if (mode === "edit" && f.status !== "Active") {
       toast.error("Activate this Internal Cost before editing it.");
@@ -160,20 +147,6 @@ function FixedCostList() {
         render: (f) => <StatusBadge status={f.status} />,
       },
       {
-        key: "mappedTo",
-        label: "Mapped To",
-        type: "text",
-        value: (f) => mappedTo(f.id).join(", "),
-        render: (f) => {
-          const codes = mappedTo(f.id);
-          return codes.length ? (
-            <span className="whitespace-nowrap">{codes.join(", ")}</span>
-          ) : (
-            <span className="text-muted-foreground">Not mapped</span>
-          );
-        },
-      },
-      {
         key: "createdBy",
         label: "Created By",
         type: "text",
@@ -196,8 +169,7 @@ function FixedCostList() {
       },
       updatedAtColumn<FixedCostRecord>(),
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [details],
+    [],
   );
 
   return (

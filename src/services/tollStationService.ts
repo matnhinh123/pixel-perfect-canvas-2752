@@ -170,11 +170,9 @@ export const draftOf = (g: TollGateRecord): TollStationDraft => {
   };
 };
 
-/** "Location" column / detail: linked location name, else road · province. */
-export const locationLabel = (
-  g: Pick<TollGateRecord, "province" | "road" | "address">,
-  locationName?: string,
-) => locationName || [g.road, g.province].filter(Boolean).join(" · ") || g.address || "—";
+/** "Road · Province" column / detail: road · province, else the address. */
+export const roadLabel = (g: Pick<TollGateRecord, "province" | "road" | "address">) =>
+  [g.road, g.province].filter(Boolean).join(" · ") || g.address || "—";
 
 const CODE_RE = /^[A-Z0-9._-]{1,30}$/;
 
@@ -207,7 +205,6 @@ export function validateTollStation(
 const AUDIT_FIELDS: [keyof TollStationDraft, string][] = [
   ["code", "Toll Station Code"],
   ["name", "Toll Station Name"],
-  ["locationId", "Location"],
   ["feeType", "Fee Type"],
   ["vietmapId", "Vietmap ID"],
   ["remark", "Remark"],

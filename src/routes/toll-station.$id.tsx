@@ -49,7 +49,7 @@ import { reverseGeocode } from "@/services/reverseGeocode";
 import { VN_PROVINCES } from "@/mock-data/locationCatalog";
 import { cn } from "@/lib/utils";
 import { useCollection } from "@/hooks/use-store";
-import { locationRepository, tollStationRepository } from "@/repositories";
+import { tollStationRepository } from "@/repositories";
 import type { TollGateRecord } from "@/mock-data/tollCatalog";
 import { auditService } from "@/services/auditService";
 import { BusinessRuleError } from "@/services/crudService";
@@ -60,7 +60,7 @@ import {
   draftOf,
   feeTypeFromLabel,
   feeTypeName,
-  locationLabel,
+  roadLabel,
   newTollStationDraft,
   sourceOf,
   tollStationCrud,
@@ -170,8 +170,6 @@ function TollStationView({ station }: { station: TollGateRecord }) {
   const navigate = useNavigate();
   const actions = useEntityActions(tollStationCrud, "en");
   const [auditOpen, setAuditOpen] = useState(false);
-  const locations = useCollection(locationRepository);
-  const loc = station.locationId ? locations.find((l) => l.id === station.locationId) : undefined;
   const hasCoords = Number.isFinite(station.lat) && Number.isFinite(station.lng);
   const confirm = useConfirm();
 
@@ -272,12 +270,7 @@ function TollStationView({ station }: { station: TollGateRecord }) {
       <div className="flex flex-col gap-5">
         <Panel title="General">
           <dl className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-3">
-            <InfoRow label="Location">
-              {locationLabel(
-                station,
-                loc ? `${loc.code ? `${loc.code} · ` : ""}${loc.name}` : undefined,
-              )}
-            </InfoRow>
+            <InfoRow label="Road · Province">{roadLabel(station)}</InfoRow>
             <InfoRow label="Fee Type">{feeTypeName(station.feeType)}</InfoRow>
             <InfoRow label="Source From">
               <Tag tone={sourceOf(station)}>{sourceOf(station)}</Tag>

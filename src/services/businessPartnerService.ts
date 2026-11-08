@@ -24,6 +24,7 @@ import {
   TENANT_DEFAULT_CURRENCY,
 } from "@/mock-data/businessPartners";
 import { tr } from "@/lib/i18n";
+import { isTaxCode, taxCodeFormatError } from "./taxPayerApi";
 import { CC } from "@/mock-data/commonCodes";
 import { codeOptions } from "./commonCodeService";
 import { splitList } from "@/lib/utils";
@@ -69,19 +70,12 @@ export const taxCodeRequired = (legalType: string) => legalType === "Company";
 export const hasOperationalTransactions = (id?: string) =>
   !!id && BP_IDS_WITH_TRANSACTIONS.includes(id);
 export const identityNoRequired = (legalType: string) => legalType === "Individual";
-const MST = /^\d{10}(-?\d{3})?$/;
 const CCCD = /^\d{12}$/;
 
 /** "Get Info" for a Company (demo: looks the MST up in a mock tax registry instead of the tax API). */
 export function lookupTaxPayer(taxCode: string) {
   const key = taxCodeKey(taxCode);
-  if (!MST.test(key))
-    return {
-      error: tr(
-        "Mã số thuế gồm 10 số, hoặc 10 + 3 số với chi nhánh.",
-        "Tax Code should be 10 digits, or 10 + 3 digits for a branch.",
-      ),
-    } as const;
+  if (!isTaxCode(key)) return { error: taxCodeFormatError() } as const;
   const hit = TAX_REGISTRY[key.replace("-", "")];
   return hit
     ? ({ info: hit } as const)
@@ -469,18 +463,14 @@ export function validateBusinessPartner(
       );
   }
 
-  // Tax Code (MST, 10 or 10+3 digits): required for a Company. Identity Number: required for an
+  // Tax Code (MST: 10, 10+3 or 12 digits): required for a Company. Identity Number: required for an
   // Individual. A Representative needs neither. Each value entered must be unique per tenant among
   // non-deleted partners.
   const others = businessPartnerRepository.all().filter((b) => !b.deleted && b.id !== id);
   const tax = taxCodeKey(d.taxCode);
   if (!tax) {
     if (taxCodeRequired(d.legalType)) e["taxCode"] = tr("Nhập Tax Code.", "Tax Code is required.");
-  } else if (!MST.test(tax))
-    e["taxCode"] = tr(
-      "Mã số thuế gồm 10 số, hoặc 10 + 3 số với chi nhánh.",
-      "Tax Code should be 10 digits, or 10 + 3 digits for a branch.",
-    );
+  } else if (!isTaxCode(tax)) e["taxCode"] = taxCodeFormatError();
   else {
     const dup = others.find((b) => taxCodeKey(str(b.taxCode)) === tax);
     if (dup)

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { cn } from "@/lib/utils";
+import { moduleTabClass, moduleTablistClass } from "@/components/movex/cost/moduleTabs";
 
 export type FixedCostTab = "list" | "summary";
 const TABS: { key: FixedCostTab; label: string }[] = [
@@ -10,7 +10,7 @@ const TABS: { key: FixedCostTab; label: string }[] = [
 /** The two tabs of the Fixed Cost screen (same route, `?tab=`). */
 export function FixedCostTabs({ active }: { active: FixedCostTab }) {
   return (
-    <div role="tablist" className="mb-4 flex gap-1 border-b">
+    <div role="tablist" className={moduleTablistClass}>
       {TABS.map((t) => (
         <Link
           key={t.key}
@@ -18,12 +18,7 @@ export function FixedCostTabs({ active }: { active: FixedCostTab }) {
           search={{ tab: t.key }}
           role="tab"
           aria-selected={active === t.key}
-          className={cn(
-            "-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors",
-            active === t.key
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground opacity-50 hover:text-foreground hover:opacity-100",
-          )}
+          className={moduleTabClass(active === t.key)}
         >
           {t.label}
         </Link>

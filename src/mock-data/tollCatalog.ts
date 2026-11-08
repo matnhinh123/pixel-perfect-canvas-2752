@@ -16,8 +16,6 @@ export interface MockTollGate {
   lng: number;
   /** Toll fee per Toll Group 1..5 (VND by default). */
   prices: [number, number, number, number, number];
-  /** Location Master link (picked on the form); coordinates can come from it. */
-  locationId?: string;
   /** The toll's id in the Vietmap API (route response `toll.id`) — the key Routing maps by. */
   vietmapId?: string;
   source?: TollStationSource;

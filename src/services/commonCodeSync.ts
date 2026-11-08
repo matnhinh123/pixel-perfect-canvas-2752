@@ -114,7 +114,12 @@ function renameVehicleKeys(typeCode: string, map: Map<string, string>): number {
       ? { ...r, vehicleType: key(r.vehicleType) }
       : null;
   let n = 0;
-  n += rewrite(salaryRangeRepository, one);
+  n += rewrite(salaryRangeRepository, (r) => {
+    const list = r.vehicleTypes?.map(key);
+    const changed = !!list && list.join("|") !== (r.vehicleTypes ?? []).join("|");
+    const head = one(r);
+    return head || changed ? { ...(head ?? r), ...(list ? { vehicleTypes: list } : {}) } : null;
+  });
   n += rewrite(cogsRepository, one);
   n += rewrite(fixedCostSummaryRepository, one);
   n += rewrite(variableCostMappingRepository, (r) => {

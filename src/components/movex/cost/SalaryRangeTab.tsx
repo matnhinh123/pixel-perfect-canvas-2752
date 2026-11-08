@@ -16,14 +16,17 @@ import { salaryRangeRepository } from "@/repositories";
 import { useVehicleTypes } from "@/components/movex/cost/useVehicleTypes";
 import { ruleOf, type CalcRule } from "@/services/cost/salaryRange";
 import { salaryRangeCrud, salaryRangeService } from "@/services/cost/variableSetup";
-import { salaryVehicleChoices } from "@/services/cost/cogsVehicle";
+import { salaryVehicleChoices, salaryVehiclesOf } from "@/services/cost/cogsVehicle";
 import { formatNumber } from "@/lib/format";
+import { useDisplayCurrency } from "@/lib/displayCurrency";
+import { versionOf } from "@/services/cost/versions";
 import type { SalaryRangeRecord } from "@/types";
 
-const ruleText = (r: CalcRule) =>
+/** `money`: an amount kept in VND, in the currency picked, with the currency after it. */
+const ruleText = (r: CalcRule, money: (vnd: number) => string) =>
   [
-    r.roundStep ? `Round up ${formatNumber(r.roundStep)}` : "No rounding",
-    r.regionOn ? `Other terrain +${formatNumber(r.regionAmount)}` : "No Other terrain surcharge",
+    r.roundStep ? `Round up ${money(r.roundStep)}` : "No rounding",
+    r.regionOn ? `Other terrain +${money(r.regionAmount)}` : "No Other terrain surcharge",
   ].join(" · ");
 
 const STATUSES = ["Draft", "Active", "Inactive"];
@@ -47,6 +50,8 @@ export function SalaryRangeTab() {
     [all],
   );
   const typeKeys = salaryVehicleChoices(types);
+  const dc = useDisplayCurrency();
+  const withCur = (vnd: number) => `${dc.money(vnd)} ${dc.cur}`;
   const duplicate = (r: SalaryRangeRecord) => {
     try {
       const copy = salaryRangeService.duplicate(r.id);
@@ -69,12 +74,14 @@ export function SalaryRangeTab() {
       },
       {
         key: "vehicleType",
-        width: 150,
+        width: 200,
         label: "Vehicle Type",
         type: "text",
-        value: (r) => r.vehicleType,
+        value: (r) => salaryVehiclesOf(r).join(", "),
         render: (r) =>
-          r.vehicleType || <span className="text-xs italic text-muted-foreground">Not picked</span>,
+          salaryVehiclesOf(r).join(", ") || (
+            <span className="text-xs italic text-muted-foreground">Not picked</span>
+          ),
       },
       {
         key: "containers",
@@ -113,7 +120,15 @@ export function SalaryRangeTab() {
         width: 260,
         label: "Calculation Rule",
         type: "text",
-        value: (r) => ruleText(ruleOf(r.rule)),
+        value: (r) => ruleText(ruleOf(r.rule), withCur),
+      },
+      {
+        key: "version",
+        width: 90,
+        label: "Version",
+        type: "number",
+        value: (r) => versionOf(r),
+        render: (r) => `v${versionOf(r)}`,
       },
       {
         key: "status",
@@ -127,7 +142,7 @@ export function SalaryRangeTab() {
       updatedAtColumn<SalaryRangeRecord>(),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [typeKeys.join("|")],
+    [typeKeys.join("|"), dc.cur],
   );
 
   return (
@@ -136,21 +151,22 @@ export function SalaryRangeTab() {
         fillHeight
         above={<VariableCostTabs active="salary" />}
         lang="en"
-        screen="salary-range.v2"
+        screen="salary-range.v3"
         entityType="Salary Range"
         entityLabel="Salary Range"
         title="Variable Cost"
         rows={rows}
         columns={columns}
         searchPlaceholder="Search code, name, vehicle type..."
-        searchValues={(r) => [r.code, r.name, r.vehicleType]}
+        searchValues={(r) => [r.code, r.name, ...salaryVehiclesOf(r)]}
         quickFilters={[
           {
             key: "vehicleType",
             allLabel: "All vehicle types",
             options: typeKeys.map((v) => ({
               label: v,
-              conditions: [{ field: "vehicleType", operator: "eq", value: v }],
+              // A Salary Range can pay several Truck Types: it shows under each.
+              conditions: [{ field: "vehicleType", operator: "contains", value: v }],
             })),
           },
           statusFilter,

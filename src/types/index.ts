@@ -8,4 +8,5 @@ export * from "./vehicleMaster";
 export * from "./fixedCost";
 export * from "./cogs";
 export * from "./variableCost";
+export * from "./exchangeRate";
 export * from "./commonCode";

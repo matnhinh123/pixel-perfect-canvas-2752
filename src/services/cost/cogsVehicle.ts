@@ -84,6 +84,12 @@ export function parseVehicleKey(key: string): VehicleKeyParts | undefined {
 }
 export const specLabel = (kind: VariableVehicleKind) =>
   kind === "TRUCK" ? "Truck Type" : "Container Type";
+/** The vehicle types a Salary Range pays (older records: its one vehicle type). */
+export const salaryVehiclesOf = (r: {
+  vehicleType: string;
+  vehicleTypes?: string[] | undefined;
+}) => (r.vehicleTypes?.length ? r.vehicleTypes : r.vehicleType ? [r.vehicleType] : []);
+
 /** The same type with every brand (the setups of all brands apply to it). */
 export const withoutBrand = (key: string) => {
   const p = parseVehicleKey(key);
