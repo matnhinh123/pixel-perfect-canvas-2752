@@ -4,11 +4,11 @@ import { useVehicleTypes } from "@/components/movex/cost/useVehicleTypes";
 import { cn } from "@/lib/utils";
 import { moduleTabClass, moduleTablistClass } from "@/components/movex/cost/moduleTabs";
 
-export type VariableCostTab = "salary" | "fuel" | "mapping" | "reference";
+export type VariableCostTab = "salary" | "fuel" | "toll" | "reference";
 const TABS: { key: VariableCostTab; label: string }[] = [
   { key: "salary", label: "Salary Range" },
   { key: "fuel", label: "Fuel Cost" },
-  { key: "mapping", label: "Variable Cost Mapping" },
+  { key: "toll", label: "Toll Fee" },
   { key: "reference", label: "Reference Trip Salary" },
 ];
 

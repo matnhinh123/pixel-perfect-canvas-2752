@@ -50,6 +50,9 @@ import { VehicleTypePicker } from "@/components/movex/cost/VehicleTypePicker";
 import { OldVersionBanner, VersionSelect } from "@/components/movex/cost/VersionField";
 import { versionOf } from "@/services/cost/versions";
 import { useVehicleTypes } from "@/components/movex/cost/useVehicleTypes";
+import { FareCodeInput, FareNameInput } from "@/components/movex/cost/FareCodeInput";
+import { useFarePair } from "@/components/movex/cost/useFarePair";
+import { fareCodeOf } from "@/services/cost/fareCode";
 import { useCollection } from "@/hooks/use-store";
 import { commonCodeRepository, salaryRangeRepository } from "@/repositories";
 import { readJson, writeJson } from "@/repositories/storage";
@@ -78,7 +81,12 @@ import {
 } from "@/services/cost/variableSetup";
 import { formatNumber } from "@/lib/format";
 import { useDisplayCurrency } from "@/lib/displayCurrency";
-import { CurrencySelect, CurrencyTag, EditLink } from "@/components/movex/general/Amount";
+import {
+  CurrencySelect,
+  CurrencyTag,
+  EditLink,
+  AmountInput,
+} from "@/components/movex/general/Amount";
 import { cn } from "@/lib/utils";
 import type { SalaryRangeRecord, SalaryTier } from "@/types";
 
@@ -167,6 +175,7 @@ export function SalaryRangeForm({
         : [],
       containers: (source?.containers ?? []).map((c) => ({ ...c })),
       rule: { ...ruleOf(source?.rule ?? DEFAULT_RULE) },
+      fareCode: fareCodeOf(source?.fareCostId),
       remark: source?.remark ?? "",
       status: source?.status ?? "Active",
     }),
@@ -174,6 +183,8 @@ export function SalaryRangeForm({
     [],
   );
   const [d, setD] = useState(initial);
+  // Fare Code + Fare Name boxes: type either, the other follows.
+  const fare = useFarePair(d.fareCode, (fareCode) => setD((x) => ({ ...x, fareCode })));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -487,13 +498,13 @@ export function SalaryRangeForm({
                   className="h-11"
                 />
               )}
-              {readOnly && <CurrencySelect />}
+              <CurrencySelect />
               <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
                 <History className="h-4 w-4" />
                 History
               </Button>
               {readOnly && !oldVersion && (
-                <EditLink usd={usd}>
+                <EditLink usd={false}>
                   <Link to="/salary-range/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
                     <Pencil className="h-4 w-4" />
                     Edit
@@ -517,16 +528,15 @@ export function SalaryRangeForm({
       {source?.status === "Draft" && (
         <div className="mb-4 flex items-center gap-2 rounded-md border border-primary/30 bg-info-soft px-3 py-2 text-sm text-primary">
           <Info className="h-4 w-4 shrink-0" />
-          Draft: not used by Variable Cost Mapping or COGS. Pick its Vehicle Type and set it Active
-          to use it.
+          Draft: not used by COGS. Pick its Vehicle Type and set it Active to use it.
         </div>
       )}
 
       <div className="space-y-4">
         <Panel title="General Information" accent>
           <InlineFields labelWidth="9.75rem">
-            {/* Code · Name · Version, then Round Up · Vehicle Type · Other Terrain, then Currency. */}
-            <div className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)]">
+            {/* Code · Name · Version / Vehicle Type (wide) · Round Up To / Other Terrain · Fare Code · Fare Name. */}
+            <div className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-3">
               <Field
                 label="Salary Range Code"
                 required
@@ -574,6 +584,28 @@ export function SalaryRangeForm({
                   text("v1")
                 )}
               </Field>
+              <div className="lg:col-span-2">
+                <Field
+                  label="Vehicle Type"
+                  required={d.status !== "Draft"}
+                  error={errors["vehicleType"]}
+                  info="From Master Data › Vehicle: one or more Truck Types, or Header alone (every container; a column per container in the Tiers). A vehicle type is paid by one Salary Range only; a Draft can leave it empty."
+                >
+                  <SalaryVehicles
+                    value={d.vehicleTypes}
+                    onChange={(vehicleTypes) => patch({ vehicleTypes })}
+                    types={types}
+                    readOnly={readOnly}
+                    invalid={!!errors["vehicleType"] || taken.length > 0}
+                    takenOf={takenOf}
+                  />
+                  {taken.map(({ k, r }) => (
+                    <p key={k} className="mt-1 text-xs text-destructive">
+                      {k} already has a Salary Range: {r!.code}.
+                    </p>
+                  ))}
+                </Field>
+              </div>
               <Field
                 label="Round Up To"
                 error={errors["roundStep"]}
@@ -582,35 +614,14 @@ export function SalaryRangeForm({
                 {readOnly ? (
                   text(d.rule.roundStep ? `${money(d.rule.roundStep)} ${cur}` : "No rounding")
                 ) : (
-                  <MoneyInput
+                  <AmountInput
                     value={d.rule.roundStep}
                     onChange={(roundStep) => setRule({ roundStep })}
-                    suffix={cur}
                     className={EDITABLE}
                     aria-label={`Round up to (${cur})`}
                     aria-invalid={!!errors["roundStep"] || undefined}
                   />
                 )}
-              </Field>
-              <Field
-                label="Vehicle Type"
-                required={d.status !== "Draft"}
-                error={errors["vehicleType"]}
-                info="From Master Data › Vehicle: one or more Truck Types, or Header alone (every container; a column per container in the Tiers). A vehicle type is paid by one Salary Range only; a Draft can leave it empty."
-              >
-                <SalaryVehicles
-                  value={d.vehicleTypes}
-                  onChange={(vehicleTypes) => patch({ vehicleTypes })}
-                  types={types}
-                  readOnly={readOnly}
-                  invalid={!!errors["vehicleType"] || taken.length > 0}
-                  takenOf={takenOf}
-                />
-                {taken.map(({ k, r }) => (
-                  <p key={k} className="mt-1 text-xs text-destructive">
-                    {k} already has a Salary Range: {r!.code}.
-                  </p>
-                ))}
               </Field>
               <Field
                 label="Other Terrain"
@@ -627,11 +638,10 @@ export function SalaryRangeForm({
                       aria-label="Other terrain surcharge"
                     />
                     <div className="min-w-0 flex-1">
-                      <MoneyInput
+                      <AmountInput
                         disabled={!d.rule.regionOn}
                         value={d.rule.regionAmount}
                         onChange={(regionAmount) => setRule({ regionAmount })}
-                        suffix={cur}
                         className={EDITABLE}
                         aria-label={`Other terrain surcharge (${cur})`}
                         aria-invalid={!!errors["regionAmount"] || undefined}
@@ -639,6 +649,16 @@ export function SalaryRangeForm({
                     </div>
                   </div>
                 )}
+              </Field>
+              <Field
+                label="Fare Code"
+                error={errors["fareCode"]}
+                info="Fare Code Management: the Fare Code the Trip Salary of a COGS is booked to. Type the code or the name: the other one is filled in. Empty: not mapped yet."
+              >
+                <FareCodeInput pair={fare} readOnly={readOnly} invalid={!!errors["fareCode"]} />
+              </Field>
+              <Field label="Fare Name">
+                <FareNameInput pair={fare} readOnly={readOnly} invalid={!!errors["fareCode"]} />
               </Field>
             </div>
           </InlineFields>
@@ -1135,7 +1155,10 @@ function NumInput({
     <MoneyInput
       value={rate === 1 ? value : value / rate}
       decimals={rate === 1 ? 0 : 2}
-      onChange={(n) => onChange(Number.isFinite(n) ? String(n) : "")}
+      // Typed in USD: kept in VND at the rate.
+      onChange={(n) =>
+        onChange(Number.isFinite(n) ? String(rate === 1 ? n : Math.round(n * rate)) : "")
+      }
       placeholder=""
       readOnly={readOnly || plain}
       title={title}

@@ -6,6 +6,7 @@ import {
   type FuelCostDraft,
 } from "@/services/cost/variableSetup";
 import type { FuelCostRecord } from "@/types";
+import { fareCodeOf } from "@/services/cost/fareCode";
 
 const draftOf = (r: FuelCostRecord, p: Partial<FuelCostDraft> = {}): FuelCostDraft => ({
   code: r.code,
@@ -13,6 +14,7 @@ const draftOf = (r: FuelCostRecord, p: Partial<FuelCostDraft> = {}): FuelCostDra
   fuelType: r.fuelType,
   fuelPrice: r.fuelPrice,
   vehicles: r.vehicles ?? [],
+  fareCode: fareCodeOf(r.fareCostId),
   remark: r.remark,
   status: r.status === "Inactive" ? "Inactive" : "Active",
   ...p,

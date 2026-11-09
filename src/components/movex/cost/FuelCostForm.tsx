@@ -30,6 +30,9 @@ import {
 import { OldVersionBanner, VersionSelect } from "@/components/movex/cost/VersionField";
 import { FuelPriceHistory } from "@/components/movex/cost/FuelPriceHistory";
 import { useVehicleTypes } from "@/components/movex/cost/useVehicleTypes";
+import { FareCodeInput, FareNameInput } from "@/components/movex/cost/FareCodeInput";
+import { useFarePair } from "@/components/movex/cost/useFarePair";
+import { fareCodeOf } from "@/services/cost/fareCode";
 import { useCollection } from "@/hooks/use-store";
 import { fuelCostRepository } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
@@ -57,7 +60,12 @@ import {
 import { atVersion, versionOf } from "@/services/cost/versions";
 import { formatNumber } from "@/lib/format";
 import { useDisplayCurrency } from "@/lib/displayCurrency";
-import { CurrencySelect, CurrencyTag, EditLink } from "@/components/movex/general/Amount";
+import {
+  CurrencySelect,
+  CurrencyTag,
+  EditLink,
+  AmountInput,
+} from "@/components/movex/general/Amount";
 import { cn } from "@/lib/utils";
 import type { FuelCostRecord, FuelVehicleRate } from "@/types";
 
@@ -172,12 +180,15 @@ export function FuelCostForm({
       fuelPrice: source?.fuelPrice ?? 0,
       // New: every vehicle type running on the fuel; older records without a list: the same.
       vehicles: source ? fuelVehiclesOf(source, types) : defaultFuelVehicles(types, fuelType),
+      fareCode: fareCodeOf(source?.fareCostId),
       remark: source?.remark ?? "",
       status: source?.status === "Inactive" ? "Inactive" : "Active",
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [d, setD] = useState(initial);
+  // Fare Code + Fare Name boxes: type either, the other follows.
+  const fare = useFarePair(d.fareCode, (fareCode) => setD((x) => ({ ...x, fareCode })));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -364,7 +375,7 @@ export function FuelCostForm({
                 className="h-11"
               />
             )}
-            {source && readOnly && <CurrencySelect />}
+            {source && <CurrencySelect />}
             {source && (
               <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
                 <History className="h-4 w-4" />
@@ -372,7 +383,7 @@ export function FuelCostForm({
               </Button>
             )}
             {source && readOnly && !oldVersion && (
-              <EditLink usd={usd}>
+              <EditLink usd={false}>
                 <Link to="/fuel-cost/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
                   <Pencil className="h-4 w-4" />
                   Edit
@@ -395,97 +406,117 @@ export function FuelCostForm({
 
       <div className="space-y-4">
         <Panel title="General Information" accent>
-          <InlineFields labelWidth="8.5rem">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-3">
-              <Field
-                label="Fuel Cost Code"
-                required={!readOnly}
-                error={errors["code"]}
-                hint={readOnly ? undefined : `${d.code.length}/20`}
-                info="Unique, auto-uppercase. A–Z, 0–9, . - _ no spaces (max 20 characters). A new one starts as FU-<Fuel Type>; a COGS shows it with the name."
-              >
-                {readOnly ? (
-                  text(d.code)
-                ) : (
-                  <Input
-                    value={d.code}
-                    maxLength={20}
-                    placeholder="Enter Fuel Cost Code"
-                    aria-invalid={!!errors["code"] || undefined}
-                    onChange={(e) => patch({ code: sanitizeSetupCode(e.target.value) })}
-                    className="h-10"
-                  />
-                )}
-              </Field>
-              <Field label="Fuel Cost Name" required={!readOnly} error={errors["name"]}>
-                {readOnly ? (
-                  text(d.name)
-                ) : (
-                  <Input
-                    value={d.name}
-                    maxLength={100}
-                    placeholder="Enter Fuel Cost Name"
-                    aria-invalid={!!errors["name"] || undefined}
-                    onChange={(e) => patch({ name: e.target.value })}
-                    className="h-10"
-                  />
-                )}
-              </Field>
-              <Field
-                label="Version"
-                info="1 when created; each save that changes the Fuel Cost adds 1. Pick an earlier version to see it as it was (read-only)."
-                hint={
-                  current && !readOnly
-                    ? `Saving a change makes it v${versionOf(current) + 1}.`
-                    : undefined
-                }
-              >
-                {current ? (
-                  <VersionSelect record={current} value={shownVersion} onPick={pickVersion} />
-                ) : (
-                  text("v1")
-                )}
-              </Field>
-              <Field
-                label="Fuel Type"
-                required={!readOnly}
-                error={errors["fuelType"]}
-                info="Common Code › Fuel Type (the list Vehicle › Fuel Type picks from); one Fuel Cost per Fuel Type."
-              >
-                {readOnly ? (
-                  text(d.fuelType)
-                ) : (
-                  <NativeSelect
-                    value={d.fuelType}
-                    onChange={pickFuel}
-                    options={withCurrent(fuelTypes, d.fuelType)}
-                    placeholder={
-                      fuelTypes.length ? "Select Fuel Type" : "Every Fuel Type has a price"
-                    }
-                    invalid={!!errors["fuelType"]}
-                    className="h-10 w-full"
-                  />
-                )}
-              </Field>
-              <Field
-                label={`Price / ${unit.capacity}`}
-                required={!readOnly}
-                error={errors["fuelPrice"]}
-              >
-                {readOnly ? (
-                  text(`${money(d.fuelPrice)} ${cur}`)
-                ) : (
-                  <MoneyInput
-                    value={d.fuelPrice}
-                    emptyZero
-                    suffix={cur}
-                    onChange={(v) => patch({ fuelPrice: Number.isFinite(v) ? v : 0 })}
-                    invalid={!!errors["fuelPrice"]}
-                  />
-                )}
-              </Field>
-            </div>
-          </InlineFields>
+          <div className="space-y-3">
+            <InlineFields labelWidth="8.5rem">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-3">
+                <Field
+                  label="Fuel Cost Code"
+                  required={!readOnly}
+                  error={errors["code"]}
+                  hint={readOnly ? undefined : `${d.code.length}/20`}
+                  info="Unique, auto-uppercase. A–Z, 0–9, . - _ no spaces (max 20 characters). A new one starts as FU-<Fuel Type>; a COGS shows it with the name."
+                >
+                  {readOnly ? (
+                    text(d.code)
+                  ) : (
+                    <Input
+                      value={d.code}
+                      maxLength={20}
+                      placeholder="Enter Fuel Cost Code"
+                      aria-invalid={!!errors["code"] || undefined}
+                      onChange={(e) => patch({ code: sanitizeSetupCode(e.target.value) })}
+                      className="h-10"
+                    />
+                  )}
+                </Field>
+                <Field label="Fuel Cost Name" required={!readOnly} error={errors["name"]}>
+                  {readOnly ? (
+                    text(d.name)
+                  ) : (
+                    <Input
+                      value={d.name}
+                      maxLength={100}
+                      placeholder="Enter Fuel Cost Name"
+                      aria-invalid={!!errors["name"] || undefined}
+                      onChange={(e) => patch({ name: e.target.value })}
+                      className="h-10"
+                    />
+                  )}
+                </Field>
+                <Field
+                  label="Version"
+                  info="1 when created; each save that changes the Fuel Cost adds 1. Pick an earlier version to see it as it was (read-only)."
+                  hint={
+                    current && !readOnly
+                      ? `Saving a change makes it v${versionOf(current) + 1}.`
+                      : undefined
+                  }
+                >
+                  {current ? (
+                    <VersionSelect record={current} value={shownVersion} onPick={pickVersion} />
+                  ) : (
+                    text("v1")
+                  )}
+                </Field>
+              </div>
+            </InlineFields>
+            {/* Fuel Type, then its price; then the Fare Code it is booked to. */}
+            <InlineFields labelWidth="6.5rem">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2 xl:grid-cols-[15rem_16rem_17rem_minmax(0,1fr)]">
+                <Field
+                  label="Fuel Type"
+                  required={!readOnly}
+                  error={errors["fuelType"]}
+                  info="Common Code › Fuel Type (the list Vehicle › Fuel Type picks from); one Fuel Cost per Fuel Type."
+                >
+                  {readOnly ? (
+                    text(d.fuelType)
+                  ) : (
+                    <NativeSelect
+                      value={d.fuelType}
+                      onChange={pickFuel}
+                      options={withCurrent(fuelTypes, d.fuelType)}
+                      placeholder={
+                        fuelTypes.length ? "Select Fuel Type" : "Every Fuel Type has a price"
+                      }
+                      invalid={!!errors["fuelType"]}
+                      className="h-10 w-full"
+                    />
+                  )}
+                </Field>
+                <div>
+                  <Field
+                    label={`Price / ${unit.capacity}`}
+                    required={!readOnly}
+                    error={errors["fuelPrice"]}
+                  >
+                    {readOnly ? (
+                      text(`${money(d.fuelPrice)} ${cur}`)
+                    ) : (
+                      <AmountInput
+                        value={d.fuelPrice}
+                        emptyZero
+                        onChange={(v) => patch({ fuelPrice: Number.isFinite(v) ? v : 0 })}
+                        invalid={!!errors["fuelPrice"]}
+                      />
+                    )}
+                  </Field>
+                </div>
+                <Field
+                  label="Fare Code"
+                  error={errors["fareCode"]}
+                  info="Fare Code Management: the Fare Code the Fuel Cost of a COGS is booked to. Type the code or the name: the other one is filled in. Empty: not mapped yet."
+                >
+                  <FareCodeInput pair={fare} readOnly={readOnly} invalid={!!errors["fareCode"]} />
+                </Field>
+                <div>
+                  <Field label="Fare Name">
+                    <FareNameInput pair={fare} readOnly={readOnly} invalid={!!errors["fareCode"]} />
+                  </Field>
+                </div>
+              </div>
+            </InlineFields>
+          </div>
         </Panel>
 
         {/* Vehicle types / Price History in one card, one at a time, tabs as on COGS › Cost Detail.
@@ -847,8 +878,6 @@ export function FuelCostForm({
                   record={current}
                   shownVersion={shownVersion}
                   onPick={pickVersion}
-                  vehiclesOf={(r) => fuelVehiclesOf(r, types)}
-                  rateOf={rowRateOf}
                   money={money}
                   cur={cur}
                   unit={unit.capacity}

@@ -6,7 +6,7 @@ import { cogsVehicleTypes } from "@/services/cost/cogsVehicle";
 import { seedCostItems } from "./costMaster";
 import { seedFixedCostSummaries, seedFixedCosts } from "./fixedCost";
 import { seedTollStations } from "./tollCatalog";
-import { seedFuelCosts, seedSalaryRangeRecords, seedVariableCostMappings } from "./variableSetup";
+import { seedFuelCosts, seedSalaryRangeRecords } from "./variableSetup";
 import { seedRoutes } from "./seed";
 import { seedFiveTonTrucks, seedVehicleMasters } from "./vehicleMaster";
 
@@ -45,7 +45,18 @@ export function seedCogs(): CogsRecord[] {
         fixedCosts,
         mappings,
         mappingIds,
-        variableMappings: seedVariableCostMappings(),
+        // The route's Toll Fee, booked to TOL.
+        tollFees: [
+          {
+            id: `TF-${route.id}`,
+            code: route.code,
+            routeId: route.id,
+            fareCostId: "CI-TOL",
+            remark: "",
+            status: "Active",
+            ...meta,
+          },
+        ],
         utilizationFactor: 1,
         costs,
         excluded: [],

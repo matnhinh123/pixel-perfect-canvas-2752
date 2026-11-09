@@ -13,6 +13,7 @@ export type EntityType =
   | "Salary Range"
   | "Fuel Cost"
   | "Variable Cost Mapping"
+  | "Toll Fee"
   | "COGS"
   | "Location"
   | "Vehicle"

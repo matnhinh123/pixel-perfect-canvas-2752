@@ -18,6 +18,7 @@ import type {
   TenantTemplateConfig,
   SalaryRangeRecord,
   VariableCostMappingRecord,
+  TollFeeRecord,
   FuelCostRecord,
   ExchangeRateRecord,
 } from "@/types";
@@ -71,11 +72,13 @@ export const costGroupRepository = createCollection<CostGroupRecord>(
 export const costItemRepository = createCollection<CostItemRecord>("cost-items.v6", seedCostItems);
 /** COGS of a trip (route × vehicle type) built on the Cost screens. */
 export const cogsRepository = createCollection<CogsRecord>("cogs.v22", seedCogs);
-/** Variable Cost Mapping: the Fare Code each variable cost of a vehicle type is booked to. */
+/** Old Variable Cost Mapping (replaced by the Fare Code on each setup; its data is moved there once). */
 export const variableCostMappingRepository = createCollection<VariableCostMappingRecord>(
   "variable-cost-mappings.v14",
   seedVariableCostMappings,
 );
+/** Toll Fee: one per route (made with the route), with the Fare Code it is booked to. */
+export const tollFeeRepository = createCollection<TollFeeRecord>("toll-fees.v1", () => []);
 /** Salary Range: driver salary tiers of a vehicle type, under a code. */
 export const salaryRangeRepository = createCollection<SalaryRangeRecord>(
   "salary-range-records.v8",

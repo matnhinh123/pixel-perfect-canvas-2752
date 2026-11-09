@@ -27,13 +27,7 @@ function CogsPage() {
   if (id === "new") return <CogsForm key="new" source={null} readOnly={false} />;
   const c = all.find((r) => r.id === id && !r.deleted);
   if (c)
-    return (
-      <CogsForm
-        key={`${c.id}:${mode ?? "view"}:${usd ? "USD" : "VND"}`}
-        source={c}
-        readOnly={mode !== "edit" || usd}
-      />
-    );
+    return <CogsForm key={`${c.id}:${mode ?? "view"}`} source={c} readOnly={mode !== "edit"} />;
   return (
     <Panel>
       <EmptyState

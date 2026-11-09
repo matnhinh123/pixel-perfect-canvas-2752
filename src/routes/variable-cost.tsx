@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { VariableCostPage } from "@/components/movex/cost/VariableCostPage";
 import type { VariableCostTab } from "@/components/movex/cost/VariableCostTabs";
 
-const TABS: readonly VariableCostTab[] = ["salary", "fuel", "mapping", "reference"];
+const TABS: readonly VariableCostTab[] = ["salary", "fuel", "toll", "reference"];
 
 export const Route = createFileRoute("/variable-cost")({
   validateSearch: (s: Record<string, unknown>): { tab?: VariableCostTab } =>

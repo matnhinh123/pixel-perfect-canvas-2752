@@ -5,9 +5,11 @@ import {
   costGroupRepository,
   costItemRepository,
   fixedCostSummaryRepository,
+  fuelCostRepository,
+  salaryRangeRepository,
   serviceRepository,
+  tollFeeRepository,
   uid,
-  variableCostMappingRepository,
 } from "@/repositories";
 import { auditService, type AuditInput } from "./auditService";
 import { BusinessRuleError, makeCrud, stampCreate, stampUpdate } from "./crudService";
@@ -177,19 +179,23 @@ export const costGroupImportConfig: ImportEntityConfig = {
 
 // ---------------------------------------------------------------- Cost (items)
 
-/** Mappings and COGS booking to a Fare Code (it cannot be deleted while they do; it can be deactivated). */
+/** Fixed Cost Mappings, Salary Ranges, Fuel Costs, Toll Fees and COGS booking to a Fare Code (it cannot be deleted while they do; it can be deactivated). */
 const fareRefs = (id: string) => {
   const live = <T extends { deleted?: boolean }>(xs: T[]) => xs.filter((x) => !x.deleted);
   const fixed = live(fixedCostSummaryRepository.all()).filter((m) => m.assignCostId === id).length;
-  const variable = live(variableCostMappingRepository.all()).filter(
-    (m) => m.assignCostId === id,
-  ).length;
+  const using = <T extends { fareCostId?: string | undefined; deleted?: boolean }>(xs: T[]) =>
+    live(xs).filter((x) => x.fareCostId === id).length;
+  const salary = using(salaryRangeRepository.all());
+  const fuel = using(fuelCostRepository.all());
+  const toll = using(tollFeeRepository.all());
   const cogs = live(cogsRepository.all()).filter((c) =>
     c.others.some((o) => o.costId === id),
   ).length;
   const parts = [
     fixed && `${fixed} Fixed Cost Mapping${fixed > 1 ? "s" : ""}`,
-    variable && `${variable} Variable Cost Mapping${variable > 1 ? "s" : ""}`,
+    salary && `${salary} Salary Range${salary > 1 ? "s" : ""}`,
+    fuel && `${fuel} Fuel Cost${fuel > 1 ? "s" : ""}`,
+    toll && `${toll} Toll Fee${toll > 1 ? "s" : ""}`,
     cogs && `${cogs} COGS`,
   ].filter(Boolean);
   return parts.length ? `is used by ${parts.join(", ")}` : null;

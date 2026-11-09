@@ -1,7 +1,7 @@
 // Create / view / edit a COGS: Code + Name, a route, a vehicle type (from Master Data > Vehicle), the
 // Fixed Cost Mappings picked (their fixed costs, shared by the trips of a day) and the Variable Cost of
-// the Variable Cost Mapping of the route × vehicle type (Salary Range, Fuel Cost, Toll Fee, each with its
-// Fare Code). Lines can be edited or removed; other Fare Codes can be added. View shows them as saved.
+// the route × vehicle type (Salary Range, Fuel Cost, the route's Toll Fee, each with the Fare Code set on
+// it). Lines can be edited or removed; other Fare Codes can be added. View shows them as saved.
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { History, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
@@ -42,7 +42,7 @@ import {
   fuelCostRepository,
   salaryRangeRepository,
   tollStationRepository,
-  variableCostMappingRepository,
+  tollFeeRepository,
   vehicleMasterRepository,
 } from "@/repositories";
 import { BusinessRuleError } from "@/services/crudService";
@@ -66,7 +66,12 @@ import { fuelRateFor } from "@/services/cost/fuelRates";
 import { fuelUnitOf } from "@/services/vehicleMasterService";
 import type { CogsLine, CogsLineGroup, CogsRecord, VariableComponent } from "@/types";
 import { useDisplayCurrency } from "@/lib/displayCurrency";
-import { CurrencySelect, CurrencyTag, EditLink } from "@/components/movex/general/Amount";
+import {
+  CurrencySelect,
+  CurrencyTag,
+  EditLink,
+  AmountInput,
+} from "@/components/movex/general/Amount";
 
 const num = "text-right tabular-nums";
 const digits = (s: string) => Number(s.replace(/[^\d]/g, "")) || 0;
@@ -128,7 +133,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   const salaryRanges = useCollection(salaryRangeRepository);
   const fuelCosts = useCollection(fuelCostRepository);
   const tollAll = useCollection(tollStationRepository);
-  const variableMappings = useCollection(variableCostMappingRepository);
+  const tollFees = useCollection(tollFeeRepository);
   const tollMasters = useMemo(() => tollAll.filter((t) => !t.deleted), [tollAll]);
   const routes = useMemo(
     () => routesAll.filter((r) => !r.deleted).sort((a, b) => a.code.localeCompare(b.code)),
@@ -185,7 +190,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
           fixedCosts: fixedAll,
           mappings,
           mappingIds: autoMappingIds,
-          variableMappings,
+          tollFees,
           utilizationFactor: factorOf(d),
           costs,
           excluded: d.excluded,
@@ -387,10 +392,9 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
       amt(l.amount)
     ) : editing === l.key ? (
       <div className="flex justify-end">
-        <MoneyInput
+        <AmountInput
           autoFocus
           value={l.amount}
-          suffix={cur}
           onChange={(v) => editAuto(l, Number.isFinite(v) ? v : 0)}
           onBlur={() => setEditing(null)}
           onKeyDown={(e) => e.key === "Enter" && setEditing(null)}
@@ -504,13 +508,13 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
   };
 
   // A variable cost (Trip Salary, Fuel Cost, Toll Fee — a line per toll station): its lines, under the
-  // Fare Code of its Variable Cost Mapping.
+  // Fare Code of its setup (Salary Range, Fuel Cost, Toll Fee).
   const variableRowsOf = () => {
     const order: VariableComponent[] = ["Trip Salary", "Fuel Cost", "Toll Fee"];
     const vLines = lines
       .filter((l) => l.group === "Variable Cost")
       .sort((a, b) => order.indexOf(componentOf(a)) - order.indexOf(componentOf(b)));
-    // One group per Fare Code (Variable Cost Mapping), in the order of the costs; none = "—".
+    // One group per Fare Code, in the order of the costs; none = "—".
     const fares = [...new Set(vLines.map((l) => l.fareCode ?? ""))];
     const rows = fares.flatMap((code) => {
       const items = vLines.filter((l) => (l.fareCode ?? "") === code);
@@ -625,13 +629,13 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                   className="h-11"
                 />
               )}
-              {readOnly && <CurrencySelect />}
+              <CurrencySelect />
               <Button variant="outline" size="lg" onClick={() => setHistoryOpen(true)}>
                 <History className="h-4 w-4" />
                 History
               </Button>
               {readOnly && (
-                <EditLink usd={usd}>
+                <EditLink usd={false}>
                   <Link to="/cogs/$id" params={{ id: source.id }} search={{ mode: "edit" }}>
                     <Pencil className="h-4 w-4" />
                     Edit
@@ -951,7 +955,7 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                     <>
                       {sectionHead(
                         "Variable Cost",
-                        "Trip Salary, Fuel Cost and Toll Fee of the route and vehicle type (Variable Cost Mapping)",
+                        "Trip Salary, Fuel Cost and Toll Fee of the route and vehicle type, each under the Fare Code of its setup",
                         undefined,
                         { to: "/variable-cost", label: "Variable Cost" },
                       )}
@@ -1047,10 +1051,9 @@ export function CogsForm({ source, readOnly }: { source: CogsRecord | null; read
                               </TableCell>
                               <TableCell className={cn("py-1.5 align-top", num)}>
                                 <div className="flex justify-end">
-                                  <MoneyInput
+                                  <AmountInput
                                     emptyZero
                                     value={o.amount}
-                                    suffix={cur}
                                     onChange={(v) =>
                                       setOther(o.rid, { amount: Number.isFinite(v) ? v : 0 })
                                     }

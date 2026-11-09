@@ -1,6 +1,6 @@
 // COGS run by themselves: whenever a setup they are built from changes (routes, vehicles, internal costs
-// and their mappings, salary ranges, fuel costs, variable cost mappings, fare codes, toll stations), the
-// missing COGS are created and every COGS is worked out again (debounced).
+// and their mappings, salary ranges, fuel costs, toll fees, fare codes, toll stations), the missing
+// Toll Fees and COGS are created and every COGS is worked out again (debounced).
 import {
   costItemRepository,
   fixedCostRepository,
@@ -9,11 +9,12 @@ import {
   routeRepository,
   salaryRangeRepository,
   tollStationRepository,
-  variableCostMappingRepository,
+  tollFeeRepository,
   vehicleMasterRepository,
 } from "@/repositories";
 import { subscribeKey } from "@/repositories/storage";
 import { syncAllCogs } from "./cogsService";
+import { syncTollFees } from "./tollFee";
 
 const SOURCES = [
   routeRepository,
@@ -22,7 +23,7 @@ const SOURCES = [
   fixedCostSummaryRepository,
   salaryRangeRepository,
   fuelCostRepository,
-  variableCostMappingRepository,
+  tollFeeRepository,
   costItemRepository,
   tollStationRepository,
 ];
@@ -34,6 +35,8 @@ export function startCogsAutoSync(): () => void {
     clearTimeout(timer);
     timer = setTimeout(() => {
       try {
+        // Every route has its Toll Fee (a new route gets one) before the COGS are worked out.
+        syncTollFees();
         syncAllCogs();
       } catch (e) {
         console.error("COGS auto sync failed", e);

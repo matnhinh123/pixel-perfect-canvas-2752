@@ -106,6 +106,10 @@ export interface EntityListPageProps<T extends BaseRecord> {
   subRow?: (row: T) => boolean;
   /** Hide the Delete row action (master data that is deactivated rather than deleted). */
   allowDelete?: boolean;
+  /** No Add button (records made by themselves, e.g. Toll Fees with their route). */
+  hideAdd?: boolean;
+  /** More buttons in the selection bar, for the rows picked (e.g. map a Fare Code to all of them). */
+  bulkActions?: (rows: T[], clear: () => void) => ReactNode;
   /** Lists that mix entities: the entity whose Change History a row opens. */
   entityTypeOf?: (row: T) => EntityType;
   /** false: no Import / Export buttons at all (incl. "Export selected"). */
@@ -575,7 +579,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
       return { ...x, order };
     });
 
-  const addBtn = p.onAdd ? (
+  const addBtn = p.hideAdd ? null : p.onAdd ? (
     <Button onClick={p.onAdd}>
       <Plus className="h-4 w-4" />
       {p.addLabel ?? t("Thêm mới", "Add")}
@@ -818,6 +822,7 @@ export function EntityListPage<T extends BaseRecord>(p: EntityListPageProps<T>) 
                   {t("Export đã chọn", "Export selected")}
                 </Button>
               )}
+              {p.bulkActions?.(selectedRows, () => setSelected(new Set()))}
               {crud && (
                 <>
                   <Button

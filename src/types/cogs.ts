@@ -16,7 +16,7 @@ export interface CogsLine {
   calculated?: number;
   /** Fixed Cost Mapping the line came from. */
   mappingId?: string;
-  /** Variable cost: the Fare Code it is booked to (in its Variable Cost Mapping). */
+  /** Variable cost: the Fare Code it is booked to (set on its Salary Range, Fuel Cost or Toll Fee). */
   fareCode?: string;
   /** Variable cost: which one (Trip Salary, Fuel Cost, Toll Fee — a Toll Fee line per toll station). */
   component?: VariableComponent;

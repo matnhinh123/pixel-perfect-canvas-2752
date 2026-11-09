@@ -12,7 +12,7 @@ import type {
   RouteRecord,
   SalaryRangeRecord,
   VariableComponent,
-  VariableCostMappingRecord,
+  TollFeeRecord,
   VariableItem,
 } from "@/types";
 import { VARIABLE_COMPONENTS } from "@/types";
@@ -78,25 +78,6 @@ export function setupsFor<
         salaryVehiclesOf(r).some((k) => coversVehicle(k, vehicleType)),
     )
     .sort((a, b) => Number(exact(b)) - Number(exact(a)) || a.code.localeCompare(b.code));
-}
-
-/**
- * Variable Cost Mapping a variable cost of a vehicle type is booked by: the one made for that vehicle type
- * (its brand) first, else one for every brand of it.
- */
-export function variableMappingOf(
-  mappings: readonly VariableCostMappingRecord[],
-  vehicleType: string,
-  component: VariableComponent,
-) {
-  const ok = mappings.filter(
-    (m) =>
-      !m.deleted &&
-      m.status === "Active" &&
-      m.component === component &&
-      m.vehicleTypes.some((t) => coversVehicle(t, vehicleType)),
-  );
-  return ok.find((m) => m.vehicleTypes.includes(vehicleType)) ?? ok[0];
 }
 
 /** The active Fuel Cost (price) of a Fuel Type. */
@@ -222,8 +203,8 @@ export interface CogsBuildInput extends VariableSetups {
   mappings: FixedCostSummaryRecord[];
   /** Mappings picked on the COGS. */
   mappingIds: readonly string[];
-  /** Variable Cost Mappings: the Fare Code each variable cost is booked to. */
-  variableMappings: readonly VariableCostMappingRecord[];
+  /** Toll Fees of the routes: the Fare Code a route's toll stations are booked to. */
+  tollFees: readonly TollFeeRecord[];
   /** Trips per day (hệ số khai thác): Fixed Cost per trip = per day ÷ factor. */
   utilizationFactor: number;
   /** Fare Codes (Fare Code Management). */
@@ -279,10 +260,15 @@ export function buildCogs(i: CogsBuildInput): CogsBuild {
   // the Toll Stations of the route.
   const variable: TripVariable = tripVariable(i.route, i.vehicle, i);
   // Each variable cost on its own; the Toll Fee one line per toll station of the route.
+  // Fare Code: the one of the setup the cost is read from (Salary Range, Fuel Cost, the route's Toll Fee).
+  const fareIdOfCost = (c: VariableComponent) =>
+    c === "Trip Salary"
+      ? variable.salaryRange?.fareCostId
+      : c === "Fuel Cost"
+        ? variable.fuelCost?.fareCostId
+        : i.tollFees.find((f) => !f.deleted && f.routeId === i.route.id)?.fareCostId;
   const fareOf = (c: VariableComponent) =>
-    i.costs.find(
-      (x) => x.id === variableMappingOf(i.variableMappings, i.vehicle.key, c)?.assignCostId,
-    )?.code ?? "";
+    i.costs.find((x) => x.id === fareIdOfCost(c))?.code ?? "";
   const setupNameOf = (c: VariableComponent) =>
     c === "Toll Fee"
       ? i.route.name

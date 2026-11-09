@@ -35,8 +35,8 @@ describe("Cost modules stay in sync", () => {
     expect(check.reason).toMatch(/COGS/);
   });
 
-  it("a Fare Code booked by a Fixed / Variable Cost Mapping cannot be deleted", () => {
-    expect(costItemCrud.checkDelete("CI-TDS").reason).toMatch(/Variable Cost Mapping/);
+  it("a Fare Code booked by a Fixed Cost Mapping or a variable cost setup cannot be deleted", () => {
+    expect(costItemCrud.checkDelete("CI-TDS").reason).toMatch(/Salary Range/);
     expect(costItemCrud.checkDelete("CI-DEP").reason).toMatch(/Fixed Cost Mapping/);
   });
 

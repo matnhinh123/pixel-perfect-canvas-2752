@@ -9,7 +9,7 @@ import {
   routeRepository,
   salaryRangeRepository,
   tollStationRepository,
-  variableCostMappingRepository,
+  tollFeeRepository,
   uid,
   vehicleMasterRepository,
 } from "@/repositories";
@@ -21,6 +21,7 @@ import { cogsVehicleTypes, type CogsVehicleType } from "./cogsVehicle";
 import { liveContainerTypes } from "./containerTypes";
 import { vehicleClassFor } from "@/services/routing/RouteProvider";
 import { mappingsFor } from "./cogsBuild";
+import { syncTollFees } from "./tollFee";
 
 /** Vehicle types of the current Vehicle master. */
 /** Vehicle types worked out once for a whole sync run (instead of once per COGS). */
@@ -157,7 +158,7 @@ export const buildCogsOf = (d: CogsDraft) => {
     mappings: fixedCostSummaryRepository.all(),
     // Fixed Cost: every Fixed Cost Mapping of the vehicle type.
     mappingIds: mappingsFor(fixedCostSummaryRepository.all(), vehicle).map((m) => m.id),
-    variableMappings: variableCostMappingRepository.all(),
+    tollFees: (syncTollFees(), tollFeeRepository.all()),
     utilizationFactor: factorOf(d),
     costs: costItemRepository.all().filter((c) => !c.deleted),
     excluded: d.excluded,

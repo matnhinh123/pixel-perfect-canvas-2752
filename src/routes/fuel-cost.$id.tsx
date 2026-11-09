@@ -38,10 +38,10 @@ function FuelCostPage() {
         : undefined;
     return (
       <FuelCostForm
-        key={`${r.id}:${mode ?? "view"}:${old ?? "current"}:${usd ? "USD" : "VND"}`}
+        key={`${r.id}:${mode ?? "view"}:${old ?? "current"}`}
         source={old ? atVersion(r, old) : r}
         live={r}
-        readOnly={mode !== "edit" || !!old || usd}
+        readOnly={mode !== "edit" || !!old}
       />
     );
   }

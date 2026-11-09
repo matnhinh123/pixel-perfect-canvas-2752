@@ -8,17 +8,14 @@ import type {
   SalaryRangeRecord,
   SalaryTier,
   VariableComponent,
-  VariableCostMappingRecord,
 } from "@/types";
 import {
   cogsRepository,
-  costItemRepository,
   fixedCostSummaryRepository,
   fuelCostRepository,
   routeRepository,
   salaryRangeRepository,
   uid,
-  variableCostMappingRepository,
   vehicleMasterRepository,
 } from "@/repositories";
 import { auditService } from "@/services/auditService";
@@ -32,6 +29,7 @@ import {
   salaryVehiclesOf,
 } from "./cogsVehicle";
 import { liveContainerTypes } from "./containerTypes";
+import { fareIdOf } from "./fareCode";
 import { codeOptions } from "@/services/commonCodeService";
 import { CC } from "@/mock-data/commonCodes";
 import { FUEL_TYPES } from "@/mock-data/vehicleMaster";
@@ -50,13 +48,6 @@ export const sanitizeSetupCode = (v: string) =>
     .toUpperCase()
     .replace(/[^A-Z0-9._-]/g, "")
     .slice(0, 20);
-
-const vehicleError = (key: string) =>
-  !key
-    ? "Vehicle Type is required."
-    : currentTypes().some((t) => t.key === key)
-      ? null
-      : `No active vehicle of type ${key} in Vehicle.`;
 
 /** Code: required, format, unique among the live records of the collection. */
 function codeError<T extends { id: string; code: string; deleted?: boolean }>(
@@ -149,6 +140,8 @@ export interface SalaryRangeDraft {
   tiers: SalaryTier[];
   containers: ContainerColumn[];
   rule: CalcRule;
+  /** Code of the Fare Code its Trip Salary is booked to (empty: none yet). */
+  fareCode: string;
   remark: string;
   status: Status;
 }
@@ -182,6 +175,8 @@ export function validateSalaryRange(d: SalaryRangeDraft, id?: string): Record<st
   const code = codeError(salaryRangeRepository, d.code, "Salary Range", id);
   if (code) e["code"] = code;
   if (!d.name.trim()) e["name"] = "Salary Range Name is required.";
+  const fare = fareIdOf(d.fareCode).error;
+  if (fare) e["fareCode"] = fare;
   // One or more Truck Types, or Header alone; each vehicle type in one Salary Range only.
   const keys = d.vehicleTypes;
   const v = !keys.length
@@ -287,6 +282,7 @@ export const salaryRangeService = {
             : t;
         }),
         rule: ruleOf(d.rule),
+        fareCostId: fareIdOf(d.fareCode).id,
         remark: d.remark.trim(),
         status: d.status,
       },
@@ -318,6 +314,7 @@ export const salaryRangeService = {
         })),
         containers: (src.containers ?? []).map((c) => ({ ...c })),
         rule: ruleOf(src.rule),
+        fareCostId: src.fareCostId,
         remark: src.remark,
         status: "Draft",
       },
@@ -337,6 +334,8 @@ export interface FuelCostDraft {
   fuelPrice: number;
   /** Its vehicle types (and brands), each with the Fuel Rate set, or null: its vehicles' average. */
   vehicles: FuelVehicleRate[];
+  /** Code of the Fare Code it is booked to (empty: none yet). */
+  fareCode: string;
   remark: string;
   status: "Active" | "Inactive";
 }
@@ -364,6 +363,8 @@ export function validateFuelCost(d: FuelCostDraft, id?: string): Record<string, 
     e["fuelType"] = `${d.fuelType} has a Fuel Cost already — edit that one.`;
   if (!(d.fuelPrice > 0)) e["fuelPrice"] = "Fuel Price must be above 0.";
   if (!d.name.trim()) e["name"] = "Fuel Cost Name is required.";
+  const fare = fareIdOf(d.fareCode).error;
+  if (fare) e["fareCode"] = fare;
   const seen = new Set<string>();
   for (const v of d.vehicles) {
     if (seen.has(v.vehicleType)) e[`vehicles.${v.vehicleType}`] = "Listed twice.";
@@ -404,6 +405,7 @@ export const fuelCostService = {
           rate: v.rate,
           rateLoaded: v.rateLoaded ?? null,
         })),
+        fareCostId: fareIdOf(d.fareCode).id,
         remark: d.remark.trim(),
         status: d.status,
       },
@@ -412,136 +414,5 @@ export const fuelCostService = {
       // An older Fuel Cost without its list: every vehicle type running on the fuel.
       (r) => ({ ...r, name: fuelCostNameOf(r), vehicles: fuelVehiclesOf(r, currentTypes()) }),
     );
-  },
-};
-
-// ---------------------------------------------------------------- Variable Cost Mapping
-
-export interface VariableCostMappingDraft {
-  assignCostId: string;
-  vehicleTypes: string[];
-  component: VariableComponent;
-}
-
-/** The other live mappings of the same vehicle type holding a variable cost. */
-export const mappingsHolding = (
-  vehicleType: string,
-  component: VariableComponent,
-  exceptId?: string,
-) =>
-  variableCostMappingRepository
-    .all()
-    .filter(
-      (m) =>
-        !m.deleted &&
-        m.id !== exceptId &&
-        m.vehicleTypes.includes(vehicleType) &&
-        m.component === component,
-    );
-
-const fareLabel = (id: string) => costItemRepository.get(id)?.code ?? id;
-
-/**
- * One mapping per Fare Code, one variable cost per mapping; a variable cost of a vehicle type is booked to
- * one Fare Code only (it would be counted twice).
- */
-export function validateVariableCostMapping(
-  d: VariableCostMappingDraft,
-  id?: string,
-): Record<string, string> {
-  const e: Record<string, string> = {};
-  if (!d.assignCostId) e["assignCost"] = "Fare Code is required.";
-  else if (
-    variableCostMappingRepository
-      .all()
-      .some((m) => !m.deleted && m.id !== id && m.assignCostId === d.assignCostId)
-  )
-    e["assignCost"] =
-      `${fareLabel(d.assignCostId)} already has a Variable Cost Mapping — edit that one.`;
-  if (!d.vehicleTypes.length) e["vehicleTypes"] = "Add at least one Vehicle Type.";
-  for (const [i, key] of d.vehicleTypes.entries()) {
-    const msg =
-      vehicleError(key) ?? (d.vehicleTypes.indexOf(key) !== i ? `${key} is listed twice.` : "");
-    if (msg) {
-      e["vehicleTypes"] = `Vehicle Type row ${i + 1}: ${msg}`;
-      break;
-    }
-  }
-  if (!d.component) e["component"] = "Variable Cost is required.";
-  else
-    for (const key of d.vehicleTypes) {
-      const other = mappingsHolding(key, d.component, id)[0];
-      if (other) {
-        const fare = costItemRepository.get(other.assignCostId)?.code ?? "another Fare Code";
-        e["vehicleTypes"] = `${d.component} of ${key} is already mapped to ${fare} — remove it.`;
-        break;
-      }
-    }
-  return e;
-}
-
-export const variableCostMappingCrud = makeCrud<VariableCostMappingRecord>({
-  entityType: "Variable Cost Mapping",
-  repo: variableCostMappingRepository,
-  labelOf: (m) => `${fareLabel(m.assignCostId)} · ${m.component}`,
-  references: () => null,
-});
-
-export const variableCostMappingService = {
-  save(d: VariableCostMappingDraft, id?: string): VariableCostMappingRecord {
-    const errors = validateVariableCostMapping(d, id);
-    if (Object.keys(errors).length)
-      throw new BusinessRuleError("Please check the highlighted fields.", errors);
-    const existing = id ? variableCostMappingRepository.get(id) : undefined;
-    const label = `${fareLabel(d.assignCostId)} · ${d.component}`;
-    if (!existing) {
-      const rec: VariableCostMappingRecord = {
-        id: uid("VM-"),
-        ...d,
-        status: "Active",
-        ...stampCreate(),
-      };
-      variableCostMappingRepository.insert(rec);
-      auditService.log({
-        action: "CREATE",
-        entityType: "Variable Cost Mapping",
-        entityId: rec.id,
-        entityLabel: label,
-        note: d.vehicleTypes.join(", "),
-      });
-      return rec;
-    }
-    const next = stampUpdate({ ...existing, ...d });
-    variableCostMappingRepository.update(existing.id, () => next);
-    const base = {
-      action: "UPDATE" as const,
-      entityType: "Variable Cost Mapping" as const,
-      entityId: next.id,
-      entityLabel: label,
-    };
-    const out: Parameters<typeof auditService.logMany>[0] = [];
-    if (existing.assignCostId !== next.assignCostId)
-      out.push({
-        ...base,
-        field: "Fare Code",
-        oldValue: fareLabel(existing.assignCostId),
-        newValue: fareLabel(next.assignCostId),
-      });
-    if (existing.vehicleTypes.join(", ") !== next.vehicleTypes.join(", "))
-      out.push({
-        ...base,
-        field: "Vehicle Types",
-        oldValue: existing.vehicleTypes.join(", ") || "—",
-        newValue: next.vehicleTypes.join(", ") || "—",
-      });
-    if (existing.component !== next.component)
-      out.push({
-        ...base,
-        field: "Variable Cost",
-        oldValue: existing.component,
-        newValue: next.component,
-      });
-    auditService.logMany(out);
-    return next;
   },
 };

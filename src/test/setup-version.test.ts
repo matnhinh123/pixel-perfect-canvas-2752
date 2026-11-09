@@ -10,6 +10,7 @@ import { ruleOf } from "@/services/cost/salaryRange";
 import { salaryVehiclesOf } from "@/services/cost/cogsVehicle";
 import { setupsFor } from "@/services/cost/cogsBuild";
 import { atVersion, versionOf } from "@/services/cost/versions";
+import { fareCodeOf } from "@/services/cost/fareCode";
 import type { FuelCostRecord, SalaryRangeRecord } from "@/types";
 
 const salaryDraft = (r: SalaryRangeRecord): SalaryRangeDraft => ({
@@ -19,6 +20,7 @@ const salaryDraft = (r: SalaryRangeRecord): SalaryRangeDraft => ({
   tiers: r.tiers.map((t) => ({ ...t })),
   containers: r.containers.map((c) => ({ ...c })),
   rule: ruleOf(r.rule),
+  fareCode: fareCodeOf(r.fareCostId),
   remark: r.remark,
   status: r.status,
 });
@@ -28,6 +30,7 @@ const fuelDraft = (r: FuelCostRecord): FuelCostDraft => ({
   fuelType: r.fuelType,
   fuelPrice: r.fuelPrice,
   vehicles: r.vehicles ?? [],
+  fareCode: fareCodeOf(r.fareCostId),
   remark: r.remark,
   status: r.status === "Inactive" ? "Inactive" : "Active",
 });

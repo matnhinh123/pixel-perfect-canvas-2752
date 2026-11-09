@@ -63,6 +63,8 @@ export interface SalaryRangeRecord extends BaseRecord {
   /** Header only: a column per container; a container without one is paid the tier's own rates. */
   containers: ContainerColumn[];
   rule: CalcRule;
+  /** Fare Code (Fare Code Management) the Trip Salary of a COGS is booked to. */
+  fareCostId?: string | undefined;
   remark: string;
   /** 1 when created; each save that changes it adds 1 (older records: 1). */
   version?: number;
@@ -80,6 +82,7 @@ export type SalaryRangeContent = Pick<
   | "tiers"
   | "containers"
   | "rule"
+  | "fareCostId"
   | "remark"
   | "status"
 >;
@@ -112,6 +115,8 @@ export interface FuelCostRecord extends BaseRecord {
   fuelPrice: number;
   /** Its vehicle types; older records without it: every vehicle type running on the fuel. */
   vehicles?: FuelVehicleRate[];
+  /** Fare Code (Fare Code Management) the Fuel Cost of a COGS is booked to. */
+  fareCostId?: string | undefined;
   remark: string;
   /** 1 when created; each save that changes it adds 1 (older records: 1). */
   version?: number;
@@ -122,8 +127,21 @@ export interface FuelCostRecord extends BaseRecord {
 /** What a version of a Fuel Cost holds. */
 export type FuelCostContent = Pick<
   FuelCostRecord,
-  "code" | "name" | "fuelType" | "fuelPrice" | "vehicles" | "remark" | "status"
+  "code" | "name" | "fuelType" | "fuelPrice" | "vehicles" | "fareCostId" | "remark" | "status"
 >;
+
+/**
+ * Toll Fee of a route: made for every route (Variable Cost › Toll Fee), with the Fare Code its toll
+ * stations are booked to in a COGS. The fees themselves come from Route › Toll Stations.
+ */
+export interface TollFeeRecord extends BaseRecord {
+  /** The route's code. */
+  code: string;
+  routeId: string;
+  /** Fare Code (Fare Code Management) the Toll Fee of a COGS is booked to. */
+  fareCostId?: string | undefined;
+  remark: string;
+}
 
 /** The variable costs of a trip, worked out for its route and vehicle type. */
 export const VARIABLE_COMPONENTS = ["Trip Salary", "Fuel Cost", "Toll Fee"] as const;

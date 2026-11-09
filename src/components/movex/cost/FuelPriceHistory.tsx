@@ -1,19 +1,16 @@
 // Fuel Cost › Price History: every version at a glance — one row per version (newest first) with when and
-// by whom it was saved, its price and the change from the version before, and the Fuel Cost per km of
-// each vehicle type. A row opens that version.
+// by whom it was saved, its price and the change from the version before. A row opens that version.
 import { CurrencyTag } from "@/components/movex/general/Amount";
 import { thClass } from "@/components/movex/common";
 import { atVersion, versionOf } from "@/services/cost/versions";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { FuelCostRecord, FuelVehicleRate } from "@/types";
+import type { FuelCostRecord } from "@/types";
 
 export function FuelPriceHistory({
   record,
   shownVersion,
   onPick,
-  vehiclesOf,
-  rateOf,
   money,
   cur,
   unit,
@@ -23,9 +20,6 @@ export function FuelPriceHistory({
   /** The version on screen: its row is marked. */
   shownVersion: number;
   onPick: (version: number) => void;
-  /** The vehicle types of a version, and the Estimate (per 100 km) one of them burns. */
-  vehiclesOf: (r: FuelCostRecord) => FuelVehicleRate[];
-  rateOf: (list: readonly FuelVehicleRate[], key: string) => { rate: number } | undefined;
   money: (n: number) => string;
   cur: string;
   unit: string;
@@ -39,10 +33,8 @@ export function FuelPriceHistory({
       .sort((a, b) => b.version - a.version),
   ].map((v) => {
     const r = v.version === current ? record : atVersion(record, v.version);
-    return { ...v, price: r.fuelPrice, vehicles: vehiclesOf(r) };
+    return { ...v, price: r.fuelPrice };
   });
-  // Columns: the vehicle types of the current version first, then any only an older one had.
-  const keys = [...new Set(versions.flatMap((v) => v.vehicles.map((x) => x.vehicleType)))];
   const pct = (from: number, to: number) => Math.round(((to - from) / from) * 1000) / 10;
   const cell = "px-3 py-2";
   const head = (h: string, right = true) => (
@@ -60,17 +52,10 @@ export function FuelPriceHistory({
         <thead>
           <tr className="bg-muted text-left">
             {head("Version", false)}
-            {head("Saved at", false)}
-            {head("Saved by", false)}
+            {head("Created At", false)}
+            {head("Created By", false)}
             {head(`Price / ${unit}`)}
             {head("Ratio (%)")}
-            {keys.map((k) => head(k))}
-          </tr>
-          <tr className="bg-muted/50 text-[11px] text-muted-foreground">
-            <th colSpan={5} />
-            <th colSpan={keys.length} className="px-3 pb-1.5 text-right font-medium">
-              Fuel Cost / km ({cur})
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -119,14 +104,6 @@ export function FuelPriceHistory({
                 >
                   {change === undefined ? "—" : `${change > 0 ? "+" : ""}${change}%`}
                 </td>
-                {keys.map((k) => {
-                  const rate = rateOf(v.vehicles, k)?.rate ?? 0;
-                  return (
-                    <td key={k} className={cn(cell, "whitespace-nowrap text-right")}>
-                      {rate > 0 && v.price > 0 ? money(Math.round((rate / 100) * v.price)) : "—"}
-                    </td>
-                  );
-                })}
               </tr>
             );
           })}

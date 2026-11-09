@@ -36,6 +36,7 @@ import { Route as RoutingIdRouteImport } from './routes/routing.$id'
 import { Route as SalaryRangeIdRouteImport } from './routes/salary-range.$id'
 import { Route as ServiceIndexRouteImport } from './routes/service.index'
 import { Route as ServiceIdRouteImport } from './routes/service.$id'
+import { Route as TollFeeIdRouteImport } from './routes/toll-fee.$id'
 import { Route as TollStationIndexRouteImport } from './routes/toll-station.index'
 import { Route as TollStationIdRouteImport } from './routes/toll-station.$id'
 import { Route as VehicleIndexRouteImport } from './routes/vehicle.index'
@@ -177,6 +178,11 @@ const ServiceIdRoute = ServiceIdRouteImport.update({
   path: '/service/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TollFeeIdRoute = TollFeeIdRouteImport.update({
+  id: '/toll-fee/$id',
+  path: '/toll-fee/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TollStationIndexRoute = TollStationIndexRouteImport.update({
   id: '/toll-station/',
   path: '/toll-station/',
@@ -222,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/routing/$id': typeof RoutingIdRoute
   '/salary-range/$id': typeof SalaryRangeIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/toll-fee/$id': typeof TollFeeIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
@@ -256,6 +263,7 @@ export interface FileRoutesByTo {
   '/routing/$id': typeof RoutingIdRoute
   '/salary-range/$id': typeof SalaryRangeIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/toll-fee/$id': typeof TollFeeIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner': typeof BusinessPartnerIndexRoute
@@ -291,6 +299,7 @@ export interface FileRoutesById {
   '/routing/$id': typeof RoutingIdRoute
   '/salary-range/$id': typeof SalaryRangeIdRoute
   '/service/$id': typeof ServiceIdRoute
+  '/toll-fee/$id': typeof TollFeeIdRoute
   '/toll-station/$id': typeof TollStationIdRoute
   '/vehicle/$id': typeof VehicleIdRoute
   '/business-partner/': typeof BusinessPartnerIndexRoute
@@ -327,6 +336,7 @@ export interface FileRouteTypes {
     | '/routing/$id'
     | '/salary-range/$id'
     | '/service/$id'
+    | '/toll-fee/$id'
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner/'
@@ -361,6 +371,7 @@ export interface FileRouteTypes {
     | '/routing/$id'
     | '/salary-range/$id'
     | '/service/$id'
+    | '/toll-fee/$id'
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner'
@@ -395,6 +406,7 @@ export interface FileRouteTypes {
     | '/routing/$id'
     | '/salary-range/$id'
     | '/service/$id'
+    | '/toll-fee/$id'
     | '/toll-station/$id'
     | '/vehicle/$id'
     | '/business-partner/'
@@ -430,6 +442,7 @@ export interface RootRouteChildren {
   RoutingIdRoute: typeof RoutingIdRoute
   SalaryRangeIdRoute: typeof SalaryRangeIdRoute
   ServiceIdRoute: typeof ServiceIdRoute
+  TollFeeIdRoute: typeof TollFeeIdRoute
   TollStationIdRoute: typeof TollStationIdRoute
   VehicleIdRoute: typeof VehicleIdRoute
   BusinessPartnerIndexRoute: typeof BusinessPartnerIndexRoute
@@ -637,6 +650,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/toll-fee/$id': {
+      id: '/toll-fee/$id'
+      path: '/toll-fee/$id'
+      fullPath: '/toll-fee/$id'
+      preLoaderRoute: typeof TollFeeIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/toll-station/': {
       id: '/toll-station/'
       path: '/toll-station'
@@ -694,6 +714,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoutingIdRoute: RoutingIdRoute,
   SalaryRangeIdRoute: SalaryRangeIdRoute,
   ServiceIdRoute: ServiceIdRoute,
+  TollFeeIdRoute: TollFeeIdRoute,
   TollStationIdRoute: TollStationIdRoute,
   VehicleIdRoute: VehicleIdRoute,
   BusinessPartnerIndexRoute: BusinessPartnerIndexRoute,

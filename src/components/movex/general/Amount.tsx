@@ -1,5 +1,5 @@
 // An amount kept in VND, shown in the currency picked (VND / USD) with the currency after it.
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,10 +9,12 @@ import {
 } from "@/lib/displayCurrency";
 import { formatDate, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { MoneyInput } from "@/components/movex/general/MoneyInput";
 
 /**
  * VND / USD switch of a detail page, next to History. One setting for the app (remembered per browser):
- * the lists of the Cost module show the currency last picked. USD: converted at the latest rate, view only.
+ * the lists of the Cost module show the currency last picked. USD: converted at the latest rate; in edit mode
+ * amounts are typed in USD too and kept in VND (× the rate).
  */
 export function CurrencySelect() {
   const { cur, usdRate } = useDisplayCurrency();
@@ -71,5 +73,26 @@ export function Amount({ vnd, className }: { vnd: number | null | undefined; cla
       {money(vnd)}
       {vnd !== null && vnd !== undefined && Number.isFinite(vnd) && <CurrencyTag cur={cur} />}
     </span>
+  );
+}
+
+/**
+ * Box for an amount kept in VND, typed in the currency picked next to History: USD is shown with 2 decimals
+ * and kept in VND at the latest rate (rounded to the đồng). The currency is shown after the box.
+ */
+export function AmountInput({
+  value,
+  onChange,
+  ...rest
+}: Omit<ComponentProps<typeof MoneyInput>, "decimals" | "suffix">) {
+  const { usd, rate, cur } = useDisplayCurrency();
+  return (
+    <MoneyInput
+      {...rest}
+      value={usd ? Math.round((value / rate) * 100) / 100 : value}
+      decimals={usd ? 2 : 0}
+      suffix={cur}
+      onChange={(v) => onChange(usd && Number.isFinite(v) ? Math.round(v * rate) : v)}
+    />
   );
 }

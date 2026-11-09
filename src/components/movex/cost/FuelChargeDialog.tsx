@@ -12,8 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { MoneyInput } from "@/components/movex/general/MoneyInput";
-import { CurrencyTag } from "@/components/movex/general/Amount";
+import { AmountInput, CurrencyTag } from "@/components/movex/general/Amount";
 import { fuelCostOf } from "@/services/cost/salaryRange";
 import { formatNumber } from "@/lib/format";
 
@@ -117,10 +116,9 @@ export function FuelChargeDialog({
           </Row>
           <Row n={5} label={`Fuel Price / ${unit}`}>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <MoneyInput
+              <AmountInput
                 autoFocus
                 value={price}
-                suffix="VND"
                 onChange={(v) => setPrice(Number.isFinite(v) && v > 0 ? v : 0)}
                 className="h-9 w-36 text-right tabular-nums"
                 aria-label={`Fuel Price per ${unit}`}

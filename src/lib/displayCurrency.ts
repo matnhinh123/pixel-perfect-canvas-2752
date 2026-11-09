@@ -1,6 +1,7 @@
 // Currency the amounts are shown in (the switch next to History on a detail page): VND, the tenant currency
 // the amounts are kept in, or USD, converted at the latest USD rate of Master Data › Exchange Rate.
-// USD is view only: a form that edits amounts needs VND. Remembered per browser; VND by default.
+// In edit mode amounts can be typed in USD too: they are kept in VND at the rate. Remembered per browser;
+// VND by default.
 import { useSyncExternalStore } from "react";
 import { useCollection } from "@/hooks/use-store";
 import { exchangeRateRepository } from "@/repositories";
